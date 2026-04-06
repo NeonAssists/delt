@@ -1631,31 +1631,67 @@ function getMailTransporter() {
   return mailTransporter;
 }
 
-// Google Sheets append (lazy init)
-let sheetsClient = null;
-async function getSheetsClient() {
-  if (sheetsClient) return sheetsClient;
+// Google Sheets append via raw API (no googleapis SDK — saves 194MB)
+async function createServiceAccountJwt(keyData) {
+  const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  const payload = Buffer.from(JSON.stringify({
+    iss: keyData.client_email,
+    scope: "https://www.googleapis.com/auth/spreadsheets",
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+  })).toString("base64url");
+
+  const sign = crypto.createSign("RSA-SHA256");
+  sign.update(`${header}.${payload}`);
+  const signature = sign.sign(keyData.private_key, "base64url");
+  return `${header}.${payload}.${signature}`;
+}
+
+let sheetsAccessToken = null;
+let sheetsTokenExpiry = 0;
+
+async function getSheetsToken() {
+  if (sheetsAccessToken && Date.now() < sheetsTokenExpiry) return sheetsAccessToken;
+
   const keyJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
   if (!keyJson) return null;
+
   try {
-    const { google } = require("googleapis");
-    let key;
-    // Support both inline JSON and file path
-    if (keyJson.startsWith("{")) {
-      key = JSON.parse(keyJson);
-    } else {
-      key = JSON.parse(fs.readFileSync(keyJson, "utf-8"));
-    }
-    const auth = new google.auth.GoogleAuth({
-      credentials: key,
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    const key = keyJson.startsWith("{")
+      ? JSON.parse(keyJson)
+      : JSON.parse(fs.readFileSync(keyJson, "utf-8"));
+
+    const jwt = await createServiceAccountJwt(key);
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
     });
-    sheetsClient = google.sheets({ version: "v4", auth });
-    return sheetsClient;
+    const data = await res.json();
+    if (data.access_token) {
+      sheetsAccessToken = data.access_token;
+      sheetsTokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+      return sheetsAccessToken;
+    }
   } catch (e) {
-    console.error("Google Sheets init failed:", e.message);
-    return null;
+    console.error("Sheets auth failed:", e.message);
   }
+  return null;
+}
+
+async function appendToSheet(spreadsheetId, range, values) {
+  const token = await getSheetsToken();
+  if (!token) return false;
+
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ values }),
+  });
+  return res.ok;
 }
 
 // Generate vCard for contact
@@ -1772,19 +1808,11 @@ app.post("/api/signup", async (req, res) => {
 
   // 3. Append to Google Sheet
   try {
-    const sheets = await getSheetsClient();
     const sheetId = process.env.GOOGLE_SHEETS_ID;
-    if (sheets && sheetId) {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: sheetId,
-        range: "Sheet1!A:D",
-        valueInputOption: "USER_ENTERED",
-        insertDataOption: "INSERT_ROWS",
-        requestBody: {
-          values: [[timestamp, displayName, email, "early-access"]],
-        },
-      });
-      results.sheet = true;
+    if (sheetId) {
+      const ok = await appendToSheet(sheetId, "Sheet1!A:D", [[timestamp, displayName, email, "early-access"]]);
+      results.sheet = ok;
+      if (!ok) console.warn("Sheets append returned non-OK response.");
     } else {
       console.warn("Google Sheets not configured — signup logged locally only.");
     }
