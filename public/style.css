@@ -573,17 +573,6 @@ header {
    Chat Area
    ============================================ */
 
-#chat-area {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scroll-behavior: smooth;
-}
-
-#chat-area::-webkit-scrollbar { width: 5px; }
-#chat-area::-webkit-scrollbar-track { background: transparent; }
-#chat-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
 /* ============================================
    Onboarding (first-time setup)
    ============================================ */

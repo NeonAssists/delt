@@ -1,3 +1,4 @@
+require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
@@ -8,6 +9,7 @@ const os = require("os");
 const fs = require("fs");
 const crypto = require("crypto");
 const multer = require("multer");
+const nodemailer = require("nodemailer");
 
 // ============================================
 // Stability helpers
@@ -115,12 +117,45 @@ function saveCredential(integrationId, data) {
   const creds = loadCredentials();
   creds[integrationId] = { ...data, enabled: true, updatedAt: new Date().toISOString() };
   saveCredentials(creds);
+  writeIntegrationsMd();
 }
 
 function deleteCredential(integrationId) {
   const creds = loadCredentials();
   delete creds[integrationId];
   saveCredentials(creds);
+  writeIntegrationsMd();
+}
+
+// Write persistent integrations.md so Claude always knows what's connected
+function writeIntegrationsMd() {
+  const creds = loadCredentials();
+  const connected = integrationsRegistry.integrations.filter(
+    (i) => creds[i.id] && creds[i.id].enabled
+  );
+
+  let md = "# Connected Integrations\n\n";
+
+  if (!connected.length) {
+    md += "No integrations connected. Use the Integrations panel to connect services.\n";
+  } else {
+    md += "These services are connected via MCP. ALWAYS use the MCP tools to interact with them.\n";
+    md += "NEVER use local apps (Mail.app, Calendar.app), AppleScript, osascript, or shell commands for these services.\n\n";
+
+    for (const i of connected) {
+      const tools = Object.keys(i.mcpServers || {}).map((s) => `mcp__${s}__*`);
+      md += `## ${i.name}\n`;
+      md += `${i.description}\n`;
+      md += `MCP tools: ${tools.join(", ")}\n\n`;
+    }
+  }
+
+  try {
+    const mdPath = path.join(__dirname, "INTEGRATIONS.md");
+    fs.writeFileSync(mdPath, md);
+  } catch (e) {
+    console.error("Failed to write INTEGRATIONS.md:", e.message);
+  }
 }
 
 // Build MCP config from enabled integrations
@@ -486,7 +521,13 @@ app.post("/integrations/:id/test", async (req, res) => {
   const cred = getCredential(integration.id);
   if (!cred || !cred.enabled) return res.json({ ok: false, error: "Not connected" });
 
-  // Try to spawn the first MCP server for this integration
+  // For OAuth integrations, try refreshing the token
+  if (cred.type === "oauth2") {
+    const token = await refreshOAuthToken(integration.id);
+    return res.json({ ok: !!token, message: token ? "Token valid" : "Token refresh failed" });
+  }
+
+  // For MCP-based integrations, try spawning the server
   const [serverName, serverDef] = Object.entries(integration.mcpServers || {})[0] || [];
   if (!serverName) return res.json({ ok: false, error: "No MCP server defined" });
 
@@ -690,20 +731,6 @@ async function refreshOAuthToken(integrationId) {
   }
   return cred.accessToken;
 }
-
-// Test an integration connection
-app.post("/integrations/:id/test", async (req, res) => {
-  const cred = getCredential(req.params.id);
-  if (!cred) return res.json({ ok: false, error: "Not connected" });
-
-  // For OAuth, try refreshing token
-  if (cred.type === "oauth2") {
-    const token = await refreshOAuthToken(req.params.id);
-    res.json({ ok: !!token, message: token ? "Token valid" : "Token refresh failed" });
-  } else {
-    res.json({ ok: true, message: "Credentials stored" });
-  }
-});
 
 // File upload endpoint
 const uploadedFileMap = new Map();
@@ -1121,14 +1148,44 @@ app.get("/memory/session/:sid", (req, res) => {
 // Active sessions
 const sessions = new Map();
 
+// Generate integrations context for Claude
+function buildIntegrationsContext() {
+  const creds = loadCredentials();
+  const connected = [];
+
+  for (const integration of integrationsRegistry.integrations) {
+    const cred = creds[integration.id];
+    if (!cred || !cred.enabled) continue;
+    connected.push(integration);
+  }
+
+  if (!connected.length) return "";
+
+  const lines = connected.map((i) => {
+    const tools = Object.keys(i.mcpServers || {}).map((s) => `mcp__${s}__*`).join(", ");
+    return `- **${i.name}**: ${i.description}. Use MCP tools (${tools}).`;
+  });
+
+  return `[CONNECTED INTEGRATIONS — the user has linked these services. ALWAYS use the MCP tools listed below to interact with them. NEVER use local apps (Mail.app, Calendar.app, etc.), AppleScript, or osascript. NEVER try to open Terminal or shell commands to interact with these services. The MCP tools handle everything directly.
+
+${lines.join("\n")}
+
+When the user asks you to do something with a connected service (send email, check calendar, search files, etc.), use the corresponding mcp__* tools. If a tool call fails, tell the user — don't fall back to local apps.]
+
+`;
+}
+
 function buildSystemPrefix() {
   const ctx = config.business?.context || "";
   const userMem = safeRead(userMemFile);
   const stateMem = getStateContext();
   const dailyMem = safeRead(path.join(memDailyDir, `${todayStr()}.md`));
+  const integrationsCtx = buildIntegrationsContext();
 
   let prefix = "";
   if (ctx) prefix += `[CONTEXT: ${ctx}]\n\n`;
+
+  if (integrationsCtx) prefix += integrationsCtx;
 
   if (userMem) {
     prefix += `[WHO THIS USER IS — persistent memory from all prior sessions]\n${userMem}\n[END USER MEMORY]\n\n`;
@@ -1594,6 +1651,194 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
     if (pane2Process) { pane2Process.kill("SIGINT"); pane2Process = null; }
     if (sessionId) sessions.delete(sessionId);
   });
+});
+
+// ============================================
+// Signup API — email + Google Sheets
+// ============================================
+
+// Serve demo.html at /demo
+app.get("/demo", (req, res) => {
+  res.sendFile(path.join(__dirname, "demo.html"));
+});
+
+// Gmail transporter (lazy init)
+let mailTransporter = null;
+function getMailTransporter() {
+  if (mailTransporter) return mailTransporter;
+  const user = process.env.GMAIL_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD;
+  if (!user || !pass) return null;
+  mailTransporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: { user, pass },
+  });
+  return mailTransporter;
+}
+
+// Google Sheets append (lazy init)
+let sheetsClient = null;
+async function getSheetsClient() {
+  if (sheetsClient) return sheetsClient;
+  const keyJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  if (!keyJson) return null;
+  try {
+    const { google } = require("googleapis");
+    let key;
+    // Support both inline JSON and file path
+    if (keyJson.startsWith("{")) {
+      key = JSON.parse(keyJson);
+    } else {
+      key = JSON.parse(fs.readFileSync(keyJson, "utf-8"));
+    }
+    const auth = new google.auth.GoogleAuth({
+      credentials: key,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
+    sheetsClient = google.sheets({ version: "v4", auth });
+    return sheetsClient;
+  } catch (e) {
+    console.error("Google Sheets init failed:", e.message);
+    return null;
+  }
+}
+
+// Generate vCard for contact
+function generateVCard(name, email) {
+  const firstName = name || email.split("@")[0];
+  return [
+    "BEGIN:VCARD",
+    "VERSION:3.0",
+    `FN:${firstName}`,
+    `N:;${firstName};;;`,
+    `EMAIL;TYPE=INTERNET:${email}`,
+    `NOTE:Delt early access signup — ${new Date().toISOString().split("T")[0]}`,
+    "END:VCARD",
+  ].join("\r\n");
+}
+
+// Local signup log (fallback + backup)
+const signupsPath = path.join(__dirname, "signups.json");
+function logSignupLocally(entry) {
+  let signups = [];
+  try { signups = JSON.parse(fs.readFileSync(signupsPath, "utf-8")); } catch {}
+  signups.push(entry);
+  fs.writeFileSync(signupsPath, JSON.stringify(signups, null, 2));
+}
+
+app.post("/api/signup", async (req, res) => {
+  const { email, name } = req.body;
+  if (!email || !email.includes("@")) {
+    return res.status(400).json({ error: "Valid email required" });
+  }
+
+  const displayName = name || email.split("@")[0];
+  const timestamp = new Date().toISOString();
+  const results = { email: true, notification: false, sheet: false };
+
+  // Always log locally as backup
+  logSignupLocally({ email, name: displayName, timestamp });
+
+  // 1. Send thank-you email to the signup
+  const transporter = getMailTransporter();
+  if (transporter) {
+    try {
+      await transporter.sendMail({
+        from: `"Neonotics" <${process.env.GMAIL_USER}>`,
+        to: email,
+        subject: "Welcome to Delt — You're on the list",
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 24px; color: #18182B;">
+            <div style="text-align: center; margin-bottom: 32px;">
+              <div style="display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #6C5CE7, #06B6D4); color: #fff; font-weight: 800; font-size: 20px;">D</div>
+            </div>
+            <h1 style="font-size: 24px; font-weight: 700; margin-bottom: 16px; text-align: center;">Thank you for your interest in Delt</h1>
+            <p style="font-size: 15px; line-height: 1.7; color: #5C5C72; margin-bottom: 20px;">
+              Hey ${displayName},
+            </p>
+            <p style="font-size: 15px; line-height: 1.7; color: #5C5C72; margin-bottom: 20px;">
+              You're on the early access list for Delt — the AI assistant that connects to your tools and actually does things. Gmail, Slack, GitHub, Notion, Stripe, and more, all through one conversation.
+            </p>
+            <p style="font-size: 15px; line-height: 1.7; color: #5C5C72; margin-bottom: 20px;">
+              We're letting people in weekly. When it's your turn, you'll get an invite with everything you need to get started.
+            </p>
+            <p style="font-size: 15px; line-height: 1.7; color: #5C5C72; margin-bottom: 32px;">
+              In the meantime — if you have questions, just reply to this email. A real person reads it.
+            </p>
+            <div style="border-top: 1px solid #E3E3E8; padding-top: 20px; text-align: center;">
+              <p style="font-size: 13px; color: #9494A8; margin: 0;">
+                Delt by <a href="mailto:neonotics@gmail.com" style="color: #6C5CE7; text-decoration: none;">Neonotics</a>
+              </p>
+            </div>
+          </div>
+        `,
+      });
+      results.email = true;
+    } catch (e) {
+      console.error("Failed to send thank-you email:", e.message);
+      results.email = false;
+    }
+
+    // 2. Send notification + vCard to neonotics@gmail.com
+    try {
+      const vcard = generateVCard(displayName, email);
+      await transporter.sendMail({
+        from: `"Delt Signups" <${process.env.GMAIL_USER}>`,
+        to: process.env.GMAIL_USER,
+        subject: `Delt — New signup: ${displayName}`,
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; padding: 32px 24px; color: #18182B;">
+            <h1 style="font-size: 22px; font-weight: 700; margin-bottom: 20px;">Delt</h1>
+            <div style="background: #F7F7F8; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #E3E3E8;">
+              <p style="margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">${displayName}</p>
+              <p style="margin: 0 0 4px 0; font-size: 14px; color: #5C5C72;">
+                <a href="mailto:${email}" style="color: #6C5CE7; text-decoration: none;">${email}</a>
+              </p>
+              <p style="margin: 8px 0 0 0; font-size: 12px; color: #9494A8;">Signed up: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
+            </div>
+            <p style="font-size: 13px; color: #9494A8;">Contact card attached. Save it to your contacts.</p>
+          </div>
+        `,
+        attachments: [
+          {
+            filename: `${displayName.replace(/[^a-zA-Z0-9]/g, "_")}.vcf`,
+            content: vcard,
+            contentType: "text/vcard",
+          },
+        ],
+      });
+      results.notification = true;
+    } catch (e) {
+      console.error("Failed to send notification email:", e.message);
+    }
+  } else {
+    console.warn("GMAIL_APP_PASSWORD not set — emails skipped. Signup logged locally.");
+  }
+
+  // 3. Append to Google Sheet
+  try {
+    const sheets = await getSheetsClient();
+    const sheetId = process.env.GOOGLE_SHEETS_ID;
+    if (sheets && sheetId) {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: sheetId,
+        range: "Sheet1!A:D",
+        valueInputOption: "USER_ENTERED",
+        insertDataOption: "INSERT_ROWS",
+        requestBody: {
+          values: [[timestamp, displayName, email, "early-access"]],
+        },
+      });
+      results.sheet = true;
+    } else {
+      console.warn("Google Sheets not configured — signup logged locally only.");
+    }
+  } catch (e) {
+    console.error("Failed to append to Google Sheet:", e.message);
+  }
+
+  console.log(`[signup] ${displayName} <${email}> — email:${results.email} notify:${results.notification} sheet:${results.sheet}`);
+  res.json({ ok: true, results });
 });
 
 // ============================================

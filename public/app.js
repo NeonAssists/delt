@@ -1024,70 +1024,7 @@
     });
   }
 
-  // --- Activity Summary (Welcome Screen + Badge) ---
-  const activitySummary = document.getElementById("activity-summary");
-  const activityStats = document.getElementById("activity-stats");
-  const activityRecent = document.getElementById("activity-recent");
-  const activityViewAll = document.getElementById("activity-viewall");
-  async function loadActivitySummary() {
-    try {
-      const res = await fetch("/logs/summary");
-      const data = await res.json();
-      renderActivitySummary(data);
-    } catch {
-      // No logs yet — keep hidden
-    }
-  }
-
-  function renderActivitySummary(data) {
-    if (!activitySummary || !activityStats || !activityRecent) return;
-
-    const today = data.today || {};
-    const week = data.week || {};
-    const recent = data.recent || [];
-
-    // Don't show if no data at all
-    if (today.count === 0 && week.count === 0) return;
-
-    activitySummary.classList.remove("hidden");
-
-    // Stats row
-    const totalDuration = today.totalDurationMs || 0;
-    const durationDisplay = totalDuration < 60000
-      ? Math.round(totalDuration / 1000) + "s"
-      : Math.round(totalDuration / 60000) + "m";
-
-    activityStats.innerHTML = `
-      <div class="activity-stat">
-        <span class="activity-stat-value accent">${today.count || 0}</span>
-        <span class="activity-stat-label">Today</span>
-      </div>
-      <div class="activity-stat">
-        <span class="activity-stat-value">${week.count || 0}</span>
-        <span class="activity-stat-label">This week</span>
-      </div>
-      <div class="activity-stat">
-        <span class="activity-stat-value">${today.count ? durationDisplay : "—"}</span>
-        <span class="activity-stat-label">Time today</span>
-      </div>
-    `;
-
-    // Recent list
-    if (!recent.length) {
-      activityRecent.innerHTML = `<div class="activity-empty">No conversations today yet.</div>`;
-      return;
-    }
-
-    activityRecent.innerHTML = `<div class="activity-recent-list">${recent.map((e) => `
-      <div class="activity-recent-item">
-        <span class="activity-recent-time">${formatTime(e.timestamp)}</span>
-        <div class="activity-recent-content">
-          <div class="activity-recent-q">${escapeHtml(truncate(e.userMessage, 80))}</div>
-          ${e.assistantMessage ? `<div class="activity-recent-a">${escapeHtml(truncate(e.assistantMessage, 100))}</div>` : ""}
-        </div>
-      </div>
-    `).join("")}</div>`;
-  }
+  // Activity summary removed — welcome screen no longer has those elements
 
 
   // ============================================
@@ -1095,7 +1032,6 @@
   // ============================================
   const btwFab = document.getElementById("btw-fab");
   const btwPanel = document.getElementById("btw-panel");
-  const btwOverlay = document.getElementById("btw-overlay");
   const btwCloseBtn = document.getElementById("btw-close");
   const btwMessagesEl = document.getElementById("btw-messages");
   const btwEmpty = document.getElementById("btw-empty");
@@ -1441,7 +1377,8 @@
 
     integrationsBody.innerHTML = html;
 
-    // Bind events via delegation
+    // Bind events via delegation — remove old listener first to prevent leak
+    integrationsBody.removeEventListener("click", handleIntegrationClick);
     integrationsBody.addEventListener("click", handleIntegrationClick);
   }
 
@@ -1988,7 +1925,6 @@
         waitForOpen();
       }
     });
-    loadActivitySummary();
     initSpeech();
     if (localStorage.getItem(MIC_CONSENT_KEY) === "denied" && micBtn) {
       micBtn.classList.add("hidden");
