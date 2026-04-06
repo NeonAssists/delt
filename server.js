@@ -165,35 +165,54 @@ function writeIntegrationsMd() {
 function buildMcpConfig() {
   const creds = loadCredentials();
   const mcpServers = {};
-  const composioKey = config.composioApiKey;
 
   for (const integration of integrationsRegistry.integrations) {
     const cred = creds[integration.id];
     if (!cred || !cred.enabled) continue;
 
-    // Composio-managed integrations — use mcp-remote to Composio endpoint
-    if (integration.composioSlug && composioKey) {
-      const url = `https://mcp.composio.dev/${integration.composioSlug}/${composioKey}`;
-      mcpServers[integration.composioSlug] = {
-        command: "npx",
-        args: ["-y", "mcp-remote", url],
-        env: {},
-      };
-      continue;
-    }
-
-    // Direct MCP server integrations (token-based)
     for (const [serverName, serverDef] of Object.entries(integration.mcpServers || {})) {
       const env = {};
       for (const [envVar, credKey] of Object.entries(serverDef.envMapping || {})) {
-        const val = cred[credKey];
-        if (val) env[envVar] = val;
+        if (credKey.startsWith("_static:")) {
+          env[envVar] = credKey.slice(8);
+        } else {
+          const val = cred[credKey];
+          if (val) env[envVar] = val;
+        }
       }
-      mcpServers[serverName] = {
-        command: serverDef.command,
-        args: serverDef.args || [],
-        env,
-      };
+
+      // Google Workspace: inject env vars per MCP server
+      if (integration.id === "google-workspace") {
+        const clientConfig = oauthClients["google-workspace"];
+        if (serverName === "google-calendar") {
+          env.CREDENTIALS_PATH = path.join(os.homedir(), ".delt", "google", "credentials.json");
+        } else if (serverName === "google-sheets" && clientConfig) {
+          env.GOOGLE_SHEETS_CLIENT_ID = clientConfig.clientId;
+          env.GOOGLE_SHEETS_CLIENT_SECRET = clientConfig.clientSecret;
+          if (cred.refreshToken) env.GOOGLE_SHEETS_REFRESH_TOKEN = cred.refreshToken;
+          if (cred.accessToken) env.GOOGLE_SHEETS_ACCESS_TOKEN = cred.accessToken;
+          env.TOKEN_PATH = path.join(os.homedir(), ".delt", "google", "token.json");
+        }
+      }
+
+      // Local access: append directory args based on permission level
+      if (integration.id === "local-access") {
+        const dirs = cred.level === "full"
+          ? [os.homedir()]
+          : (cred.directories || []).filter(Boolean);
+        if (!dirs.length) continue; // skip if no directories configured
+        mcpServers[serverName] = {
+          command: serverDef.command,
+          args: [...(serverDef.args || []), ...dirs],
+          env,
+        };
+      } else {
+        mcpServers[serverName] = {
+          command: serverDef.command,
+          args: serverDef.args || [],
+          env,
+        };
+      }
     }
   }
 
@@ -500,18 +519,26 @@ app.post("/setup", (req, res) => {
 // List all integrations with connection status
 app.get("/integrations", (req, res) => {
   const creds = loadCredentials();
-  const result = integrationsRegistry.integrations.map((i) => ({
-    id: i.id,
-    name: i.name,
-    description: i.description,
-    icon: i.icon,
-    category: i.category,
-    authType: i.authType,
-    setupSteps: i.setupSteps || [],
-    tokenConfig: i.tokenConfig || null,
-    connected: !!(creds[i.id] && creds[i.id].enabled),
-    connectedAt: creds[i.id]?.updatedAt || null,
-  }));
+  const result = integrationsRegistry.integrations.map((i) => {
+    const cred = creds[i.id];
+    const entry = {
+      id: i.id,
+      name: i.name,
+      description: i.description,
+      icon: i.icon,
+      category: i.category,
+      authType: i.authType,
+      setupSteps: i.setupSteps || [],
+      tokenConfig: i.tokenConfig || null,
+      connected: !!(cred && cred.enabled),
+      connectedAt: cred?.updatedAt || null,
+    };
+    if (i.authType === "local-access" && cred && cred.enabled) {
+      entry.accessLevel = cred.level || "none";
+      entry.directories = cred.directories || [];
+    }
+    return entry;
+  });
   res.json({ integrations: result });
 });
 
@@ -550,22 +577,35 @@ app.post("/integrations/:id/auto-detect", async (req, res) => {
   }
 });
 
-// Connect an integration (token-based or enable)
+// Connect an integration (token-based, multi-field, or enable)
 app.post("/integrations/:id/connect", (req, res) => {
-  const { token, baseUrl } = req.body;
+  const { token, baseUrl, fields } = req.body;
   const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
   if (!integration) return res.status(404).json({ error: "Integration not found" });
 
-  if (integration.authType === "composio") {
-    if (!config.composioApiKey) return res.status(400).json({ error: "Composio API key not configured. Add it in Settings." });
-    saveCredential(integration.id, { type: "composio" });
-    res.json({ ok: true, connected: true });
-  } else if (integration.authType === "enable") {
+  if (integration.authType === "enable") {
     saveCredential(integration.id, { type: "enable" });
     res.json({ ok: true, connected: true });
+  } else if (integration.authType === "local-access") {
+    const { level, directories } = req.body;
+    if (!level || !["none", "limited", "full"].includes(level)) {
+      return res.status(400).json({ error: "Invalid access level" });
+    }
+    if (level === "none") {
+      deleteCredential(integration.id);
+      return res.json({ ok: true, connected: false });
+    }
+    saveCredential(integration.id, { type: "local-access", level, directories: directories || [] });
+    res.json({ ok: true, connected: true });
   } else if (integration.authType === "token" || integration.authType === "custom") {
-    if (!token) return res.status(400).json({ error: "Token required" });
-    saveCredential(integration.id, { token, baseUrl: baseUrl || "", type: "token" });
+    // Multi-field support: if tokenConfig has fields, expect fields object
+    if (fields && typeof fields === "object") {
+      saveCredential(integration.id, { ...fields, type: "token" });
+    } else if (token) {
+      saveCredential(integration.id, { token, baseUrl: baseUrl || "", type: "token" });
+    } else {
+      return res.status(400).json({ error: "Token required" });
+    }
     res.json({ ok: true, connected: true });
   } else {
     res.status(400).json({ error: "Use OAuth flow for this integration" });
@@ -670,7 +710,7 @@ app.get("/integrations/:id/auth-url", (req, res) => {
 
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: `http://localhost:${PORT}/oauth/callback`,
+    redirect_uri: `http://localhost:${PORT}`,
     response_type: "code",
     scope: integration.oauth.scopes.join(" "),
     access_type: "offline",
@@ -679,6 +719,14 @@ app.get("/integrations/:id/auth-url", (req, res) => {
   });
 
   res.json({ url: `${integration.oauth.authorizationUrl}?${params}` });
+});
+
+// OAuth callback — Desktop app redirects to root with ?code=&state=
+app.get("/", (req, res, next) => {
+  if (req.query.code && req.query.state) {
+    return res.redirect(`/oauth/callback?${new URLSearchParams(req.query)}`);
+  }
+  next();
 });
 
 // OAuth callback handler
@@ -715,7 +763,7 @@ app.get("/oauth/callback", async (req, res) => {
         client_secret: clientConfig.clientSecret,
         code,
         grant_type: "authorization_code",
-        redirect_uri: `http://localhost:${PORT}/oauth/callback`,
+        redirect_uri: `http://localhost:${PORT}`,
       }),
     });
 
@@ -731,6 +779,44 @@ app.get("/oauth/callback", async (req, res) => {
       expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
       scope: tokens.scope,
     });
+
+    // Google Workspace: write credentials for each MCP server
+    if (integration.id === "google-workspace") {
+      const oauthKeysJson = JSON.stringify({
+        installed: {
+          client_id: clientConfig.clientId,
+          client_secret: clientConfig.clientSecret,
+          auth_uri: "https://accounts.google.com/o/oauth2/auth",
+          token_uri: "https://oauth2.googleapis.com/token",
+          redirect_uris: ["http://localhost"]
+        }
+      });
+      const tokenJson = JSON.stringify({
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        token_type: tokens.token_type || "Bearer",
+        expiry_date: Date.now() + (tokens.expires_in || 3600) * 1000
+      });
+
+      try {
+        // Gmail MCP — reads from ~/.gmail-mcp/
+        const gmailDir = path.join(os.homedir(), ".gmail-mcp");
+        if (!fs.existsSync(gmailDir)) fs.mkdirSync(gmailDir, { recursive: true });
+        fs.writeFileSync(path.join(gmailDir, "gcp-oauth.keys.json"), oauthKeysJson);
+        fs.writeFileSync(path.join(gmailDir, "credentials.json"), tokenJson);
+
+        // Calendar MCP — reads credentials.json + token.json from CREDENTIALS_PATH dir
+        const calDir = path.join(os.homedir(), ".delt", "google");
+        if (!fs.existsSync(calDir)) fs.mkdirSync(calDir, { recursive: true });
+        fs.writeFileSync(path.join(calDir, "credentials.json"), oauthKeysJson);
+        fs.writeFileSync(path.join(calDir, "token.json"), tokenJson);
+
+        // Sheets MCP — uses env vars (handled in buildMcpConfig)
+        // refresh_token is already in the saved credential
+      } catch (e) {
+        console.error("Failed to write Google MCP credentials:", e.message);
+      }
+    }
 
     res.send(`<html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f7f7f8;">
       <div style="text-align:center;">
@@ -1239,11 +1325,25 @@ function buildIntegrationsContext() {
     return `- **${i.name}**: ${i.description}. Use MCP tools (${tools}).`;
   });
 
+  // Local access context
+  let localCtx = "";
+  const localCred = creds["local-access"];
+  if (localCred && localCred.enabled) {
+    if (localCred.level === "full") {
+      localCtx = "\n\n[LOCAL COMPUTER ACCESS: FULL — You have unrestricted filesystem access to this Mac via mcp__filesystem__* tools. You can read, write, search, and manage files anywhere in the user's home directory.]";
+    } else if (localCred.level === "limited") {
+      const dirs = (localCred.directories || []).join(", ");
+      localCtx = `\n\n[LOCAL COMPUTER ACCESS: LIMITED — You have filesystem access ONLY to these directories: ${dirs}. Use mcp__filesystem__* tools. Before accessing any file, confirm the path is within an allowed directory. If the user asks you to access something outside these directories, tell them it's outside your permitted access and ask them to update their Local Computer settings.]`;
+    }
+  } else {
+    localCtx = "\n\n[LOCAL COMPUTER ACCESS: NONE — You do NOT have filesystem access. Do not attempt to read, write, or search local files. If the user asks you to work with local files, tell them to enable Local Computer access in the Integrations panel.]";
+  }
+
   return `[CONNECTED INTEGRATIONS — the user has linked these services. ALWAYS use the MCP tools listed below to interact with them. NEVER use local apps (Mail.app, Calendar.app, etc.), AppleScript, or osascript. NEVER try to open Terminal or shell commands to interact with these services. The MCP tools handle everything directly.
 
 ${lines.join("\n")}
 
-When the user asks you to do something with a connected service (send email, check calendar, search files, etc.), use the corresponding mcp__* tools. If a tool call fails, tell the user — don't fall back to local apps.]
+When the user asks you to do something with a connected service (send email, check calendar, search files, etc.), use the corresponding mcp__* tools. If a tool call fails, tell the user — don't fall back to local apps.]${localCtx}
 
 `;
 }

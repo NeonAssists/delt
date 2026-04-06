@@ -700,6 +700,8 @@
     if (pane2Open || !pane2) return;
     pane2Open = true;
     pane2.classList.remove("hidden");
+    const p1Header = document.getElementById("pane-1-header");
+    if (p1Header) p1Header.classList.remove("hidden");
     pane2Messages.innerHTML = "";
     pane2Welcome.classList.remove("hidden");
     pane2SessionId = null;
@@ -723,6 +725,8 @@
     if (!pane2) return;
     pane2Open = false;
     pane2.classList.add("hidden");
+    const p1Header = document.getElementById("pane-1-header");
+    if (p1Header) p1Header.classList.add("hidden");
     pane2SessionId = null;
     pane2Busy = false;
     input.focus();
@@ -861,6 +865,8 @@
   }
 
   if (pane2Close) pane2Close.addEventListener("click", closePane2);
+  const pane1Close = document.getElementById("pane-1-close");
+  if (pane1Close) pane1Close.addEventListener("click", closePane2);
   if (pane2Input) {
     pane2Input.addEventListener("input", () => {
       pane2Input.style.height = "auto";
@@ -1316,6 +1322,8 @@
     sendgrid: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#1A82E2"><path d="M1 8h7v7H1V8zm7-7h7v7H8V1zm7 7h8v7h-8V8zm0 7h-7v7h7v-7z"/></svg>`,
     salesforce: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#00A1E0"><path d="M10 4.5a4.5 4.5 0 0 1 7.6-2 5 5 0 0 1 5.4 6 4.5 4.5 0 0 1-2 8.5H5a4 4 0 0 1-1-7.9A5.5 5.5 0 0 1 10 4.5z"/></svg>`,
     zoom: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#2D8CFF"><rect x="1" y="4" width="22" height="16" rx="4"/><path d="M5 8h9v5.5c0 .8-.7 1.5-1.5 1.5H5V8z" fill="white"/><path d="M15 10l4-2.5v9L15 14v-4z" fill="white"/></svg>`,
+    vscode: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M17.58 2L7.72 10.16 3.87 7.17 2 8.04v7.92l1.87.87 3.85-2.99L17.58 22 22 20.08V3.92L17.58 2zM7.72 14.17L5.04 12l2.68-2.17v4.34zm9.86 3.93L12.7 12l4.88-6.1v12.2z" fill="#007ACC"/></svg>`,
+    computer: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
     api: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
   };
 
@@ -1392,7 +1400,10 @@
             <span class="integration-desc">${escapeHtml(i.description)}</span>
           </div>
           <div class="integration-actions">
-            <span class="integration-status"><span class="integration-status-dot"></span> Connected</span>
+            <span class="integration-status"><span class="integration-status-dot"></span> ${i.authType === "local-access" ? (i.accessLevel === "full" ? "Full Access" : "Limited Access") : "Connected"}</span>
+            ${i.authType === "local-access"
+              ? `<button class="integration-connect-btn" data-action="connect" data-id="${i.id}" data-auth="local-access" style="font-size:12px">Change</button>`
+              : ""}
             <button class="integration-disconnect-btn" data-action="disconnect" data-id="${i.id}">Remove</button>
           </div>
         </div>`;
@@ -1405,7 +1416,7 @@
           <span class="integration-desc">${escapeHtml(i.description)}</span>
         </div>
         <div class="integration-actions">
-          <button class="integration-connect-btn" data-action="connect" data-id="${i.id}" data-auth="${i.authType}">${i.authType === "composio" ? "Connect" : i.authType === "enable" ? "Enable" : i.authType === "google-oauth" ? "Sign in with Google" : i.authType === "oauth2" ? "Sign in" : "Connect"}</button>
+          <button class="integration-connect-btn" data-action="connect" data-id="${i.id}" data-auth="${i.authType}">${i.authType === "oauth2" ? "Sign in" : i.authType === "enable" ? "Enable" : i.authType === "local-access" ? "Configure" : "Connect"}</button>
         </div>
       </div>`;
   }
@@ -1428,21 +1439,19 @@
 
     if (action === "connect") {
       const authType = btn.dataset.auth;
-      if (authType === "composio" || authType === "enable") {
-        btn.textContent = authType === "composio" ? "Connecting..." : "Enabling...";
+      if (authType === "enable") {
+        btn.textContent = "Enabling...";
         btn.disabled = true;
         try {
-          const cRes = await fetch(`/integrations/${id}/connect`, {
+          await fetch(`/integrations/${id}/connect`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({}),
           });
-          const cData = await cRes.json();
-          if (cData.error) { btn.textContent = cData.error; btn.disabled = false; return; }
           loadIntegrations();
         } catch { btn.textContent = "Failed"; btn.disabled = false; }
-      } else if (authType === "google-oauth") {
-        startGoogleAuth(id, btn);
+      } else if (authType === "local-access") {
+        showLocalAccessWizard(id, btn.closest(".integration-card"));
       } else if (authType === "oauth2") {
         startOAuthFlow(id);
       } else {
@@ -1548,31 +1557,49 @@
 
       const wizard = document.createElement("div");
       wizard.className = "token-wizard";
+      const hasFields = tc.fields && tc.fields.length > 0;
+      const inputsHtml = hasFields
+        ? tc.fields.map((f) => `<input class="token-wizard-input" data-key="${escapeHtml(f.key)}" type="password" placeholder="${escapeHtml(f.placeholder || f.label)}" autocomplete="off" aria-label="${escapeHtml(f.label)}">`).join("")
+        : `<input class="token-wizard-input" type="password" placeholder="${escapeHtml(tc.placeholder || 'Paste your token here')}" autocomplete="off">`;
+
       wizard.innerHTML = `
-        <div class="token-wizard-title">How to get your ${escapeHtml(tc.label || "API key")}</div>
+        <div class="token-wizard-title">How to get your ${escapeHtml(hasFields ? integration.name + " credentials" : tc.label || "API key")}</div>
         ${steps ? `<ol class="token-wizard-steps">${steps}</ol>` : ""}
         ${tc.helpUrl ? `<a class="token-wizard-link" href="${tc.helpUrl}" target="_blank" rel="noopener">Open ${escapeHtml(integration.name)} settings &rarr;</a>` : ""}
-        <input class="token-wizard-input" type="password" placeholder="${escapeHtml(tc.placeholder || 'Paste your token here')}" autocomplete="off">
+        ${inputsHtml}
         <button class="token-wizard-submit" disabled>Connect ${escapeHtml(integration.name)}</button>
       `;
 
-      const input = wizard.querySelector(".token-wizard-input");
+      const inputs = wizard.querySelectorAll(".token-wizard-input");
       const submit = wizard.querySelector(".token-wizard-submit");
 
-      input.addEventListener("input", () => { submit.disabled = !input.value.trim(); });
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !submit.disabled) doConnect();
+      function checkAllFilled() {
+        submit.disabled = ![...inputs].every((inp) => inp.value.trim());
+      }
+      inputs.forEach((inp) => {
+        inp.addEventListener("input", checkAllFilled);
+        inp.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !submit.disabled) doConnect();
+        });
       });
       submit.addEventListener("click", doConnect);
 
       async function doConnect() {
         submit.disabled = true;
         submit.textContent = "Connecting...";
+        let body;
+        if (hasFields) {
+          const fields = {};
+          inputs.forEach((inp) => { fields[inp.dataset.key] = inp.value.trim(); });
+          body = { fields };
+        } else {
+          body = { token: inputs[0].value.trim() };
+        }
         try {
           const res = await fetch(`/integrations/${integrationId}/connect`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: input.value.trim() }),
+            body: JSON.stringify(body),
           });
           const result = await res.json();
           if (result.ok) {
@@ -1588,7 +1615,99 @@
       }
 
       cardEl.appendChild(wizard);
-      input.focus();
+      inputs[0].focus();
+    });
+  }
+
+  function showLocalAccessWizard(integrationId, cardEl) {
+    const existingWizard = cardEl.querySelector(".local-access-panel");
+    if (existingWizard) { existingWizard.remove(); return; }
+
+    fetch("/integrations").then((r) => r.json()).then((data) => {
+      const integration = (data.integrations || []).find((i) => i.id === integrationId);
+      if (!integration) return;
+
+      const currentLevel = integration.accessLevel || "none";
+      const currentDirs = (integration.directories || []).join("\n");
+
+      const panel = document.createElement("div");
+      panel.className = "local-access-panel";
+      panel.innerHTML = `
+        <div class="local-access-options">
+          <button class="local-access-btn${currentLevel === "none" ? " active" : ""}" data-level="none">
+            <div class="local-access-btn-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            </div>
+            <div class="local-access-btn-text">
+              <strong>No Access</strong>
+              <span>Cannot read or write any files on this computer</span>
+            </div>
+          </button>
+          <button class="local-access-btn${currentLevel === "limited" ? " active" : ""}" data-level="limited">
+            <div class="local-access-btn-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <div class="local-access-btn-text">
+              <strong>Limited Access</strong>
+              <span>Only folders you approve — you choose exactly what's accessible</span>
+            </div>
+          </button>
+          <button class="local-access-btn${currentLevel === "full" ? " active" : ""}" data-level="full">
+            <div class="local-access-btn-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <div class="local-access-btn-text">
+              <strong>Full Access</strong>
+              <span>Unrestricted access to all files in your home directory</span>
+            </div>
+          </button>
+        </div>
+        <div class="local-access-dirs" style="display:${currentLevel === "limited" ? "block" : "none"}">
+          <label class="local-access-dirs-label">Allowed folders <span style="color:var(--text-faint)">(one per line)</span></label>
+          <textarea class="local-access-dirs-input" rows="3" placeholder="/Users/you/Documents&#10;/Users/you/Projects">${escapeHtml(currentDirs)}</textarea>
+          <button class="local-access-dirs-save">Save folders</button>
+        </div>
+      `;
+
+      const btns = panel.querySelectorAll(".local-access-btn");
+      const dirsSection = panel.querySelector(".local-access-dirs");
+      const dirsInput = panel.querySelector(".local-access-dirs-input");
+      const dirsSave = panel.querySelector(".local-access-dirs-save");
+
+      async function setLevel(level, directories) {
+        try {
+          await fetch(`/integrations/${integrationId}/connect`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ level, directories: directories || [] }),
+          });
+          loadIntegrations();
+        } catch {}
+      }
+
+      btns.forEach((btn) => btn.addEventListener("click", () => {
+        const level = btn.dataset.level;
+        btns.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+
+        if (level === "limited") {
+          dirsSection.style.display = "block";
+          dirsInput.focus();
+        } else {
+          dirsSection.style.display = "none";
+          setLevel(level);
+        }
+      }));
+
+      dirsSave.addEventListener("click", () => {
+        const dirs = dirsInput.value.split("\n").map((s) => s.trim()).filter(Boolean);
+        if (!dirs.length) { dirsInput.focus(); return; }
+        dirsSave.textContent = "Saving...";
+        dirsSave.disabled = true;
+        setLevel("limited", dirs);
+      });
+
+      cardEl.appendChild(panel);
     });
   }
 

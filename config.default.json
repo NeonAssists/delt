@@ -12,7 +12,6 @@
     "accentSoft": "rgba(108, 92, 231, 0.08)",
     "accentSofter": "rgba(108, 92, 231, 0.04)"
   },
-  "composioApiKey": "",
   "tools": [
     {
       "id": "email",

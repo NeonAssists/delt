@@ -1,31 +1,64 @@
 {
   "integrations": [
     {
-      "id": "gmail",
-      "name": "Gmail",
-      "description": "Send, read, search, and manage emails",
-      "icon": "google",
-      "category": "communication",
-      "authType": "composio",
-      "composioSlug": "gmail",
-      "setupSteps": [
-        "Click Connect below",
-        "Sign in with your Google account in the popup",
-        "That's it — you can now send and read emails"
-      ]
+      "id": "local-access",
+      "name": "Local Computer",
+      "description": "Files, folders, and system access on this Mac",
+      "icon": "computer",
+      "category": "system",
+      "authType": "local-access",
+      "mcpServers": {
+        "filesystem": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+          "envMapping": {}
+        }
+      },
+      "setupSteps": []
     },
     {
-      "id": "google-drive",
-      "name": "Google Drive",
-      "description": "Files, folders, sharing, search",
+      "id": "google-workspace",
+      "name": "Google Workspace",
+      "description": "Gmail, Calendar, Sheets, Drive",
       "icon": "google",
       "category": "productivity",
-      "authType": "composio",
-      "composioSlug": "googledrive",
+      "authType": "oauth2",
+      "oauth": {
+        "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth",
+        "tokenUrl": "https://oauth2.googleapis.com/token",
+        "scopes": [
+          "https://www.googleapis.com/auth/gmail.modify",
+          "https://www.googleapis.com/auth/gmail.compose",
+          "https://www.googleapis.com/auth/gmail.readonly",
+          "https://www.googleapis.com/auth/gmail.labels",
+          "https://www.googleapis.com/auth/calendar",
+          "https://www.googleapis.com/auth/calendar.events",
+          "https://www.googleapis.com/auth/spreadsheets",
+          "https://www.googleapis.com/auth/drive.readonly",
+          "https://www.googleapis.com/auth/drive.file"
+        ]
+      },
+      "mcpServers": {
+        "gmail": {
+          "command": "npx",
+          "args": ["-y", "@monsoft/mcp-gmail"],
+          "envMapping": {}
+        },
+        "google-calendar": {
+          "command": "npx",
+          "args": ["-y", "mcp-google-calendar"],
+          "envMapping": {}
+        },
+        "google-sheets": {
+          "command": "npx",
+          "args": ["-y", "mcp-google-sheets"],
+          "envMapping": {}
+        }
+      },
       "setupSteps": [
-        "Click Connect below",
-        "Sign in with your Google account in the popup",
-        "Your Drive files will be accessible"
+        "Click 'Sign in with Google' below",
+        "Choose your Google account and grant access",
+        "Gmail, Calendar, Sheets, and Drive will all be available"
       ]
     },
     {
@@ -61,12 +94,26 @@
       "description": "Messages, channels, search workspace",
       "icon": "slack",
       "category": "communication",
-      "authType": "composio",
-      "composioSlug": "slack",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Bot User OAuth Token",
+        "placeholder": "xoxb-xxxxxxxxxxxx-xxxxxxxxxxxx",
+        "helpUrl": "https://api.slack.com/apps",
+        "scopes": "channels:read, chat:write, users:read"
+      },
+      "mcpServers": {
+        "slack": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-slack"],
+          "envMapping": { "SLACK_BOT_TOKEN": "token" }
+        }
+      },
       "setupSteps": [
-        "Click Connect below",
-        "Sign in with your Slack workspace in the popup",
-        "Your channels and messages will be accessible"
+        "Go to api.slack.com/apps and sign in",
+        "Click 'Create New App' → 'From scratch'",
+        "Name it 'Delt' and pick your workspace",
+        "Go to 'OAuth & Permissions', add scopes: channels:read, chat:write, users:read",
+        "Install to Workspace and copy the Bot User OAuth Token"
       ]
     },
     {
@@ -75,12 +122,26 @@
       "description": "Pages, databases, search, create content",
       "icon": "notion",
       "category": "productivity",
-      "authType": "composio",
-      "composioSlug": "notion",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Integration Token",
+        "placeholder": "ntn_xxxxxxxxxxxxxxxxxxxx",
+        "helpUrl": "https://www.notion.so/profile/integrations",
+        "scopes": "read, update, insert"
+      },
+      "mcpServers": {
+        "notion": {
+          "command": "npx",
+          "args": ["-y", "@notionhq/notion-mcp-server"],
+          "envMapping": { "OPENAPI_MCP_HEADERS": "token" }
+        }
+      },
       "setupSteps": [
-        "Click Connect below",
-        "Sign in with Notion and select which pages to share",
-        "Your Notion workspace will be accessible"
+        "Go to notion.so/profile/integrations",
+        "Click 'New integration' and name it 'Delt'",
+        "Select your workspace and click Submit",
+        "Copy the Internal Integration Token",
+        "Go to the Notion pages you want accessible, click ··· → Connections → Add Delt"
       ]
     },
     {
@@ -104,10 +165,10 @@
         }
       },
       "setupSteps": [
-        "Go to Linear → Settings (gear icon) → Account → API",
+        "Go to Linear → Settings → Account → API",
         "Click 'Create key' under Personal API Keys",
-        "Give it a label like 'Delt' and click Create",
-        "Copy the key that appears"
+        "Name it 'Delt' and click Create",
+        "Copy the key"
       ]
     },
     {
@@ -132,23 +193,8 @@
       },
       "setupSteps": [
         "Go to dashboard.stripe.com and sign in",
-        "Click Developers → API Keys in the top nav",
-        "Copy your Secret key (starts with sk_test_ or sk_live_)",
-        "Tip: use a Test mode key first to try it safely"
-      ]
-    },
-    {
-      "id": "hubspot",
-      "name": "HubSpot",
-      "description": "CRM, contacts, deals, tickets",
-      "icon": "hubspot",
-      "category": "crm",
-      "authType": "composio",
-      "composioSlug": "hubspot",
-      "setupSteps": [
-        "Click Connect below",
-        "Sign in with your HubSpot account in the popup",
-        "Your CRM data will be accessible"
+        "Click Developers → API Keys",
+        "Copy your Secret key (starts with sk_test_ or sk_live_)"
       ]
     },
     {
@@ -157,12 +203,52 @@
       "description": "Products, orders, customers, inventory",
       "icon": "shopify",
       "category": "commerce",
-      "authType": "composio",
-      "composioSlug": "shopify",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Admin API Access Token",
+        "placeholder": "shpat_xxxxxxxxxxxxxxxxxxxx",
+        "helpUrl": "https://admin.shopify.com/settings/apps/development",
+        "scopes": "read_products, write_products, read_orders"
+      },
+      "mcpServers": {
+        "shopify": {
+          "command": "npx",
+          "args": ["-y", "shopify-mcp"],
+          "envMapping": { "SHOPIFY_ACCESS_TOKEN": "token" }
+        }
+      },
       "setupSteps": [
-        "Click Connect below",
-        "Sign in with your Shopify store in the popup",
-        "Your products, orders, and customers will be accessible"
+        "Go to your Shopify Admin → Settings → Apps → Develop apps",
+        "Create an app named 'Delt'",
+        "Select API scopes and install",
+        "Copy the Admin API access token"
+      ]
+    },
+    {
+      "id": "hubspot",
+      "name": "HubSpot",
+      "description": "CRM, contacts, deals, tickets",
+      "icon": "hubspot",
+      "category": "crm",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Private App Access Token",
+        "placeholder": "pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        "helpUrl": "https://app.hubspot.com/private-apps/",
+        "scopes": "crm.objects.contacts, crm.objects.deals"
+      },
+      "mcpServers": {
+        "hubspot": {
+          "command": "npx",
+          "args": ["-y", "mcp-hubspot"],
+          "envMapping": { "HUBSPOT_ACCESS_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to HubSpot → Settings → Integrations → Private Apps",
+        "Create a private app named 'Delt'",
+        "Add scopes: Contacts, Deals, Tickets",
+        "Create and copy the access token"
       ]
     },
     {
@@ -171,12 +257,25 @@
       "description": "Boards, cards, lists, checklists",
       "icon": "trello",
       "category": "productivity",
-      "authType": "composio",
-      "composioSlug": "trello",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "API Token",
+        "placeholder": "your-trello-api-token",
+        "helpUrl": "https://trello.com/power-ups/admin",
+        "scopes": "read, write"
+      },
+      "mcpServers": {
+        "trello": {
+          "command": "npx",
+          "args": ["-y", "mcp-trello"],
+          "envMapping": { "TRELLO_API_TOKEN": "token" }
+        }
+      },
       "setupSteps": [
-        "Click Connect below",
-        "Sign in with your Trello account in the popup",
-        "Your boards and cards will be accessible"
+        "Go to trello.com/power-ups/admin and sign in",
+        "Create a Power-Up and generate an API Key",
+        "Click the Token link to generate a token",
+        "Copy the token"
       ]
     },
     {
@@ -185,68 +284,45 @@
       "description": "Design files, components, comments",
       "icon": "figma",
       "category": "design",
-      "authType": "composio",
-      "composioSlug": "figma",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Personal Access Token",
+        "placeholder": "figd_xxxxxxxxxxxxxxxxxxxx",
+        "helpUrl": "https://www.figma.com/developers/api#access-tokens",
+        "scopes": "file:read"
+      },
+      "mcpServers": {
+        "figma": {
+          "command": "npx",
+          "args": ["-y", "figma-mcp"],
+          "envMapping": { "FIGMA_ACCESS_TOKEN": "token" }
+        }
+      },
       "setupSteps": [
-        "Click Connect below",
-        "Sign in with your Figma account in the popup",
-        "Your design files will be accessible"
+        "Go to figma.com → Settings → Personal access tokens",
+        "Create a new token named 'Delt'",
+        "Copy the token immediately"
       ]
     },
     {
-      "id": "microsoft-365",
-      "name": "Microsoft 365",
-      "description": "Outlook, OneDrive, Teams, Word, Excel",
-      "icon": "microsoft",
-      "category": "productivity",
-      "authType": "composio",
-      "composioSlug": "outlook",
+      "id": "vscode",
+      "name": "VS Code",
+      "description": "Workspace files, diagnostics, terminals, editor control",
+      "icon": "vscode",
+      "category": "development",
+      "authType": "enable",
+      "mcpServers": {
+        "vscode": {
+          "command": "npx",
+          "args": ["-y", "@vscode-mcp/vscode-mcp-server"],
+          "envMapping": {}
+        }
+      },
       "setupSteps": [
-        "Click Connect below",
-        "Sign in with your Microsoft account in the popup",
-        "Your Outlook, OneDrive, and Office apps will be accessible"
-      ]
-    },
-    {
-      "id": "salesforce",
-      "name": "Salesforce",
-      "description": "CRM, leads, opportunities, accounts",
-      "icon": "salesforce",
-      "category": "crm",
-      "authType": "composio",
-      "composioSlug": "salesforce",
-      "setupSteps": [
-        "Click Connect below",
-        "Sign in with your Salesforce account in the popup",
-        "Your CRM data will be accessible"
-      ]
-    },
-    {
-      "id": "dropbox",
-      "name": "Dropbox",
-      "description": "Files, folders, sharing, search",
-      "icon": "dropbox",
-      "category": "storage",
-      "authType": "composio",
-      "composioSlug": "dropbox",
-      "setupSteps": [
-        "Click Connect below",
-        "Sign in with your Dropbox account in the popup",
-        "Your files will be accessible"
-      ]
-    },
-    {
-      "id": "zoom",
-      "name": "Zoom",
-      "description": "Meetings, recordings, participants",
-      "icon": "zoom",
-      "category": "communication",
-      "authType": "composio",
-      "composioSlug": "zoom",
-      "setupSteps": [
-        "Click Connect below",
-        "Sign in with your Zoom account in the popup",
-        "Your meetings and recordings will be accessible"
+        "Install the 'VSCode MCP' extension in VS Code (search 'vscode-mcp' in the Extensions panel)",
+        "Make sure VS Code is running with the extension active",
+        "Click Enable below — the MCP server connects to VS Code via Unix Socket",
+        "No API keys needed — it talks directly to your running VS Code instance"
       ]
     },
     {
@@ -255,12 +331,205 @@
       "description": "Bases, tables, records, views",
       "icon": "airtable",
       "category": "productivity",
-      "authType": "composio",
-      "composioSlug": "airtable",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Personal Access Token",
+        "placeholder": "pat_xxxxxxxxxxxxxxxxxxxx",
+        "helpUrl": "https://airtable.com/create/tokens",
+        "scopes": "data.records:read, data.records:write"
+      },
+      "mcpServers": {
+        "airtable": {
+          "command": "npx",
+          "args": ["-y", "mcp-airtable"],
+          "envMapping": { "AIRTABLE_API_KEY": "token" }
+        }
+      },
       "setupSteps": [
-        "Click Connect below",
-        "Sign in with your Airtable account in the popup",
-        "Your bases and tables will be accessible"
+        "Go to airtable.com/create/tokens",
+        "Create a new token named 'Delt'",
+        "Add scopes and select bases",
+        "Copy the token"
+      ]
+    },
+    {
+      "id": "apple",
+      "name": "Apple Apps",
+      "description": "Reminders, Notes, Calendar, Contacts, Mail (macOS)",
+      "icon": "apple",
+      "category": "productivity",
+      "authType": "enable",
+      "mcpServers": {
+        "apple": {
+          "command": "npx",
+          "args": ["-y", "apple-mcp"],
+          "envMapping": {}
+        }
+      },
+      "setupSteps": [
+        "Click Enable below",
+        "Your Mac may ask for permission to access Reminders, Calendar, or Contacts",
+        "Click 'Allow' on any permission prompts that appear",
+        "Your Apple apps will be accessible — no sign-in needed since you're already logged in on your Mac"
+      ]
+    },
+    {
+      "id": "microsoft-365",
+      "name": "Microsoft 365",
+      "description": "Outlook, OneDrive, Teams, Calendar, Planner",
+      "icon": "microsoft",
+      "category": "productivity",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Client ID",
+        "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        "helpUrl": "https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps",
+        "scopes": "Mail.Read, Mail.Send, Calendars.ReadWrite, Files.ReadWrite",
+        "fields": [
+          { "key": "clientId", "label": "Client ID", "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
+          { "key": "tenantId", "label": "Tenant ID", "placeholder": "common (or your tenant ID)" }
+        ]
+      },
+      "mcpServers": {
+        "microsoft365": {
+          "command": "npx",
+          "args": ["-y", "microsoft365-mcp-server"],
+          "envMapping": {
+            "MS365_AUTH_MODE": "_static:interactive",
+            "MS365_CLIENT_ID": "clientId",
+            "MS365_TENANT_ID": "tenantId"
+          }
+        }
+      },
+      "setupSteps": [
+        "Go to Azure Portal → App registrations → New registration",
+        "Name it 'Delt', set redirect URI to http://localhost",
+        "Under API permissions, add Microsoft Graph: Mail.Read, Mail.Send, Calendars.ReadWrite, Files.ReadWrite",
+        "Copy the Application (client) ID and Directory (tenant) ID",
+        "For personal accounts, use 'common' as the Tenant ID"
+      ]
+    },
+    {
+      "id": "twilio",
+      "name": "Twilio",
+      "description": "SMS, calls, WhatsApp, phone numbers",
+      "icon": "twilio",
+      "category": "communication",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Account SID",
+        "placeholder": "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "helpUrl": "https://console.twilio.com",
+        "scopes": "messaging, voice",
+        "fields": [
+          { "key": "accountSid", "label": "Account SID", "placeholder": "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
+          { "key": "authToken", "label": "Auth Token", "placeholder": "Your auth token" },
+          { "key": "phoneNumber", "label": "Twilio Phone Number", "placeholder": "+1234567890" }
+        ]
+      },
+      "mcpServers": {
+        "twilio": {
+          "command": "npx",
+          "args": ["-y", "twilio-mcp"],
+          "envMapping": {
+            "TWILIO_ACCOUNT_SID": "accountSid",
+            "TWILIO_AUTH_TOKEN": "authToken",
+            "TWILIO_PHONE_NUMBER": "phoneNumber"
+          }
+        }
+      },
+      "setupSteps": [
+        "Go to console.twilio.com and sign in",
+        "Your Account SID and Auth Token are on the dashboard",
+        "Click 'Show' next to Auth Token and copy it",
+        "Copy a phone number from Phone Numbers → Manage → Active numbers"
+      ]
+    },
+    {
+      "id": "sendgrid",
+      "name": "SendGrid",
+      "description": "Email delivery, templates, analytics",
+      "icon": "sendgrid",
+      "category": "communication",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "API Key",
+        "placeholder": "SG.xxxxxxxxxxxxxxxxxxxx",
+        "helpUrl": "https://app.sendgrid.com/settings/api_keys",
+        "scopes": "mail.send, templates.read"
+      },
+      "mcpServers": {
+        "sendgrid": {
+          "command": "npx",
+          "args": ["-y", "sendgrid-mcp"],
+          "envMapping": {
+            "SENDGRID_API_KEY": "token"
+          }
+        }
+      },
+      "setupSteps": [
+        "Go to app.sendgrid.com → Settings → API Keys",
+        "Click 'Create API Key'",
+        "Name it 'Delt', choose 'Full Access' or select specific permissions",
+        "Click 'Create & View' and copy the key immediately"
+      ]
+    },
+    {
+      "id": "salesforce",
+      "name": "Salesforce",
+      "description": "CRM, leads, opportunities, accounts, reports",
+      "icon": "salesforce",
+      "category": "crm",
+      "authType": "enable",
+      "mcpServers": {
+        "salesforce": {
+          "command": "npx",
+          "args": ["-y", "salesforce-mcp-server"],
+          "envMapping": {}
+        }
+      },
+      "setupSteps": [
+        "Install Salesforce CLI first: npm install -g @salesforce/cli",
+        "Run 'sf org login web' in Terminal to authenticate",
+        "Once logged in, click Enable below",
+        "Delt will use your existing Salesforce CLI session"
+      ]
+    },
+    {
+      "id": "zoom",
+      "name": "Zoom",
+      "description": "Meetings, recordings, participants",
+      "icon": "zoom",
+      "category": "communication",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Account ID",
+        "placeholder": "Your Zoom account ID",
+        "helpUrl": "https://marketplace.zoom.us/develop/create",
+        "scopes": "meeting:read, meeting:write",
+        "fields": [
+          { "key": "accountId", "label": "Account ID", "placeholder": "Your Zoom account ID" },
+          { "key": "clientId", "label": "Client ID", "placeholder": "Your Zoom client ID" },
+          { "key": "clientSecret", "label": "Client Secret", "placeholder": "Your Zoom client secret" }
+        ]
+      },
+      "mcpServers": {
+        "zoom": {
+          "command": "npx",
+          "args": ["-y", "zoom-mcp-server"],
+          "envMapping": {
+            "ZOOM_ACCOUNT_ID": "accountId",
+            "ZOOM_CLIENT_ID": "clientId",
+            "ZOOM_CLIENT_SECRET": "clientSecret"
+          }
+        }
+      },
+      "setupSteps": [
+        "Go to marketplace.zoom.us and sign in",
+        "Click Develop → Build App → Server-to-Server OAuth",
+        "Name it 'Delt' and create the app",
+        "Copy the Account ID, Client ID, and Client Secret",
+        "Add scopes: meeting:read, meeting:write, then activate the app"
       ]
     },
     {
@@ -285,8 +554,8 @@
       },
       "setupSteps": [
         "Find the API docs for the service you want to connect",
-        "Look for 'API Keys' or 'Developer Settings' in their settings",
-        "Create a new API key and paste it below"
+        "Create a new API key in their settings",
+        "Paste it below"
       ]
     }
   ]

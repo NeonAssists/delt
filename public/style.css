@@ -1109,6 +1109,7 @@ header {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .token-wizard-input::placeholder { color: var(--text-faint); }
+.token-wizard-input:last-of-type { margin-bottom: 12px; }
 
 .token-wizard-submit {
   width: 100%;
@@ -1125,6 +1126,41 @@ header {
 }
 .token-wizard-submit:hover { background: var(--accent-hover); transform: translateY(-1px); }
 .token-wizard-submit:disabled { opacity: 0.35; cursor: default; transform: none; }
+
+.local-access-panel { padding: 14px 0 4px; }
+.local-access-options { display: flex; flex-direction: column; gap: 6px; }
+.local-access-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px;
+  border: 1.5px solid var(--border); border-radius: 10px; background: var(--bg);
+  cursor: pointer; text-align: left; transition: all 0.15s;
+}
+.local-access-btn:hover { border-color: var(--text-faint); background: var(--bg-hover, rgba(0,0,0,0.02)); }
+.local-access-btn.active { border-color: var(--accent); background: rgba(108, 92, 231, 0.06); }
+.local-access-btn-icon {
+  flex-shrink: 0; width: 34px; height: 34px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface, rgba(0,0,0,0.04)); color: var(--text-secondary);
+}
+.local-access-btn.active .local-access-btn-icon { background: var(--accent); color: white; }
+.local-access-btn-text { display: flex; flex-direction: column; gap: 1px; }
+.local-access-btn-text strong { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.local-access-btn-text span { font-size: 12px; color: var(--text-secondary); line-height: 1.3; }
+.local-access-dirs { margin-top: 10px; }
+.local-access-dirs-label { display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
+.local-access-dirs-input {
+  width: 100%; padding: 9px 12px; font-family: var(--mono); font-size: 12px;
+  border: 1.5px solid var(--border); border-radius: 8px; background: var(--bg);
+  color: var(--text-primary); resize: vertical; box-sizing: border-box; outline: none;
+  margin-bottom: 8px;
+}
+.local-access-dirs-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.local-access-dirs-save {
+  width: 100%; padding: 9px; background: var(--accent); color: white; border: none;
+  border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.local-access-dirs-save:hover { background: var(--accent-hover); transform: translateY(-1px); }
+.local-access-dirs-save:disabled { opacity: 0.35; cursor: default; transform: none; }
 
 .integration-category-label {
   font-size: 11px;
@@ -1231,21 +1267,7 @@ header {
   color: var(--text-primary);
 }
 
-.pane-2-textarea {
-  flex: 1;
-  background: none;
-  border: none;
-  outline: none;
-  font-family: var(--font);
-  font-size: 15px;
-  line-height: 1.5;
-  color: var(--text-primary);
-  resize: none;
-  max-height: 160px;
-  padding: 7px 0;
-}
-
-.pane-2-textarea::placeholder { color: var(--text-faint); }
+/* pane-2-textarea shares #message-input styles via shared rule below */
 
 /* ============================================
    Messages
@@ -1524,11 +1546,7 @@ header {
    Input Area
    ============================================ */
 
-#input-area {
-  flex-shrink: 0;
-  padding: 12px 24px 16px;
-  background: var(--bg-page);
-}
+/* #input-area inherits from .pane-input-area — no override needed */
 
 .input-wrapper {
   max-width: var(--chat-max);
@@ -1612,7 +1630,8 @@ header {
 
 .attach-btn:hover { background: var(--bg-elevated); color: var(--text-secondary); }
 
-#message-input {
+#message-input,
+.pane-2-textarea {
   flex: 1;
   background: none;
   border: none;
@@ -1626,7 +1645,8 @@ header {
   padding: 7px 0;
 }
 
-#message-input::placeholder { color: var(--text-faint); }
+#message-input::placeholder,
+.pane-2-textarea::placeholder { color: var(--text-faint); }
 
 .send-btn, .stop-btn {
   flex-shrink: 0;
@@ -2109,7 +2129,7 @@ header {
   .tools-grid { grid-template-columns: 1fr; }
 
   #messages { padding: 16px 14px; }
-  #input-area { padding: 10px 14px 14px; }
+  .pane-input-area { padding: 10px 14px 14px; }
   .input-meta { display: none; }
 
   .message-avatar { width: 28px; height: 28px; border-radius: 8px; font-size: 12px; }
