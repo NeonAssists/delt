@@ -141,12 +141,27 @@ function buildMcpConfig() {
       mcpServers[serverName] = {
         command: serverDef.command,
         args: serverDef.args || [],
-        env
+        env,
       };
     }
   }
 
   return { mcpServers };
+}
+
+// Write MCP config to temp file and return the path
+// Using a file avoids shell escaping issues with inline JSON
+const mcpConfigDir = path.join(os.tmpdir(), "delt-mcp");
+if (!fs.existsSync(mcpConfigDir)) fs.mkdirSync(mcpConfigDir, { recursive: true });
+
+function writeMcpConfigFile() {
+  const mcpConfig = buildMcpConfig();
+  const serverCount = Object.keys(mcpConfig.mcpServers).length;
+  if (serverCount === 0) return null;
+
+  const filePath = path.join(mcpConfigDir, `mcp-${process.pid}.json`);
+  fs.writeFileSync(filePath, JSON.stringify(mcpConfig, null, 2));
+  return filePath;
 }
 
 // Build Claude args with MCP config injected
@@ -157,10 +172,12 @@ function buildClaudeArgs(fullMessage) {
     "--verbose",
     "--include-partial-messages",
   ];
-  const mcpConfig = buildMcpConfig();
-  if (Object.keys(mcpConfig.mcpServers).length > 0) {
-    args.push("--mcp-config", JSON.stringify(mcpConfig));
+
+  const mcpFile = writeMcpConfigFile();
+  if (mcpFile) {
+    args.push("--mcp-config", mcpFile);
   }
+
   return args;
 }
 
@@ -406,6 +423,72 @@ app.post("/integrations/:id/connect", (req, res) => {
 app.post("/integrations/:id/disconnect", (req, res) => {
   deleteCredential(req.params.id);
   res.json({ ok: true, connected: false });
+});
+
+// Show active MCP config (no secrets — for diagnostics)
+app.get("/integrations/mcp-status", (req, res) => {
+  const mcpConfig = buildMcpConfig();
+  const servers = {};
+  for (const [name, def] of Object.entries(mcpConfig.mcpServers)) {
+    servers[name] = {
+      command: def.command,
+      args: def.args,
+      envKeys: Object.keys(def.env || {}),
+      hasCredentials: Object.values(def.env || {}).every((v) => !!v),
+    };
+  }
+  res.json({
+    activeServers: Object.keys(servers).length,
+    servers,
+    mcpFilePath: writeMcpConfigFile(),
+  });
+});
+
+// Test an MCP server can spawn
+app.post("/integrations/:id/test", async (req, res) => {
+  const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
+  if (!integration) return res.status(404).json({ error: "Not found" });
+
+  const cred = getCredential(integration.id);
+  if (!cred || !cred.enabled) return res.json({ ok: false, error: "Not connected" });
+
+  // Try to spawn the first MCP server for this integration
+  const [serverName, serverDef] = Object.entries(integration.mcpServers || {})[0] || [];
+  if (!serverName) return res.json({ ok: false, error: "No MCP server defined" });
+
+  const env = { ...process.env };
+  for (const [envVar, credKey] of Object.entries(serverDef.envMapping || {})) {
+    if (cred[credKey]) env[envVar] = cred[credKey];
+  }
+
+  try {
+    const testProc = spawn(serverDef.command, serverDef.args || [], { env, timeout: 10000 });
+    let stderr = "";
+
+    testProc.stderr.on("data", (d) => { stderr += d.toString(); });
+
+    // Give it 3 seconds to see if it starts without crashing
+    await new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        testProc.kill("SIGTERM");
+        resolve();
+      }, 3000);
+
+      testProc.on("close", (code) => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+
+    // If it ran for 3 seconds without dying, it's working
+    if (testProc.killed || !testProc.exitCode) {
+      res.json({ ok: true, server: serverName, status: "running" });
+    } else {
+      res.json({ ok: false, server: serverName, error: stderr.slice(0, 200) || `Exit code ${testProc.exitCode}` });
+    }
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
+  }
 });
 
 // Get OAuth authorization URL
