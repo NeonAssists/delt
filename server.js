@@ -483,105 +483,173 @@ app.get("/history/:sessionId", (req, res) => {
 });
 
 // ============================================
-// Persistent Memory
+// Persistent Memory — all markdown, all local
 // ============================================
 const memoryDir = path.join(__dirname, "memory");
-if (!fs.existsSync(memoryDir)) fs.mkdirSync(memoryDir, { recursive: true });
+const memDailyDir = path.join(memoryDir, "daily");
+const memSessionsDir = path.join(memoryDir, "sessions");
 
-const memoryFile = path.join(memoryDir, "user.md");
-const memoryMetaFile = path.join(memoryDir, "meta.json");
-
-function readMemory() {
-  try { return fs.readFileSync(memoryFile, "utf-8"); } catch { return ""; }
+for (const d of [memoryDir, memDailyDir, memSessionsDir]) {
+  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
 }
 
-function writeMemory(content) {
-  const tmp = memoryFile + ".tmp." + process.pid;
+const userMemFile = path.join(memoryDir, "user.md");
+const stateFile = path.join(memoryDir, "state.md");
+const memMetaFile = path.join(memoryDir, "meta.json");
+
+function safeRead(fp) {
+  try { return fs.readFileSync(fp, "utf-8"); } catch { return ""; }
+}
+
+function safeWrite(fp, content) {
+  const tmp = fp + ".tmp." + process.pid;
   try {
     fs.writeFileSync(tmp, content);
-    fs.renameSync(tmp, memoryFile);
+    fs.renameSync(tmp, fp);
   } catch (e) {
-    console.error("Memory write error:", e.message);
+    console.error("Write error:", fp, e.message);
     try { fs.unlinkSync(tmp); } catch {}
   }
 }
 
-function readMemoryMeta() {
-  try { return JSON.parse(fs.readFileSync(memoryMetaFile, "utf-8")); }
+function readMemMeta() {
+  try { return JSON.parse(fs.readFileSync(memMetaFile, "utf-8")); }
   catch { return { lastExtraction: null, exchangeCount: 0 }; }
 }
 
-function writeMemoryMeta(meta) {
-  try { fs.writeFileSync(memoryMetaFile, JSON.stringify(meta, null, 2)); } catch {}
+function writeMemMeta(meta) {
+  try { fs.writeFileSync(memMetaFile, JSON.stringify(meta, null, 2)); } catch {}
 }
 
-// Background memory extraction — runs after exchanges
-let memoryExtractionRunning = false;
+// --- Full session logs (not truncated) ---
+function appendSessionLog(sid, role, text) {
+  if (!sid || !text) return;
+  const fp = path.join(memSessionsDir, `${sid}.md`);
+  const ts = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const label = role === "user" ? "**You**" : "**Assistant**";
+  const entry = `\n### ${label} — ${ts}\n${text}\n`;
+  try { fs.appendFileSync(fp, entry); } catch {}
+}
+
+// --- Daily log ---
+function appendDailyLog(userMsg, assistantMsg, tag) {
+  const fp = path.join(memDailyDir, `${todayStr()}.md`);
+  const ts = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const tagStr = tag && tag !== "chat" ? ` [${tag}]` : "";
+  let entry = `\n---\n#### ${ts}${tagStr}\n`;
+  if (userMsg) entry += `**You:** ${userMsg.slice(0, 500)}\n\n`;
+  if (assistantMsg) entry += `**Assistant:** ${assistantMsg.slice(0, 800)}\n`;
+  try { fs.appendFileSync(fp, entry); } catch {}
+}
+
+// --- State file — what's in progress ---
+function updateState(userMsg, assistantMsg) {
+  // Lightweight: just keep last 5 exchanges as "recent context"
+  let state;
+  try { state = JSON.parse(safeRead(stateFile) || "{}"); } catch { state = {}; }
+
+  if (!state.recentExchanges) state.recentExchanges = [];
+  state.recentExchanges.push({
+    ts: new Date().toISOString(),
+    user: (userMsg || "").slice(0, 400),
+    assistant: (assistantMsg || "").slice(0, 600),
+  });
+  // Keep last 5
+  if (state.recentExchanges.length > 5) {
+    state.recentExchanges = state.recentExchanges.slice(-5);
+  }
+  state.lastActive = new Date().toISOString();
+  safeWrite(stateFile, JSON.stringify(state, null, 2));
+}
+
+function getStateContext() {
+  let state;
+  try { state = JSON.parse(safeRead(stateFile) || "{}"); } catch { return ""; }
+  if (!state.recentExchanges || !state.recentExchanges.length) return "";
+
+  let ctx = "## Recent conversation (last session)\n";
+  for (const ex of state.recentExchanges) {
+    if (ex.user) ctx += `**You:** ${ex.user}\n`;
+    if (ex.assistant) ctx += `**Assistant:** ${ex.assistant}\n\n`;
+  }
+  return ctx;
+}
+
+// --- Background memory extraction ---
+let memExtracting = false;
 
 function extractMemories(userMsg, assistantMsg) {
-  if (memoryExtractionRunning || (!userMsg && !assistantMsg)) return;
+  if (memExtracting || (!userMsg && !assistantMsg)) return;
 
-  const currentMemory = readMemory();
-  const meta = readMemoryMeta();
+  const current = safeRead(userMemFile);
+  const meta = readMemMeta();
   meta.exchangeCount = (meta.exchangeCount || 0) + 1;
-  writeMemoryMeta(meta);
+  writeMemMeta(meta);
 
-  // Run extraction every 3 exchanges (or first time)
-  if (meta.exchangeCount % 3 !== 0 && currentMemory.length > 0) return;
+  // Extract every 3 exchanges or on first
+  if (meta.exchangeCount % 3 !== 0 && current.length > 0) return;
 
-  memoryExtractionRunning = true;
+  memExtracting = true;
 
-  const prompt = `You are a memory extraction system. Maintain a persistent memory file for an AI assistant.
+  const prompt = `You are a memory system. Update this user profile from the latest exchange.
 
-CURRENT MEMORY:
-${currentMemory || "(empty — first session)"}
+CURRENT:
+${current || "(empty — first session)"}
 
-LATEST EXCHANGE:
+EXCHANGE:
 User: ${(userMsg || "").slice(0, 1500)}
 Assistant: ${(assistantMsg || "").slice(0, 1500)}
 
-RULES:
-- Extract facts worth remembering: user preferences, names, project context, decisions, ongoing work, communication style, things they care about.
-- Do NOT store: code, temporary task details, things derivable from files.
-- One line per fact, grouped by ## category headers (User, Preferences, Projects, Decisions, Style).
-- If a fact contradicts existing memory, replace it. Never duplicate.
-- If nothing new, output current memory unchanged.
-- Output ONLY the updated memory file. No explanation, no wrapper.
-
-Updated memory:`;
+Rules: extract lasting facts (preferences, names, projects, decisions, style). One line per fact under ## headers. Replace stale facts. Skip code/temp details. Output ONLY the updated file:`;
 
   const proc = spawn("claude", ["-p", prompt, "--output-format", "text"], {
-    cwd: os.homedir(),
-    env: { ...process.env },
+    cwd: os.homedir(), env: { ...process.env },
   });
 
   let output = "";
-  proc.stdout.on("data", (chunk) => { output += chunk.toString(); });
-
+  proc.stdout.on("data", (c) => { output += c.toString(); });
   proc.on("close", () => {
-    memoryExtractionRunning = false;
-    const trimmed = output.trim();
-    if (trimmed.length > 10) {
-      writeMemory(trimmed);
-      const m = readMemoryMeta();
+    memExtracting = false;
+    const t = output.trim();
+    if (t.length > 10) {
+      safeWrite(userMemFile, t);
+      const m = readMemMeta();
       m.lastExtraction = new Date().toISOString();
-      writeMemoryMeta(m);
+      writeMemMeta(m);
     }
   });
-
-  proc.on("error", () => { memoryExtractionRunning = false; });
+  proc.on("error", () => { memExtracting = false; });
 }
 
-// Memory API
+// --- Save everything after each exchange ---
+function persistExchange(sid, userMsg, assistantMsg, tag) {
+  appendSessionLog(sid, "user", userMsg);
+  appendSessionLog(sid, "assistant", assistantMsg);
+  appendDailyLog(userMsg, assistantMsg, tag);
+  updateState(userMsg, assistantMsg);
+  extractMemories(userMsg, assistantMsg);
+}
+
+// --- Memory API ---
 app.get("/memory", (req, res) => {
-  res.json({ content: readMemory(), meta: readMemoryMeta() });
+  res.json({
+    user: safeRead(userMemFile),
+    state: getStateContext(),
+    daily: safeRead(path.join(memDailyDir, `${todayStr()}.md`)),
+    meta: readMemMeta(),
+  });
 });
 
 app.put("/memory", (req, res) => {
   const { content } = req.body;
   if (typeof content !== "string") return res.status(400).json({ error: "content required" });
-  writeMemory(content);
+  safeWrite(userMemFile, content);
   res.json({ ok: true });
+});
+
+app.get("/memory/session/:sid", (req, res) => {
+  const content = safeRead(path.join(memSessionsDir, `${req.params.sid}.md`));
+  res.json({ sessionId: req.params.sid, content });
 });
 
 // Active sessions
@@ -589,13 +657,27 @@ const sessions = new Map();
 
 function buildSystemPrefix() {
   const ctx = config.business?.context || "";
-  const memory = readMemory();
+  const userMem = safeRead(userMemFile);
+  const stateMem = getStateContext();
+  const dailyMem = safeRead(path.join(memDailyDir, `${todayStr()}.md`));
+
   let prefix = "";
   if (ctx) prefix += `[CONTEXT: ${ctx}]\n\n`;
-  if (memory) {
-    prefix += `[PERSISTENT MEMORY — What you remember about this user from prior sessions. Use this to be personal, reference prior work, and avoid re-asking things you already know.]\n${memory}\n[END MEMORY]\n\n`;
+
+  if (userMem) {
+    prefix += `[WHO THIS USER IS — persistent memory from all prior sessions]\n${userMem}\n[END USER MEMORY]\n\n`;
   }
-  prefix += `[MEMORY NOTE: You have persistent memory across sessions stored at ${memoryFile}. The system auto-extracts memories, but if the user says "remember this" you can also write to it directly.]\n\n`;
+
+  if (stateMem) {
+    prefix += `[WHERE WE LEFT OFF — last few exchanges from the previous session]\n${stateMem}\n[END STATE]\n\n`;
+  }
+
+  if (dailyMem) {
+    // Only inject last ~2000 chars of today's log to keep context manageable
+    const tail = dailyMem.length > 2000 ? "...\n" + dailyMem.slice(-2000) : dailyMem;
+    prefix += `[TODAY'S LOG — what's happened so far today]\n${tail}\n[END TODAY]\n\n`;
+  }
+
   return prefix;
 }
 
@@ -667,14 +749,14 @@ wss.on("connection", (ws) => {
       const isFirst = messageCount === 0;
       messageCount++;
 
-      // Save to history immediately so sidebar updates on send
+      // Save to history + session log immediately on send
       try {
         if (isFirst) {
           createConversationEntry(sessionId, currentUserMessage, "chat");
         } else {
-          // Append user message to existing history
           saveConversationMeta(sessionId, currentUserMessage, null, "chat");
         }
+        appendSessionLog(sessionId, "user", currentUserMessage);
       } catch {}
 
       // Prepend business context on first message
@@ -764,15 +846,13 @@ wss.on("connection", (ws) => {
           console.error("Log write failed:", logErr.message);
         }
 
-        // Save to conversation history
+        // Save to conversation history + persist all memory layers
         try {
           saveConversationMeta(sessionId, currentUserMessage, currentAssistantText);
         } catch (histErr) {
           console.error("History save failed:", histErr.message);
         }
-
-        // Background memory extraction
-        extractMemories(currentUserMessage, currentAssistantText);
+        persistExchange(sessionId, currentUserMessage, currentAssistantText, "chat");
 
         safeSend(ws, { type: "done", code });
         currentProcess = null;
@@ -840,11 +920,13 @@ wss.on("connection", (ws) => {
         } else {
           saveConversationMeta(btwSessionId, btwUserMessage, null, "multitask");
         }
+        appendSessionLog(btwSessionId, "user", btwUserMessage);
       } catch {}
 
-      const btwMemory = readMemory();
+      const btwMemory = safeRead(userMemFile);
+      const btwState = getStateContext();
       const btwPrefix = isFirst ? `[CONTEXT: You are running in BTW mode — a side-thread orchestrator. ${config.business?.context || ""}
-${btwMemory ? `\nPERSISTENT MEMORY:\n${btwMemory}\n` : ""}
+${btwMemory ? `\nUSER MEMORY:\n${btwMemory}\n` : ""}${btwState ? `\nWHERE WE LEFT OFF:\n${btwState}\n` : ""}
 
 ORCHESTRATOR RULES:
 - You can and SHOULD use the Agent tool to delegate work to subagents when tasks are parallelizable.
@@ -929,12 +1011,11 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
             safeSend(ws, { type: "btw-stream", data: obj });
           } catch {}
         }
-        // Save assistant response to history
+        // Save to history + persist all memory layers
         try {
           saveConversationMeta(btwSessionId, btwUserMessage, btwAssistantText, "multitask");
         } catch {}
-        // Background memory extraction from multitask too
-        extractMemories(btwUserMessage, btwAssistantText);
+        persistExchange(btwSessionId, btwUserMessage, btwAssistantText, "multitask");
         safeSend(ws, { type: "btw-done", code });
         btwProcess = null;
         // Process queued BTW messages
