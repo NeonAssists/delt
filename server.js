@@ -117,6 +117,7 @@ function saveCredential(integrationId, data) {
   const creds = loadCredentials();
   creds[integrationId] = { ...data, enabled: true, updatedAt: new Date().toISOString() };
   saveCredentials(creds);
+  invalidateMcpCache();
   writeIntegrationsMd();
 }
 
@@ -124,6 +125,7 @@ function deleteCredential(integrationId) {
   const creds = loadCredentials();
   delete creds[integrationId];
   saveCredentials(creds);
+  invalidateMcpCache();
   writeIntegrationsMd();
 }
 
@@ -184,19 +186,30 @@ function buildMcpConfig() {
   return { mcpServers };
 }
 
-// Write MCP config to temp file and return the path
-// Using a file avoids shell escaping issues with inline JSON
+// Write MCP config to temp file — cached, only rewrites when integrations change
 const mcpConfigDir = path.join(os.tmpdir(), "delt-mcp");
 if (!fs.existsSync(mcpConfigDir)) fs.mkdirSync(mcpConfigDir, { recursive: true });
+
+let _mcpConfigCache = null;
+let _mcpConfigPath = null;
+
+function invalidateMcpCache() {
+  _mcpConfigCache = null;
+}
 
 function writeMcpConfigFile() {
   const mcpConfig = buildMcpConfig();
   const serverCount = Object.keys(mcpConfig.mcpServers).length;
-  if (serverCount === 0) return null;
+  if (serverCount === 0) { _mcpConfigPath = null; return null; }
 
-  const filePath = path.join(mcpConfigDir, `mcp-${process.pid}.json`);
-  fs.writeFileSync(filePath, JSON.stringify(mcpConfig, null, 2));
-  return filePath;
+  // Only rewrite if config changed
+  const json = JSON.stringify(mcpConfig, null, 2);
+  if (json === _mcpConfigCache) return _mcpConfigPath;
+
+  _mcpConfigCache = json;
+  _mcpConfigPath = path.join(mcpConfigDir, `mcp-${process.pid}.json`);
+  fs.writeFileSync(_mcpConfigPath, json);
+  return _mcpConfigPath;
 }
 
 // Build Claude args with MCP config injected
@@ -214,6 +227,59 @@ function buildClaudeArgs(fullMessage) {
   }
 
   return args;
+}
+
+// ============================================
+// Shared Claude stream handler
+// Eliminates ~120 lines of duplicate stdout/stderr/close logic
+// ============================================
+function attachStreamHandlers(proc, ws, { streamType, errorType, onText, onCost, onClose }) {
+  let buffer = "";
+
+  proc.stdout.on("data", (chunk) => {
+    buffer += chunk.toString();
+    const lines = buffer.split("\n");
+    buffer = lines.pop();
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const obj = JSON.parse(line);
+        safeSend(ws, { type: streamType, data: obj });
+
+        if (obj.type === "assistant" && obj.message?.content) {
+          for (const b of obj.message.content) {
+            if (b.type === "text" && onText) onText(b.text);
+            if (b.type === "tool_use" && onText) onText(null, b.name || "unknown");
+          }
+        }
+        if (obj.type === "result" && obj.cost_usd && onCost) onCost(obj.cost_usd);
+      } catch {}
+    }
+  });
+
+  proc.stderr.on("data", (chunk) => {
+    const text = chunk.toString();
+    if (text.includes("Error") || text.includes("ENOENT")) {
+      safeSend(ws, { type: errorType, message: text.trim() });
+    }
+  });
+
+  proc.on("close", (code) => {
+    if (buffer.trim()) {
+      try {
+        const obj = JSON.parse(buffer.trim());
+        safeSend(ws, { type: streamType, data: obj });
+        if (obj.type === "result" && obj.cost_usd && onCost) onCost(obj.cost_usd);
+      } catch {}
+    }
+    if (onClose) onClose(code);
+  });
+
+  proc.on("error", (err) => {
+    safeSend(ws, { type: errorType, message: err.message });
+    if (onClose) onClose(-1);
+  });
 }
 
 // Pending OAuth states (CSRF protection)
@@ -1068,21 +1134,25 @@ function getStateContext() {
   return ctx;
 }
 
-// --- Background memory extraction ---
+// --- Background memory extraction (debounced — 30s cooldown) ---
 let memExtracting = false;
+let memLastExtractedAt = 0;
+const MEM_EXTRACT_COOLDOWN_MS = 30000;
 
 function extractMemories(userMsg, assistantMsg) {
   if (memExtracting || (!userMsg && !assistantMsg)) return;
 
+  const now = Date.now();
   const current = safeRead(userMemFile);
   const meta = readMemMeta();
   meta.exchangeCount = (meta.exchangeCount || 0) + 1;
   writeMemMeta(meta);
 
-  // Extract every 3 exchanges or on first
-  if (meta.exchangeCount % 3 !== 0 && current.length > 0) return;
+  // Cooldown: skip if extracted within last 30 seconds (unless first ever)
+  if (current.length > 0 && (now - memLastExtractedAt) < MEM_EXTRACT_COOLDOWN_MS) return;
 
   memExtracting = true;
+  memLastExtractedAt = now;
 
   const prompt = `You are a memory system. Update this user profile from the latest exchange.
 
@@ -1302,81 +1372,35 @@ wss.on("connection", (ws) => {
 
       currentProcess = proc;
       spawnWithTimeout(proc, ws, "error");
-      let buffer = "";
-
       safeSend(ws, { type: "thinking" });
 
-      proc.stdout.on("data", (chunk) => {
-        buffer += chunk.toString();
-        const lines = buffer.split("\n");
-        buffer = lines.pop();
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
+      attachStreamHandlers(proc, ws, {
+        streamType: "stream",
+        errorType: "error",
+        onText: (text, toolName) => {
+          if (text) currentAssistantText += text;
+          if (toolName) currentToolsUsed.push(toolName);
+        },
+        onCost: (cost) => { currentCost = cost; },
+        onClose: (code) => {
           try {
-            const obj = JSON.parse(line);
-            safeSend(ws, { type: "stream", data: obj });
-
-            // Capture data for logging
-            if (obj.type === "assistant" && obj.message?.content) {
-              for (const b of obj.message.content) {
-                if (b.type === "text") currentAssistantText += b.text;
-                if (b.type === "tool_use") currentToolsUsed.push(b.name || "unknown");
-              }
-            }
-            if (obj.type === "result" && obj.cost_usd) {
-              currentCost = obj.cost_usd;
-            }
-          } catch {}
-        }
-      });
-
-      proc.stderr.on("data", (chunk) => {
-        const text = chunk.toString();
-        if (text.includes("Error") || text.includes("ENOENT")) {
-          safeSend(ws, { type: "error", message: text.trim() });
-        }
-      });
-
-      proc.on("close", (code) => {
-        if (buffer.trim()) {
+            logConversation({
+              sessionId,
+              user: config.business?.owner || "User",
+              userMessage: currentUserMessage,
+              assistantMessage: currentAssistantText,
+              toolsUsed: [...new Set(currentToolsUsed)],
+              costUsd: currentCost,
+              durationMs: Date.now() - exchangeStart,
+            });
+          } catch (e) { console.error("Log write failed:", e.message); }
           try {
-            const obj = JSON.parse(buffer.trim());
-            safeSend(ws, { type: "stream", data: obj });
-            if (obj.type === "result" && obj.cost_usd) currentCost = obj.cost_usd;
-          } catch {}
-        }
-
-        // Auto-log this exchange
-        try {
-          logConversation({
-            sessionId,
-            user: config.business?.owner || "User",
-            userMessage: currentUserMessage,
-            assistantMessage: currentAssistantText,
-            toolsUsed: [...new Set(currentToolsUsed)],
-            costUsd: currentCost,
-            durationMs: Date.now() - exchangeStart,
-          });
-        } catch (logErr) {
-          console.error("Log write failed:", logErr.message);
-        }
-
-        // Save to conversation history + persist all memory layers
-        try {
-          saveConversationMeta(sessionId, currentUserMessage, currentAssistantText);
-        } catch (histErr) {
-          console.error("History save failed:", histErr.message);
-        }
-        persistExchange(sessionId, currentUserMessage, currentAssistantText, "chat");
-
-        safeSend(ws, { type: "done", code });
-        currentProcess = null;
-      });
-
-      proc.on("error", (err) => {
-        safeSend(ws, { type: "error", message: `Something went wrong: ${err.message}` });
-        currentProcess = null;
+            saveConversationMeta(sessionId, currentUserMessage, currentAssistantText);
+          } catch (e) { console.error("History save failed:", e.message); }
+          persistExchange(sessionId, currentUserMessage, currentAssistantText, "chat");
+          safeSend(ws, { type: "done", code });
+          currentProcess = null;
+        },
       });
     }
 
@@ -1482,66 +1506,21 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
 
       btwProcess = proc;
       spawnWithTimeout(proc, ws, "btw-error");
-      let btwBuffer = "";
-
       safeSend(ws, { type: "btw-thinking" });
 
-      proc.stdout.on("data", (chunk) => {
-        btwBuffer += chunk.toString();
-        const lines = btwBuffer.split("\n");
-        btwBuffer = lines.pop();
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const obj = JSON.parse(line);
-            safeSend(ws, { type: "btw-stream", data: obj });
-            // Capture assistant text for history
-            if (obj.type === "assistant" && obj.message?.content) {
-              for (const b of obj.message.content) {
-                if (b.type === "text") btwAssistantText += b.text;
-              }
-            }
-          } catch {}
-        }
-      });
-
-      proc.stderr.on("data", (chunk) => {
-        const text = chunk.toString();
-        if (text.includes("Error") || text.includes("ENOENT")) {
-          safeSend(ws, { type: "btw-error", message: text.trim() });
-        }
-      });
-
-      proc.on("close", (code) => {
-        if (btwBuffer.trim()) {
-          try {
-            const obj = JSON.parse(btwBuffer.trim());
-            safeSend(ws, { type: "btw-stream", data: obj });
-          } catch {}
-        }
-        // Save to history + persist all memory layers
-        try {
-          saveConversationMeta(btwSessionId, btwUserMessage, btwAssistantText, "multitask");
-        } catch {}
-        persistExchange(btwSessionId, btwUserMessage, btwAssistantText, "multitask");
-        safeSend(ws, { type: "btw-done", code });
-        btwProcess = null;
-        // Process queued BTW messages
-        if (btwQueue.length) {
-          const next = btwQueue.shift();
-          // Re-dispatch through the handler by simulating the message
-          ws.emit("message", JSON.stringify(next));
-        }
-      });
-
-      proc.on("error", (err) => {
-        safeSend(ws, { type: "btw-error", message: `BTW error: ${err.message}` });
-        btwProcess = null;
-        if (btwQueue.length) {
-          const next = btwQueue.shift();
-          ws.emit("message", JSON.stringify(next));
-        }
+      attachStreamHandlers(proc, ws, {
+        streamType: "btw-stream",
+        errorType: "btw-error",
+        onText: (text) => { if (text) btwAssistantText += text; },
+        onClose: (code) => {
+          try { saveConversationMeta(btwSessionId, btwUserMessage, btwAssistantText, "multitask"); } catch {}
+          persistExchange(btwSessionId, btwUserMessage, btwAssistantText, "multitask");
+          safeSend(ws, { type: "btw-done", code });
+          btwProcess = null;
+          if (btwQueue.length) {
+            ws.emit("message", JSON.stringify(btwQueue.shift()));
+          }
+        },
       });
     }
 
@@ -1594,45 +1573,16 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
       const proc = spawn("claude", args, { cwd: os.homedir(), env: { ...process.env } });
       pane2Process = proc;
       spawnWithTimeout(proc, ws, "pane2-error");
-      let p2Buffer = "";
-
       safeSend(ws, { type: "pane2-session", sessionId: pane2SessionId });
       safeSend(ws, { type: "pane2-thinking" });
 
-      proc.stdout.on("data", (chunk) => {
-        p2Buffer += chunk.toString();
-        const lines = p2Buffer.split("\n");
-        p2Buffer = lines.pop();
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const obj = JSON.parse(line);
-            safeSend(ws, { type: "pane2-stream", data: obj });
-          } catch {}
-        }
-      });
-
-      proc.stderr.on("data", (chunk) => {
-        const text = chunk.toString();
-        if (text.includes("Error") || text.includes("ENOENT")) {
-          safeSend(ws, { type: "pane2-error", message: text.trim() });
-        }
-      });
-
-      proc.on("close", (code) => {
-        if (p2Buffer.trim()) {
-          try {
-            const obj = JSON.parse(p2Buffer.trim());
-            safeSend(ws, { type: "pane2-stream", data: obj });
-          } catch {}
-        }
-        safeSend(ws, { type: "pane2-done", code });
-        pane2Process = null;
-      });
-
-      proc.on("error", (err) => {
-        safeSend(ws, { type: "pane2-error", message: err.message });
-        pane2Process = null;
+      attachStreamHandlers(proc, ws, {
+        streamType: "pane2-stream",
+        errorType: "pane2-error",
+        onClose: (code) => {
+          safeSend(ws, { type: "pane2-done", code });
+          pane2Process = null;
+        },
       });
     }
 
