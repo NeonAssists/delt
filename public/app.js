@@ -1507,6 +1507,20 @@
       } else if (authType === "oauth2") {
         startOAuthFlow(id);
       } else {
+        // Try auto-detect first (e.g., gh CLI for GitHub)
+        btn.textContent = "Detecting...";
+        btn.disabled = true;
+        try {
+          const detectRes = await fetch(`/integrations/${id}/auto-detect`, { method: "POST" });
+          const detectData = await detectRes.json();
+          if (detectData.detected && detectData.connected) {
+            loadIntegrations();
+            return;
+          }
+        } catch {}
+        // Auto-detect failed — fall back to manual token wizard
+        btn.textContent = "Connect";
+        btn.disabled = false;
         showTokenWizard(id, btn.closest(".integration-card"));
       }
     }

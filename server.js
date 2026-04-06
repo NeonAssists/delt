@@ -400,14 +400,48 @@ app.get("/integrations", (req, res) => {
   res.json({ integrations: result });
 });
 
-// Connect an integration (token-based)
+// Auto-detect credentials from local CLI tools (gh, gcloud, etc.)
+// Tries to grab an existing token so the user doesn't have to create one manually
+app.post("/integrations/:id/auto-detect", async (req, res) => {
+  const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
+  if (!integration) return res.status(404).json({ error: "Integration not found" });
+
+  // Map of integration IDs → CLI commands that return a token
+  const detectors = {
+    github: { cmd: "gh", args: ["auth", "token"] },
+  };
+
+  const detector = detectors[integration.id];
+  if (!detector) return res.json({ detected: false, reason: "No auto-detect for this service" });
+
+  try {
+    const token = await new Promise((resolve, reject) => {
+      const proc = spawn(detector.cmd, detector.args, { timeout: 5000 });
+      let stdout = "";
+      let stderr = "";
+      proc.stdout.on("data", (d) => { stdout += d.toString(); });
+      proc.stderr.on("data", (d) => { stderr += d.toString(); });
+      proc.on("close", (code) => {
+        if (code === 0 && stdout.trim()) resolve(stdout.trim());
+        else reject(new Error(stderr.trim() || `${detector.cmd} not authenticated`));
+      });
+      proc.on("error", () => reject(new Error(`${detector.cmd} CLI not installed`)));
+    });
+
+    saveCredential(integration.id, { token, type: "auto-detected" });
+    res.json({ detected: true, connected: true, source: `${detector.cmd} CLI` });
+  } catch (err) {
+    res.json({ detected: false, reason: err.message });
+  }
+});
+
+// Connect an integration (token-based or enable)
 app.post("/integrations/:id/connect", (req, res) => {
   const { token, baseUrl } = req.body;
   const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
   if (!integration) return res.status(404).json({ error: "Integration not found" });
 
   if (integration.authType === "enable") {
-    // MCP server handles its own auth — just enable it
     saveCredential(integration.id, { type: "enable" });
     res.json({ ok: true, connected: true });
   } else if (integration.authType === "token" || integration.authType === "custom") {
@@ -572,6 +606,38 @@ app.get("/oauth/callback", async (req, res) => {
       expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
       scope: tokens.scope,
     });
+
+    // Gmail: write credentials to ~/.gmail-mcp/ so MCP server can read them
+    if (integration.id === "gmail") {
+      try {
+        const gmailDir = path.join(os.homedir(), ".gmail-mcp");
+        if (!fs.existsSync(gmailDir)) fs.mkdirSync(gmailDir, { recursive: true });
+
+        // OAuth client config (for token refresh)
+        fs.writeFileSync(path.join(gmailDir, "gcp-oauth.keys.json"), JSON.stringify({
+          web: {
+            client_id: clientConfig.clientId,
+            client_secret: clientConfig.clientSecret,
+            auth_uri: "https://accounts.google.com/o/oauth2/auth",
+            token_uri: "https://oauth2.googleapis.com/token",
+            redirect_uris: [`http://localhost:${PORT}/oauth/callback`]
+          }
+        }));
+
+        // User credentials
+        fs.writeFileSync(path.join(gmailDir, "credentials.json"), JSON.stringify({
+          type: "authorized_user",
+          client_id: clientConfig.clientId,
+          client_secret: clientConfig.clientSecret,
+          refresh_token: tokens.refresh_token,
+          access_token: tokens.access_token,
+          token_type: tokens.token_type || "Bearer",
+          expiry_date: Date.now() + (tokens.expires_in || 3600) * 1000
+        }));
+      } catch (e) {
+        console.error("Failed to write Gmail MCP credentials:", e.message);
+      }
+    }
 
     res.send(`<html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f7f7f8;">
       <div style="text-align:center;">

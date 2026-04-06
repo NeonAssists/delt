@@ -6,7 +6,17 @@
       "description": "Send, read, search, and manage emails",
       "icon": "google",
       "category": "communication",
-      "authType": "enable",
+      "authType": "oauth2",
+      "oauth": {
+        "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth",
+        "tokenUrl": "https://oauth2.googleapis.com/token",
+        "scopes": [
+          "https://www.googleapis.com/auth/gmail.modify",
+          "https://www.googleapis.com/auth/gmail.compose",
+          "https://www.googleapis.com/auth/gmail.readonly",
+          "https://www.googleapis.com/auth/gmail.labels"
+        ]
+      },
       "mcpServers": {
         "gmail": {
           "command": "npx",
@@ -15,12 +25,9 @@
         }
       },
       "setupSteps": [
-        "Go to Google Cloud Console (console.cloud.google.com) and create a project",
-        "Enable the Gmail API: APIs & Services → Library → search 'Gmail API' → Enable",
-        "Create OAuth credentials: APIs & Services → Credentials → Create Credentials → OAuth client ID → Desktop app",
-        "Download the JSON file and save it as ~/.gmail-mcp/gcp-oauth.keys.json",
-        "Run in terminal: npx @monsoft/mcp-gmail auth (opens browser to sign in with your Google account)",
-        "Click Enable below — Gmail is now ready to use"
+        "Click 'Sign in with Google' below",
+        "Choose your Google account and grant Gmail access",
+        "That's it — you can now send and read emails"
       ]
     },
     {
@@ -72,11 +79,10 @@
         }
       },
       "setupSteps": [
-        "Open GitHub and go to Settings → Developer Settings → Personal Access Tokens",
-        "Click 'Generate new token' and choose Fine-grained or Classic",
-        "Give it a name like 'Delt' and select the repos you want to access",
-        "Click 'Generate token' at the bottom of the page",
-        "Copy the token immediately — you won't see it again"
+        "If you have GitHub CLI (gh) installed, your token is detected automatically — just click Connect",
+        "Otherwise: go to github.com → Settings → Developer Settings → Personal Access Tokens",
+        "Click 'Generate new token', name it 'Delt', select repo access",
+        "Copy the token and paste it below"
       ]
     },
     {
