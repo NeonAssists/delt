@@ -125,6 +125,11 @@ function readLogFile(filePath) {
   }
 }
 
+// Sanitize path params to prevent directory traversal
+function safeName(param) {
+  return String(param || "").replace(/[^a-zA-Z0-9._-]/g, "");
+}
+
 function listLogFiles(dir) {
   try {
     return fs.readdirSync(dir)
@@ -235,12 +240,15 @@ app.post("/setup", (req, res) => {
 });
 
 // File upload endpoint
+const uploadedFileMap = new Map();
+
 app.post("/upload", upload.array("files", 10), (req, res) => {
-  const uploaded = (req.files || []).map((f) => ({
-    originalName: f.originalname,
-    path: f.path,
-    size: f.size,
-  }));
+  const uploaded = (req.files || []).map((f) => {
+    const id = path.basename(f.path);
+    uploadedFileMap.set(id, f.path);
+    setTimeout(() => { try { fs.unlinkSync(f.path); } catch {} uploadedFileMap.delete(id); }, 3600000);
+    return { originalName: f.originalname, id, size: f.size };
+  });
   res.json({ files: uploaded });
 });
 
@@ -265,8 +273,9 @@ app.get("/logs/daily", (req, res) => {
 
 // Get a specific day's logs
 app.get("/logs/daily/:date", (req, res) => {
-  const file = path.join(dailyDir, `${req.params.date}.json`);
-  res.json({ date: req.params.date, entries: readLogFile(file) });
+  const date = safeName(req.params.date);
+  const file = path.join(dailyDir, `${date}.json`);
+  res.json({ date, entries: readLogFile(file) });
 });
 
 // List weekly logs
@@ -286,8 +295,9 @@ app.get("/logs/weekly", (req, res) => {
 
 // Get a specific week's logs
 app.get("/logs/weekly/:week", (req, res) => {
-  const file = path.join(weeklyDir, `${req.params.week}.json`);
-  res.json({ week: req.params.week, entries: readLogFile(file) });
+  const week = safeName(req.params.week);
+  const file = path.join(weeklyDir, `${week}.json`);
+  res.json({ week, entries: readLogFile(file) });
 });
 
 // List user logs
@@ -309,8 +319,9 @@ app.get("/logs/users", (req, res) => {
 
 // Get a specific user's logs
 app.get("/logs/users/:name", (req, res) => {
-  const file = path.join(userDir, `${req.params.name}.json`);
-  res.json({ user: req.params.name, entries: readLogFile(file) });
+  const name = safeName(req.params.name);
+  const file = path.join(userDir, `${name}.json`);
+  res.json({ user: name, entries: readLogFile(file) });
 });
 
 // Session summary — powers the welcome screen activity widget
@@ -466,9 +477,111 @@ app.get("/history", (req, res) => {
 });
 
 app.get("/history/:sessionId", (req, res) => {
-  const convo = getConversation(req.params.sessionId);
+  const convo = getConversation(safeName(req.params.sessionId));
   if (!convo) return res.status(404).json({ error: "Not found" });
   res.json(convo);
+});
+
+// ============================================
+// Persistent Memory
+// ============================================
+const memoryDir = path.join(__dirname, "memory");
+if (!fs.existsSync(memoryDir)) fs.mkdirSync(memoryDir, { recursive: true });
+
+const memoryFile = path.join(memoryDir, "user.md");
+const memoryMetaFile = path.join(memoryDir, "meta.json");
+
+function readMemory() {
+  try { return fs.readFileSync(memoryFile, "utf-8"); } catch { return ""; }
+}
+
+function writeMemory(content) {
+  const tmp = memoryFile + ".tmp." + process.pid;
+  try {
+    fs.writeFileSync(tmp, content);
+    fs.renameSync(tmp, memoryFile);
+  } catch (e) {
+    console.error("Memory write error:", e.message);
+    try { fs.unlinkSync(tmp); } catch {}
+  }
+}
+
+function readMemoryMeta() {
+  try { return JSON.parse(fs.readFileSync(memoryMetaFile, "utf-8")); }
+  catch { return { lastExtraction: null, exchangeCount: 0 }; }
+}
+
+function writeMemoryMeta(meta) {
+  try { fs.writeFileSync(memoryMetaFile, JSON.stringify(meta, null, 2)); } catch {}
+}
+
+// Background memory extraction — runs after exchanges
+let memoryExtractionRunning = false;
+
+function extractMemories(userMsg, assistantMsg) {
+  if (memoryExtractionRunning || (!userMsg && !assistantMsg)) return;
+
+  const currentMemory = readMemory();
+  const meta = readMemoryMeta();
+  meta.exchangeCount = (meta.exchangeCount || 0) + 1;
+  writeMemoryMeta(meta);
+
+  // Run extraction every 3 exchanges (or first time)
+  if (meta.exchangeCount % 3 !== 0 && currentMemory.length > 0) return;
+
+  memoryExtractionRunning = true;
+
+  const prompt = `You are a memory extraction system. Maintain a persistent memory file for an AI assistant.
+
+CURRENT MEMORY:
+${currentMemory || "(empty — first session)"}
+
+LATEST EXCHANGE:
+User: ${(userMsg || "").slice(0, 1500)}
+Assistant: ${(assistantMsg || "").slice(0, 1500)}
+
+RULES:
+- Extract facts worth remembering: user preferences, names, project context, decisions, ongoing work, communication style, things they care about.
+- Do NOT store: code, temporary task details, things derivable from files.
+- One line per fact, grouped by ## category headers (User, Preferences, Projects, Decisions, Style).
+- If a fact contradicts existing memory, replace it. Never duplicate.
+- If nothing new, output current memory unchanged.
+- Output ONLY the updated memory file. No explanation, no wrapper.
+
+Updated memory:`;
+
+  const proc = spawn("claude", ["-p", prompt, "--output-format", "text"], {
+    cwd: os.homedir(),
+    env: { ...process.env },
+  });
+
+  let output = "";
+  proc.stdout.on("data", (chunk) => { output += chunk.toString(); });
+
+  proc.on("close", () => {
+    memoryExtractionRunning = false;
+    const trimmed = output.trim();
+    if (trimmed.length > 10) {
+      writeMemory(trimmed);
+      const m = readMemoryMeta();
+      m.lastExtraction = new Date().toISOString();
+      writeMemoryMeta(m);
+    }
+  });
+
+  proc.on("error", () => { memoryExtractionRunning = false; });
+}
+
+// Memory API
+app.get("/memory", (req, res) => {
+  res.json({ content: readMemory(), meta: readMemoryMeta() });
+});
+
+app.put("/memory", (req, res) => {
+  const { content } = req.body;
+  if (typeof content !== "string") return res.status(400).json({ error: "content required" });
+  writeMemory(content);
+  res.json({ ok: true });
 });
 
 // Active sessions
@@ -476,8 +589,14 @@ const sessions = new Map();
 
 function buildSystemPrefix() {
   const ctx = config.business?.context || "";
-  if (!ctx) return "";
-  return `[CONTEXT: ${ctx}]\n\n`;
+  const memory = readMemory();
+  let prefix = "";
+  if (ctx) prefix += `[CONTEXT: ${ctx}]\n\n`;
+  if (memory) {
+    prefix += `[PERSISTENT MEMORY — What you remember about this user from prior sessions. Use this to be personal, reference prior work, and avoid re-asking things you already know.]\n${memory}\n[END MEMORY]\n\n`;
+  }
+  prefix += `[MEMORY NOTE: You have persistent memory across sessions stored at ${memoryFile}. The system auto-extracts memories, but if the user says "remember this" you can also write to it directly.]\n\n`;
+  return prefix;
 }
 
 wss.on("connection", (ws) => {
@@ -526,10 +645,13 @@ wss.on("connection", (ws) => {
       let { message, filePaths } = msg;
       currentUserMessage = message || "";
 
-      // Prepend file context
+      // Prepend file context — resolve upload IDs to server paths
       if (filePaths && filePaths.length > 0) {
         const fileList = filePaths
-          .map((f) => `- ${f.originalName}: ${f.path}`)
+          .map((f) => {
+            const serverPath = uploadedFileMap.get(f.id) || f.path || f.id;
+            return `- ${f.originalName}: ${serverPath}`;
+          })
           .join("\n");
         message = `The user has uploaded these files:\n${fileList}\n\nTheir request: ${message}`;
       }
@@ -649,6 +771,9 @@ wss.on("connection", (ws) => {
           console.error("History save failed:", histErr.message);
         }
 
+        // Background memory extraction
+        extractMemories(currentUserMessage, currentAssistantText);
+
         safeSend(ws, { type: "done", code });
         currentProcess = null;
       });
@@ -717,7 +842,9 @@ wss.on("connection", (ws) => {
         }
       } catch {}
 
+      const btwMemory = readMemory();
       const btwPrefix = isFirst ? `[CONTEXT: You are running in BTW mode — a side-thread orchestrator. ${config.business?.context || ""}
+${btwMemory ? `\nPERSISTENT MEMORY:\n${btwMemory}\n` : ""}
 
 ORCHESTRATOR RULES:
 - You can and SHOULD use the Agent tool to delegate work to subagents when tasks are parallelizable.
@@ -806,6 +933,8 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
         try {
           saveConversationMeta(btwSessionId, btwUserMessage, btwAssistantText, "multitask");
         } catch {}
+        // Background memory extraction from multitask too
+        extractMemories(btwUserMessage, btwAssistantText);
         safeSend(ws, { type: "btw-done", code });
         btwProcess = null;
         // Process queued BTW messages
@@ -976,7 +1105,8 @@ server.on("error", (err) => {
   console.error("Server error:", err);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, "127.0.0.1", () => {
   console.log(`\n  ${config.business?.name || "Delt"} is running!`);
-  console.log(`  http://localhost:${PORT}\n`);
+  console.log(`  http://localhost:${PORT}`);
+  console.log(`  Bound to localhost only — not accessible from other devices.\n`);
 });

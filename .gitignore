@@ -2,3 +2,4 @@ node_modules/
 logs/
 history/
 config.json
+.gstack/
