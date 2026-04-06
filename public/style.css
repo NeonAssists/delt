@@ -947,13 +947,14 @@ header {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-secondary);
+  overflow: hidden;
+}
+.integration-icon-box svg {
+  width: 22px;
+  height: 22px;
 }
 .integration-card.connected .integration-icon-box {
-  background: rgba(16, 185, 129, 0.08);
-  color: var(--success);
+  background: rgba(16, 185, 129, 0.06);
 }
 
 .integration-info {

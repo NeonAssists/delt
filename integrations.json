@@ -300,6 +300,266 @@
       ]
     },
     {
+      "id": "microsoft-365",
+      "name": "Microsoft 365",
+      "description": "Outlook, OneDrive, Teams, Word, Excel",
+      "icon": "microsoft",
+      "category": "productivity",
+      "authType": "enable",
+      "mcpServers": {
+        "microsoft": {
+          "command": "npx",
+          "args": ["-y", "@anthropic-ai/microsoft-mcp"],
+          "envMapping": {}
+        }
+      },
+      "setupSteps": [
+        "Click Enable below",
+        "The first time you use a Microsoft tool, a sign-in window will open",
+        "Sign in with your Microsoft account (personal or work)",
+        "Grant access to the services you want to use",
+        "That's it — your Outlook, OneDrive, and other Microsoft tools will be available"
+      ]
+    },
+    {
+      "id": "apple",
+      "name": "Apple Apps",
+      "description": "Reminders, Notes, Calendar, Contacts (macOS)",
+      "icon": "apple",
+      "category": "productivity",
+      "authType": "enable",
+      "mcpServers": {
+        "apple": {
+          "command": "npx",
+          "args": ["-y", "mcp-server-apple"],
+          "envMapping": {}
+        }
+      },
+      "setupSteps": [
+        "Click Enable below",
+        "Your Mac may ask for permission to access Reminders, Calendar, or Contacts",
+        "Click 'Allow' on any permission prompts that appear",
+        "Your Apple apps will be accessible — no sign-in needed since you're already logged in on your Mac"
+      ]
+    },
+    {
+      "id": "canva",
+      "name": "Canva",
+      "description": "Designs, templates, brand kit, images",
+      "icon": "canva",
+      "category": "design",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "API Key",
+        "placeholder": "cnk_xxxxxxxxxxxxxxxxxxxx",
+        "helpUrl": "https://www.canva.com/developers/integrations",
+        "scopes": "design:read, design:write"
+      },
+      "mcpServers": {
+        "canva": {
+          "command": "npx",
+          "args": ["-y", "mcp-canva"],
+          "envMapping": { "CANVA_API_KEY": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to canva.com/developers and sign in",
+        "Click 'Create an integration'",
+        "Name it 'Delt' and select the scopes you need",
+        "Copy the API key from your integration settings"
+      ]
+    },
+    {
+      "id": "dropbox",
+      "name": "Dropbox",
+      "description": "Files, folders, sharing, search",
+      "icon": "dropbox",
+      "category": "storage",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Access Token",
+        "placeholder": "sl.xxxxxxxxxxxxxxxxxxxx",
+        "helpUrl": "https://www.dropbox.com/developers/apps",
+        "scopes": "files.content.read, files.content.write"
+      },
+      "mcpServers": {
+        "dropbox": {
+          "command": "npx",
+          "args": ["-y", "mcp-dropbox"],
+          "envMapping": { "DROPBOX_ACCESS_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to dropbox.com/developers/apps and sign in",
+        "Click 'Create app' and choose 'Scoped access'",
+        "Select 'Full Dropbox' access, name it 'Delt'",
+        "Under Settings, click 'Generate' next to 'Generated access token'",
+        "Copy the token"
+      ]
+    },
+    {
+      "id": "airtable",
+      "name": "Airtable",
+      "description": "Bases, tables, records, views",
+      "icon": "airtable",
+      "category": "productivity",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Personal Access Token",
+        "placeholder": "pat_xxxxxxxxxxxxxxxxxxxx",
+        "helpUrl": "https://airtable.com/create/tokens",
+        "scopes": "data.records:read, data.records:write"
+      },
+      "mcpServers": {
+        "airtable": {
+          "command": "npx",
+          "args": ["-y", "mcp-airtable"],
+          "envMapping": { "AIRTABLE_API_KEY": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to airtable.com/create/tokens",
+        "Click 'Create new token'",
+        "Name it 'Delt', add scopes: data.records:read, data.records:write",
+        "Select which bases to grant access to",
+        "Click 'Create token' and copy it"
+      ]
+    },
+    {
+      "id": "mailchimp",
+      "name": "Mailchimp",
+      "description": "Email campaigns, audiences, templates, analytics",
+      "icon": "mailchimp",
+      "category": "marketing",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "API Key",
+        "placeholder": "xxxxxxxxxxxxxxxxxxxxxxxx-us1",
+        "helpUrl": "https://us1.admin.mailchimp.com/account/api/",
+        "scopes": "read, write"
+      },
+      "mcpServers": {
+        "mailchimp": {
+          "command": "npx",
+          "args": ["-y", "mcp-mailchimp"],
+          "envMapping": { "MAILCHIMP_API_KEY": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to Mailchimp → Account & Billing → Extras → API keys",
+        "Click 'Create A Key'",
+        "Copy the full key (includes a dash and your data center, like -us1)"
+      ]
+    },
+    {
+      "id": "twilio",
+      "name": "Twilio",
+      "description": "SMS, calls, WhatsApp, phone numbers",
+      "icon": "twilio",
+      "category": "communication",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Auth Token",
+        "placeholder": "your-twilio-auth-token",
+        "helpUrl": "https://console.twilio.com",
+        "scopes": "messaging, voice"
+      },
+      "mcpServers": {
+        "twilio": {
+          "command": "npx",
+          "args": ["-y", "mcp-twilio"],
+          "envMapping": { "TWILIO_AUTH_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to console.twilio.com and sign in",
+        "Your Account SID and Auth Token are on the dashboard",
+        "Click 'Show' next to Auth Token and copy it"
+      ]
+    },
+    {
+      "id": "sendgrid",
+      "name": "SendGrid",
+      "description": "Email delivery, templates, analytics",
+      "icon": "sendgrid",
+      "category": "communication",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "API Key",
+        "placeholder": "SG.xxxxxxxxxxxxxxxxxxxx",
+        "helpUrl": "https://app.sendgrid.com/settings/api_keys",
+        "scopes": "mail.send, templates.read"
+      },
+      "mcpServers": {
+        "sendgrid": {
+          "command": "npx",
+          "args": ["-y", "mcp-sendgrid"],
+          "envMapping": { "SENDGRID_API_KEY": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to app.sendgrid.com → Settings → API Keys",
+        "Click 'Create API Key'",
+        "Name it 'Delt', choose 'Full Access' or select specific permissions",
+        "Click 'Create & View' and copy the key immediately"
+      ]
+    },
+    {
+      "id": "salesforce",
+      "name": "Salesforce",
+      "description": "CRM, leads, opportunities, accounts, reports",
+      "icon": "salesforce",
+      "category": "crm",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Security Token + Password",
+        "placeholder": "your-salesforce-security-token",
+        "helpUrl": "https://help.salesforce.com/s/articleView?id=sf.user_security_token.htm",
+        "scopes": "api, full"
+      },
+      "mcpServers": {
+        "salesforce": {
+          "command": "npx",
+          "args": ["-y", "mcp-salesforce"],
+          "envMapping": { "SALESFORCE_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "Log into Salesforce, click your avatar → Settings",
+        "Search for 'Reset My Security Token' in the left sidebar",
+        "Click 'Reset Security Token' — it will be emailed to you",
+        "Copy the token from the email"
+      ]
+    },
+    {
+      "id": "zoom",
+      "name": "Zoom",
+      "description": "Meetings, recordings, participants",
+      "icon": "zoom",
+      "category": "communication",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Server-to-Server OAuth Client Secret",
+        "placeholder": "your-zoom-client-secret",
+        "helpUrl": "https://marketplace.zoom.us/develop/create",
+        "scopes": "meeting:read, meeting:write"
+      },
+      "mcpServers": {
+        "zoom": {
+          "command": "npx",
+          "args": ["-y", "mcp-zoom"],
+          "envMapping": { "ZOOM_CLIENT_SECRET": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to marketplace.zoom.us and sign in",
+        "Click 'Develop' → 'Build App'",
+        "Choose 'Server-to-Server OAuth' and create it",
+        "Copy the Client Secret from the App Credentials page",
+        "Add scopes: meeting:read, meeting:write"
+      ]
+    },
+    {
       "id": "custom-api",
       "name": "Custom API",
       "description": "Connect any service that has an API key",
