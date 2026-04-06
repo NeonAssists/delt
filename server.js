@@ -145,7 +145,8 @@ function writeIntegrationsMd() {
     md += "NEVER use local apps (Mail.app, Calendar.app), AppleScript, osascript, or shell commands for these services.\n\n";
 
     for (const i of connected) {
-      const tools = Object.keys(i.mcpServers || {}).map((s) => `mcp__${s}__*`);
+      const serverNames = i.composioSlug ? [i.composioSlug] : Object.keys(i.mcpServers || {});
+      const tools = serverNames.map((s) => `mcp__${s}__*`);
       md += `## ${i.name}\n`;
       md += `${i.description}\n`;
       md += `MCP tools: ${tools.join(", ")}\n\n`;
@@ -164,11 +165,24 @@ function writeIntegrationsMd() {
 function buildMcpConfig() {
   const creds = loadCredentials();
   const mcpServers = {};
+  const composioKey = config.composioApiKey;
 
   for (const integration of integrationsRegistry.integrations) {
     const cred = creds[integration.id];
     if (!cred || !cred.enabled) continue;
 
+    // Composio-managed integrations — use mcp-remote to Composio endpoint
+    if (integration.composioSlug && composioKey) {
+      const url = `https://mcp.composio.dev/${integration.composioSlug}/${composioKey}`;
+      mcpServers[integration.composioSlug] = {
+        command: "npx",
+        args: ["-y", "mcp-remote", url],
+        env: {},
+      };
+      continue;
+    }
+
+    // Direct MCP server integrations (token-based)
     for (const [serverName, serverDef] of Object.entries(integration.mcpServers || {})) {
       const env = {};
       for (const [envVar, credKey] of Object.entries(serverDef.envMapping || {})) {
@@ -542,7 +556,11 @@ app.post("/integrations/:id/connect", (req, res) => {
   const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
   if (!integration) return res.status(404).json({ error: "Integration not found" });
 
-  if (integration.authType === "enable") {
+  if (integration.authType === "composio") {
+    if (!config.composioApiKey) return res.status(400).json({ error: "Composio API key not configured. Add it in Settings." });
+    saveCredential(integration.id, { type: "composio" });
+    res.json({ ok: true, connected: true });
+  } else if (integration.authType === "enable") {
     saveCredential(integration.id, { type: "enable" });
     res.json({ ok: true, connected: true });
   } else if (integration.authType === "token" || integration.authType === "custom") {
@@ -713,38 +731,6 @@ app.get("/oauth/callback", async (req, res) => {
       expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
       scope: tokens.scope,
     });
-
-    // Gmail: write credentials to ~/.gmail-mcp/ so MCP server can read them
-    if (integration.id === "gmail") {
-      try {
-        const gmailDir = path.join(os.homedir(), ".gmail-mcp");
-        if (!fs.existsSync(gmailDir)) fs.mkdirSync(gmailDir, { recursive: true });
-
-        // OAuth client config (for token refresh)
-        fs.writeFileSync(path.join(gmailDir, "gcp-oauth.keys.json"), JSON.stringify({
-          web: {
-            client_id: clientConfig.clientId,
-            client_secret: clientConfig.clientSecret,
-            auth_uri: "https://accounts.google.com/o/oauth2/auth",
-            token_uri: "https://oauth2.googleapis.com/token",
-            redirect_uris: [`http://localhost:${PORT}/oauth/callback`]
-          }
-        }));
-
-        // User credentials
-        fs.writeFileSync(path.join(gmailDir, "credentials.json"), JSON.stringify({
-          type: "authorized_user",
-          client_id: clientConfig.clientId,
-          client_secret: clientConfig.clientSecret,
-          refresh_token: tokens.refresh_token,
-          access_token: tokens.access_token,
-          token_type: tokens.token_type || "Bearer",
-          expiry_date: Date.now() + (tokens.expires_in || 3600) * 1000
-        }));
-      } catch (e) {
-        console.error("Failed to write Gmail MCP credentials:", e.message);
-      }
-    }
 
     res.send(`<html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f7f7f8;">
       <div style="text-align:center;">

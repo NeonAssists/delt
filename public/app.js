@@ -1406,7 +1406,7 @@
           <span class="integration-desc">${escapeHtml(i.description)}</span>
         </div>
         <div class="integration-actions">
-          <button class="integration-connect-btn" data-action="connect" data-id="${i.id}" data-auth="${i.authType}">${i.authType === "enable" ? "Enable" : i.authType === "oauth2" ? "Sign in" : "Connect"}</button>
+          <button class="integration-connect-btn" data-action="connect" data-id="${i.id}" data-auth="${i.authType}">${i.authType === "composio" ? "Connect" : i.authType === "enable" ? "Enable" : i.authType === "google-oauth" ? "Sign in with Google" : i.authType === "oauth2" ? "Sign in" : "Connect"}</button>
         </div>
       </div>`;
   }
@@ -1429,18 +1429,21 @@
 
     if (action === "connect") {
       const authType = btn.dataset.auth;
-      if (authType === "enable") {
-        // MCP server handles its own auth — just enable it
-        btn.textContent = "Enabling...";
+      if (authType === "composio" || authType === "enable") {
+        btn.textContent = authType === "composio" ? "Connecting..." : "Enabling...";
         btn.disabled = true;
         try {
-          await fetch(`/integrations/${id}/connect`, {
+          const cRes = await fetch(`/integrations/${id}/connect`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({}),
           });
+          const cData = await cRes.json();
+          if (cData.error) { btn.textContent = cData.error; btn.disabled = false; return; }
           loadIntegrations();
         } catch { btn.textContent = "Failed"; btn.disabled = false; }
+      } else if (authType === "google-oauth") {
+        startGoogleAuth(id, btn);
       } else if (authType === "oauth2") {
         startOAuthFlow(id);
       } else {
@@ -1482,6 +1485,49 @@
       }
     } catch {
       alert("Failed to start authentication.");
+    }
+  }
+
+  // Google OAuth — runs MCP auth in Terminal, then polls for completion
+  async function startGoogleAuth(integrationId, btn) {
+    btn.textContent = "Opening sign-in...";
+    btn.disabled = true;
+    try {
+      const res = await fetch(`/integrations/${integrationId}/google-auth`, { method: "POST" });
+      const data = await res.json();
+      if (data.needsKeys) {
+        btn.textContent = "Setup needed";
+        btn.disabled = false;
+        alert(data.error);
+        return;
+      }
+      if (!data.ok) {
+        btn.textContent = "Failed";
+        btn.disabled = false;
+        return;
+      }
+      // Poll for auth completion
+      btn.textContent = "Waiting for sign-in...";
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const check = await fetch(`/integrations/${integrationId}/google-auth-status`);
+          const status = await check.json();
+          if (status.authed) {
+            clearInterval(poll);
+            loadIntegrations();
+          }
+        } catch {}
+        if (attempts > 120) { // 2 min timeout
+          clearInterval(poll);
+          btn.textContent = "Timed out. Try again.";
+          btn.disabled = false;
+        }
+      }, 1000);
+    } catch {
+      btn.textContent = "Failed";
+      btn.disabled = false;
     }
   }
 

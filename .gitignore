@@ -10,3 +10,6 @@ demo-captures/
 demo-video.html
 *.mp4
 memory/
+.env
+signups.json
+service-account.json

@@ -8,8 +8,11 @@
     "dev": "node server.js"
   },
   "dependencies": {
+    "dotenv": "17.4.1",
     "express": "^4.21.0",
+    "googleapis": "171.4.0",
     "multer": "2.1.1",
+    "nodemailer": "8.0.4",
     "uuid": "^10.0.0",
     "ws": "^8.18.0"
   }
