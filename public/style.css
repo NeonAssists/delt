@@ -394,6 +394,23 @@ body {
   font-weight: 600;
 }
 
+.sidebar-tag {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+  margin-right: 5px;
+}
+
+.sidebar-tag.multitask {
+  background: rgba(108, 92, 231, 0.1);
+  color: var(--accent);
+}
+
 .sidebar-item-meta {
   display: flex;
   align-items: center;

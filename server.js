@@ -8,6 +8,29 @@ const os = require("os");
 const fs = require("fs");
 const multer = require("multer");
 
+// ============================================
+// Stability helpers
+// ============================================
+const PROCESS_TIMEOUT_MS = 120000; // 2 min max per Claude request
+
+function safeSend(ws, data) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(typeof data === "string" ? data : JSON.stringify(data));
+  }
+}
+
+function spawnWithTimeout(proc, ws, errorType, timeoutMs = PROCESS_TIMEOUT_MS) {
+  const timer = setTimeout(() => {
+    if (proc && !proc.killed) {
+      proc.kill("SIGKILL");
+      safeSend(ws, { type: errorType, message: "Request timed out. Try again." });
+    }
+  }, timeoutMs);
+  proc.on("close", () => clearTimeout(timer));
+  proc.on("error", () => clearTimeout(timer));
+  return timer;
+}
+
 // Load config — use config.json if exists, otherwise copy from config.default.json
 const configPath = path.join(__dirname, "config.json");
 const defaultConfigPath = path.join(__dirname, "config.default.json");
@@ -49,9 +72,19 @@ function appendLog(filePath, entry) {
   let existing = [];
   try {
     existing = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  } catch {}
+  } catch (e) {
+    if (e.code !== "ENOENT") console.error("Log read error:", filePath, e.message);
+  }
   existing.push(entry);
-  fs.writeFileSync(filePath, JSON.stringify(existing, null, 2));
+  // Atomic write: temp file + rename to prevent corruption on concurrent writes
+  const tmpFile = filePath + ".tmp." + process.pid;
+  try {
+    fs.writeFileSync(tmpFile, JSON.stringify(existing, null, 2));
+    fs.renameSync(tmpFile, filePath);
+  } catch (e) {
+    console.error("Log write error:", filePath, e.message);
+    try { fs.unlinkSync(tmpFile); } catch {}
+  }
 }
 
 function logConversation({ sessionId, user, userMessage, assistantMessage, toolsUsed, costUsd, durationMs }) {
@@ -403,6 +436,7 @@ function listConversations() {
           return {
             sessionId: meta.sessionId,
             title: meta.title || "Untitled",
+            tag: meta.tag || "chat",
             createdAt: meta.createdAt,
             updatedAt: meta.updatedAt,
             messageCount: meta.messageCount || 0,
@@ -455,6 +489,7 @@ wss.on("connection", (ws) => {
   let btwSessionId = null;
   let btwProcess = null;
   let btwMessageCount = 0;
+  const btwQueue = [];
 
   // Pane 2 state
   let pane2SessionId = null;
@@ -478,12 +513,7 @@ wss.on("connection", (ws) => {
 
     if (msg.type === "chat") {
       if (currentProcess) {
-        ws.send(
-          JSON.stringify({
-            type: "error",
-            message: "Still working on your last request. One sec.",
-          })
-        );
+        safeSend(ws, { type: "error", message: "Still working on your last request. One sec." });
         return;
       }
 
@@ -509,11 +539,21 @@ wss.on("connection", (ws) => {
         sessionId = uuidv4();
         messageCount = 0;
         sessions.set(sessionId, { created: Date.now() });
-        ws.send(JSON.stringify({ type: "session", sessionId }));
+        safeSend(ws, { type: "session", sessionId });
       }
 
       const isFirst = messageCount === 0;
       messageCount++;
+
+      // Save to history immediately so sidebar updates on send
+      try {
+        if (isFirst) {
+          createConversationEntry(sessionId, currentUserMessage, "chat");
+        } else {
+          // Append user message to existing history
+          saveConversationMeta(sessionId, currentUserMessage, null, "chat");
+        }
+      } catch {}
 
       // Prepend business context on first message
       const fullMessage = isFirst
@@ -541,9 +581,10 @@ wss.on("connection", (ws) => {
       });
 
       currentProcess = proc;
+      spawnWithTimeout(proc, ws, "error");
       let buffer = "";
 
-      ws.send(JSON.stringify({ type: "thinking" }));
+      safeSend(ws, { type: "thinking" });
 
       proc.stdout.on("data", (chunk) => {
         buffer += chunk.toString();
@@ -554,7 +595,7 @@ wss.on("connection", (ws) => {
           if (!line.trim()) continue;
           try {
             const obj = JSON.parse(line);
-            ws.send(JSON.stringify({ type: "stream", data: obj }));
+            safeSend(ws, { type: "stream", data: obj });
 
             // Capture data for logging
             if (obj.type === "assistant" && obj.message?.content) {
@@ -573,7 +614,7 @@ wss.on("connection", (ws) => {
       proc.stderr.on("data", (chunk) => {
         const text = chunk.toString();
         if (text.includes("Error") || text.includes("ENOENT")) {
-          ws.send(JSON.stringify({ type: "error", message: text.trim() }));
+          safeSend(ws, { type: "error", message: text.trim() });
         }
       });
 
@@ -581,7 +622,7 @@ wss.on("connection", (ws) => {
         if (buffer.trim()) {
           try {
             const obj = JSON.parse(buffer.trim());
-            ws.send(JSON.stringify({ type: "stream", data: obj }));
+            safeSend(ws, { type: "stream", data: obj });
             if (obj.type === "result" && obj.cost_usd) currentCost = obj.cost_usd;
           } catch {}
         }
@@ -608,17 +649,12 @@ wss.on("connection", (ws) => {
           console.error("History save failed:", histErr.message);
         }
 
-        ws.send(JSON.stringify({ type: "done", code }));
+        safeSend(ws, { type: "done", code });
         currentProcess = null;
       });
 
       proc.on("error", (err) => {
-        ws.send(
-          JSON.stringify({
-            type: "error",
-            message: `Something went wrong: ${err.message}`,
-          })
-        );
+        safeSend(ws, { type: "error", message: `Something went wrong: ${err.message}` });
         currentProcess = null;
       });
     }
@@ -626,7 +662,7 @@ wss.on("connection", (ws) => {
     if (msg.type === "stop") {
       if (currentProcess) {
         currentProcess.kill("SIGINT");
-        ws.send(JSON.stringify({ type: "stopped" }));
+        safeSend(ws, { type: "stopped" });
       }
     }
 
@@ -635,8 +671,8 @@ wss.on("connection", (ws) => {
       sessionId = msg.sessionId;
       messageCount = 1; // Not first message, so --resume will be used
       sessions.set(sessionId, { created: Date.now() });
-      ws.send(JSON.stringify({ type: "session", sessionId }));
-      ws.send(JSON.stringify({ type: "resumed", sessionId }));
+      safeSend(ws, { type: "session", sessionId });
+      safeSend(ws, { type: "resumed", sessionId });
     }
 
     if (msg.type === "new-chat") {
@@ -645,7 +681,7 @@ wss.on("connection", (ws) => {
       }
       sessionId = null;
       messageCount = 0;
-      ws.send(JSON.stringify({ type: "cleared" }));
+      safeSend(ws, { type: "cleared" });
     }
 
     // ============================================
@@ -653,12 +689,16 @@ wss.on("connection", (ws) => {
     // ============================================
     if (msg.type === "btw") {
       if (btwProcess) {
-        ws.send(JSON.stringify({ type: "btw-error", message: "BTW is still working. Hold on." }));
+        btwQueue.push(msg);
         return;
       }
 
       let { message } = msg;
       if (!message) return;
+
+      // Track for history
+      let btwUserMessage = message;
+      let btwAssistantText = "";
 
       if (!btwSessionId) {
         btwSessionId = uuidv4();
@@ -667,6 +707,15 @@ wss.on("connection", (ws) => {
 
       const isFirst = btwMessageCount === 0;
       btwMessageCount++;
+
+      // Save to history immediately
+      try {
+        if (isFirst) {
+          createConversationEntry(btwSessionId, btwUserMessage, "multitask");
+        } else {
+          saveConversationMeta(btwSessionId, btwUserMessage, null, "multitask");
+        }
+      } catch {}
 
       const btwPrefix = isFirst ? `[CONTEXT: You are running in BTW mode — a side-thread orchestrator. ${config.business?.context || ""}
 
@@ -714,9 +763,10 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
       });
 
       btwProcess = proc;
+      spawnWithTimeout(proc, ws, "btw-error");
       let btwBuffer = "";
 
-      ws.send(JSON.stringify({ type: "btw-thinking" }));
+      safeSend(ws, { type: "btw-thinking" });
 
       proc.stdout.on("data", (chunk) => {
         btwBuffer += chunk.toString();
@@ -727,7 +777,13 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
           if (!line.trim()) continue;
           try {
             const obj = JSON.parse(line);
-            ws.send(JSON.stringify({ type: "btw-stream", data: obj }));
+            safeSend(ws, { type: "btw-stream", data: obj });
+            // Capture assistant text for history
+            if (obj.type === "assistant" && obj.message?.content) {
+              for (const b of obj.message.content) {
+                if (b.type === "text") btwAssistantText += b.text;
+              }
+            }
           } catch {}
         }
       });
@@ -735,7 +791,7 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
       proc.stderr.on("data", (chunk) => {
         const text = chunk.toString();
         if (text.includes("Error") || text.includes("ENOENT")) {
-          ws.send(JSON.stringify({ type: "btw-error", message: text.trim() }));
+          safeSend(ws, { type: "btw-error", message: text.trim() });
         }
       });
 
@@ -743,23 +799,37 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
         if (btwBuffer.trim()) {
           try {
             const obj = JSON.parse(btwBuffer.trim());
-            ws.send(JSON.stringify({ type: "btw-stream", data: obj }));
+            safeSend(ws, { type: "btw-stream", data: obj });
           } catch {}
         }
-        ws.send(JSON.stringify({ type: "btw-done", code }));
+        // Save assistant response to history
+        try {
+          saveConversationMeta(btwSessionId, btwUserMessage, btwAssistantText, "multitask");
+        } catch {}
+        safeSend(ws, { type: "btw-done", code });
         btwProcess = null;
+        // Process queued BTW messages
+        if (btwQueue.length) {
+          const next = btwQueue.shift();
+          // Re-dispatch through the handler by simulating the message
+          ws.emit("message", JSON.stringify(next));
+        }
       });
 
       proc.on("error", (err) => {
-        ws.send(JSON.stringify({ type: "btw-error", message: `BTW error: ${err.message}` }));
+        safeSend(ws, { type: "btw-error", message: `BTW error: ${err.message}` });
         btwProcess = null;
+        if (btwQueue.length) {
+          const next = btwQueue.shift();
+          ws.emit("message", JSON.stringify(next));
+        }
       });
     }
 
     if (msg.type === "btw-stop") {
       if (btwProcess) {
         btwProcess.kill("SIGINT");
-        ws.send(JSON.stringify({ type: "btw-stopped" }));
+        safeSend(ws, { type: "btw-stopped" });
         btwProcess = null;
       }
     }
@@ -769,7 +839,7 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
       btwSessionId = null;
       btwMessageCount = 0;
       btwProcess = null;
-      ws.send(JSON.stringify({ type: "btw-cleared" }));
+      safeSend(ws, { type: "btw-cleared" });
     }
 
     // ============================================
@@ -777,7 +847,7 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
     // ============================================
     if (msg.type === "pane2-chat") {
       if (pane2Process) {
-        ws.send(JSON.stringify({ type: "pane2-error", message: "Still working. Hold on." }));
+        safeSend(ws, { type: "pane2-error", message: "Still working. Hold on." });
         return;
       }
 
@@ -804,10 +874,11 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
 
       const proc = spawn("claude", args, { cwd: os.homedir(), env: { ...process.env } });
       pane2Process = proc;
+      spawnWithTimeout(proc, ws, "pane2-error");
       let p2Buffer = "";
 
-      ws.send(JSON.stringify({ type: "pane2-session", sessionId: pane2SessionId }));
-      ws.send(JSON.stringify({ type: "pane2-thinking" }));
+      safeSend(ws, { type: "pane2-session", sessionId: pane2SessionId });
+      safeSend(ws, { type: "pane2-thinking" });
 
       proc.stdout.on("data", (chunk) => {
         p2Buffer += chunk.toString();
@@ -817,7 +888,7 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
           if (!line.trim()) continue;
           try {
             const obj = JSON.parse(line);
-            ws.send(JSON.stringify({ type: "pane2-stream", data: obj }));
+            safeSend(ws, { type: "pane2-stream", data: obj });
           } catch {}
         }
       });
@@ -825,7 +896,7 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
       proc.stderr.on("data", (chunk) => {
         const text = chunk.toString();
         if (text.includes("Error") || text.includes("ENOENT")) {
-          ws.send(JSON.stringify({ type: "pane2-error", message: text.trim() }));
+          safeSend(ws, { type: "pane2-error", message: text.trim() });
         }
       });
 
@@ -833,15 +904,15 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
         if (p2Buffer.trim()) {
           try {
             const obj = JSON.parse(p2Buffer.trim());
-            ws.send(JSON.stringify({ type: "pane2-stream", data: obj }));
+            safeSend(ws, { type: "pane2-stream", data: obj });
           } catch {}
         }
-        ws.send(JSON.stringify({ type: "pane2-done", code }));
+        safeSend(ws, { type: "pane2-done", code });
         pane2Process = null;
       });
 
       proc.on("error", (err) => {
-        ws.send(JSON.stringify({ type: "pane2-error", message: err.message }));
+        safeSend(ws, { type: "pane2-error", message: err.message });
         pane2Process = null;
       });
     }
@@ -849,20 +920,62 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
     if (msg.type === "pane2-stop") {
       if (pane2Process) {
         pane2Process.kill("SIGINT");
-        ws.send(JSON.stringify({ type: "pane2-done" }));
+        safeSend(ws, { type: "pane2-done" });
         pane2Process = null;
       }
     }
   });
 
   ws.on("close", () => {
-    if (currentProcess) currentProcess.kill("SIGINT");
-    if (btwProcess) btwProcess.kill("SIGINT");
-    if (pane2Process) pane2Process.kill("SIGINT");
+    if (currentProcess) { currentProcess.kill("SIGINT"); currentProcess = null; }
+    if (btwProcess) { btwProcess.kill("SIGINT"); btwProcess = null; }
+    if (pane2Process) { pane2Process.kill("SIGINT"); pane2Process = null; }
+    if (sessionId) sessions.delete(sessionId);
   });
 });
 
+// ============================================
+// Graceful shutdown + error handling
+// ============================================
+
+function killAllChildren() {
+  wss.clients.forEach((client) => {
+    try { client.close(); } catch {}
+  });
+}
+
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received, shutting down...");
+  killAllChildren();
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 5000);
+});
+
+process.on("SIGINT", () => {
+  console.log("\nShutting down...");
+  killAllChildren();
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 5000);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled rejection:", err);
+});
+
 const PORT = process.env.PORT || 3939;
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`\n  Port ${PORT} is already in use. Is Delt already running?\n`);
+    process.exit(1);
+  }
+  console.error("Server error:", err);
+});
+
 server.listen(PORT, () => {
   console.log(`\n  ${config.business?.name || "Delt"} is running!`);
   console.log(`  http://localhost:${PORT}\n`);

@@ -198,19 +198,25 @@
   window.addEventListener("beforeunload", saveSession);
 
   // --- WebSocket ---
+  let reconnectDelay = 1000;
+  const MAX_RECONNECT_DELAY = 15000;
+
   function wsConnect() {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     ws = new WebSocket(`${proto}//${location.host}`);
 
     ws.onopen = () => {
       connected = true;
+      reconnectDelay = 1000;
       setStatus("connected", "Ready");
     };
 
     ws.onclose = () => {
       connected = false;
-      setStatus("error", "Disconnected");
-      setTimeout(wsConnect, 2000);
+      setStatus("error", "Reconnecting...");
+      setTimeout(wsConnect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 1.5, MAX_RECONNECT_DELAY);
     };
 
     ws.onerror = () => {
@@ -619,6 +625,9 @@
     checklistEl = null;
     completedSteps = [];
     activeStep = null;
+
+    // Refresh sidebar immediately so new convo appears on send
+    setTimeout(loadSidebarHistory, 300);
   }
 
   function processQueue() {
@@ -635,6 +644,7 @@
     setBusy(false);
     setStatus("connected", "Ready");
     saveSession();
+    loadSidebarHistory();
     processQueue();
   }
 
@@ -928,21 +938,27 @@
       sidebarList.innerHTML = convos.map((c) => {
         const time = formatRelativeTime(c.updatedAt);
         const isActive = c.sessionId === sessionId;
+        const tagLabel = c.tag === "multitask" ? '<span class="sidebar-tag multitask">MT</span>' : '';
         return `
-          <div class="sidebar-item${isActive ? ' active' : ''}" data-session="${c.sessionId}">
-            <div class="sidebar-item-title">${escapeHtml(c.title)}</div>
+          <div class="sidebar-item${isActive ? ' active' : ''}" data-session="${c.sessionId}" data-tag="${c.tag || 'chat'}">
+            <div class="sidebar-item-title">${tagLabel}${escapeHtml(c.title)}</div>
             <div class="sidebar-item-meta">
-              <span>${c.messageCount} msgs</span>
+              <span>${c.messageCount} msg${c.messageCount !== 1 ? 's' : ''}</span>
               <span>${time}</span>
             </div>
           </div>
         `;
       }).join('');
 
-      sidebarList.querySelectorAll('.sidebar-item').forEach((item) => {
-        item.addEventListener('click', () => resumeConversation(item.dataset.session));
-      });
     } catch {}
+  }
+
+  // Delegated click handler for sidebar (set once, no listener leaks)
+  if (sidebarList) {
+    sidebarList.addEventListener('click', (e) => {
+      const item = e.target.closest('.sidebar-item');
+      if (item && item.dataset.session) resumeConversation(item.dataset.session);
+    });
   }
 
   async function resumeConversation(sid) {
@@ -1178,19 +1194,45 @@
     if (btwSendBtn) btwSendBtn.disabled = !btwInput.value.trim();
   }
 
+  const btwQueue = [];
+
   function btwSend() {
     const text = btwInput.value.trim();
-    if (!text || btwBusy || !connected) return;
+    if (!text || !connected) return;
     btwAddMsg("user", text);
     btwInput.value = "";
     btwInput.style.height = "auto";
     btwUpdateSend();
+
+    if (btwBusy) {
+      // Queue it — show indicator
+      const note = document.createElement("div");
+      note.className = "btw-activity";
+      note.innerHTML = `<span class="btw-activity-dot active"></span><span class="btw-activity-label">Queued — will run next</span>`;
+      btwMessagesEl.appendChild(note);
+      btwScrollDown();
+      btwQueue.push({ text, noteEl: note });
+      return;
+    }
+
+    btwDispatch(text);
+  }
+
+  function btwDispatch(text) {
     ws.send(JSON.stringify({ type: "btw", message: text }));
     btwSetBusy(true);
     btwCurrentEl = null;
     btwLastText = "";
     btwSeenTools.clear();
     btwActiveActivity = null;
+    setTimeout(loadSidebarHistory, 300);
+  }
+
+  function btwProcessQueue() {
+    if (!btwQueue.length) return;
+    const next = btwQueue.shift();
+    if (next.noteEl) next.noteEl.remove();
+    btwDispatch(next.text);
   }
 
   function handleBtwServer(msg) {
@@ -1207,6 +1249,8 @@
         btwCurrentEl = null;
         btwLastText = "";
         btwSetBusy(false);
+        loadSidebarHistory();
+        btwProcessQueue();
         break;
       case "btw-stopped":
         btwHideTyping();
