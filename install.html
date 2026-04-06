@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Install Delt</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #F7F7F8; color: #18182B;
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .card {
+    max-width: 520px; width: 100%; background: #FFF;
+    border-radius: 18px; border: 1px solid #E3E3E8;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.06); padding: 40px 36px;
+    text-align: center;
+  }
+  .icon {
+    width: 56px; height: 56px; border-radius: 14px;
+    background: rgba(108,92,231,0.08); color: #6C5CE7;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px; font-size: 24px; font-weight: 800;
+  }
+  h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.04em; margin-bottom: 8px; }
+  .sub { font-size: 15px; color: #5C5C72; margin-bottom: 28px; line-height: 1.6; }
+  .steps { text-align: left; margin-bottom: 28px; }
+  .step {
+    display: flex; gap: 12px; padding: 14px 0;
+    border-bottom: 1px solid #EDEDF1;
+  }
+  .step:last-child { border-bottom: none; }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: rgba(108,92,231,0.08); color: #6C5CE7;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; flex-shrink: 0; margin-top: 2px;
+  }
+  .step-text { font-size: 14px; line-height: 1.5; }
+  .step-text strong { font-weight: 600; }
+  .cmd-box {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px; margin: 12px 0 0;
+    background: #1E1E2E; border: 1px solid #2A2A3A; border-radius: 10px;
+  }
+  .cmd-box code {
+    flex: 1; font-family: 'SF Mono', 'Menlo', monospace; font-size: 13px;
+    color: #E2E2F0; word-break: break-all; text-align: left;
+  }
+  .copy-btn {
+    padding: 6px 14px; font-size: 12px; font-weight: 600;
+    color: #888; background: #2A2A3A; border: 1px solid #3A3A4A;
+    border-radius: 6px; cursor: pointer; transition: all 0.15s; flex-shrink: 0;
+    font-family: inherit;
+  }
+  .copy-btn:hover { color: #DDD; background: #3A3A4A; }
+  .privacy {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    font-size: 12px; color: #9494A8; margin-top: 20px;
+  }
+  .privacy svg { opacity: 0.5; }
+  .alt { font-size: 12px; color: #9494A8; margin-top: 16px; line-height: 1.5; }
+  .alt a { color: #6C5CE7; text-decoration: none; }
+  .alt a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">D</div>
+  <h1>Install Delt</h1>
+  <p class="sub">Your AI assistant, running 100% on your computer. Nothing leaves your machine.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">
+        <strong>Open Terminal</strong><br>
+        Press <kbd style="padding:2px 6px;background:#F0F0F3;border:1px solid #E3E3E8;border-radius:4px;font-size:12px;">&#8984; Space</kbd>, type <strong>Terminal</strong>, hit Enter.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">
+        <strong>Paste this command and press Enter</strong>
+        <div class="cmd-box">
+          <code id="cmd">curl -fsSL https://raw.githubusercontent.com/NeonAssists/delt/main/install.sh | bash</code>
+          <button class="copy-btn" onclick="copyCmd()">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">
+        <strong>Done.</strong> Delt opens in your browser automatically. Everything runs locally — no account needed to start.
+      </div>
+    </div>
+  </div>
+
+  <p class="alt">
+    No Terminal? Download the installer directly from<br>
+    <a href="https://github.com/NeonAssists/delt/releases" target="_blank" rel="noopener">github.com/NeonAssists/delt/releases</a>
+  </p>
+
+  <div class="privacy">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    100% local. Your data never leaves your computer.
+  </div>
+</div>
+
+<script>
+function copyCmd() {
+  const cmd = document.getElementById('cmd').textContent;
+  navigator.clipboard.writeText(cmd).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  });
+}
+</script>
+</body>
+</html>
