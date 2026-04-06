@@ -237,6 +237,16 @@
   }
 
   function handleServer(msg) {
+    // Route btw-* and pane2-* to their handlers
+    if (msg.type && msg.type.startsWith("btw-")) {
+      if (typeof handleBtwServer === "function") handleBtwServer(msg);
+      return;
+    }
+    if (msg.type && msg.type.startsWith("pane2-")) {
+      if (typeof handlePane2Server === "function") handlePane2Server(msg);
+      return;
+    }
+
     switch (msg.type) {
       case "session":
         sessionId = msg.sessionId;
@@ -1275,17 +1285,7 @@
     if (ws && btwBusy) ws.send(JSON.stringify({ type: "btw-stop" }));
   });
 
-  // Patch handleServer to route btw-* and pane2-* messages
-  const _origHandleServer = handleServer;
-  handleServer = function(msg) {
-    if (msg.type && msg.type.startsWith("btw-")) {
-      handleBtwServer(msg);
-    } else if (msg.type && msg.type.startsWith("pane2-")) {
-      handlePane2Server(msg);
-    } else {
-      _origHandleServer(msg);
-    }
-  };
+  // BTW and pane2 routing is handled directly in handleServer (no monkey-patch needed)
 
   // --- Integrations Panel ---
   const integrationsBtn = document.getElementById("integrations-btn");

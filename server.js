@@ -1171,12 +1171,29 @@ Rules: extract lasting facts (preferences, names, projects, decisions, style). O
 }
 
 // --- Save everything after each exchange ---
+// Accumulate exchanges for end-of-session memory extraction
+let pendingMemoryExchanges = [];
+
 function persistExchange(sid, userMsg, assistantMsg, tag) {
   appendSessionLog(sid, "user", userMsg);
   appendSessionLog(sid, "assistant", assistantMsg);
   appendDailyLog(userMsg, assistantMsg, tag);
   updateState(userMsg, assistantMsg);
-  extractMemories(userMsg, assistantMsg);
+  // Queue for batch extraction on session close instead of per-message
+  if (userMsg || assistantMsg) {
+    pendingMemoryExchanges.push({ user: userMsg, assistant: assistantMsg });
+  }
+}
+
+// Called when a WebSocket disconnects — extract memories from the full session
+function flushMemoryExtraction() {
+  if (!pendingMemoryExchanges.length) return;
+  // Combine all exchanges into one extraction call
+  const combined = pendingMemoryExchanges
+    .map((e) => `User: ${(e.user || "").slice(0, 500)}\nAssistant: ${(e.assistant || "").slice(0, 500)}`)
+    .join("\n---\n");
+  pendingMemoryExchanges = [];
+  extractMemories(combined, "");
 }
 
 // --- Memory API ---
@@ -1586,6 +1603,8 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
     if (btwProcess) { btwProcess.kill("SIGINT"); btwProcess = null; }
     if (pane2Process) { pane2Process.kill("SIGINT"); pane2Process = null; }
     if (sessionId) sessions.delete(sessionId);
+    // Batch extract memories from the entire session
+    flushMemoryExtraction();
   });
 });
 
