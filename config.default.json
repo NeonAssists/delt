@@ -1,0 +1,73 @@
+{
+  "business": {
+    "name": "Assistant",
+    "owner": "",
+    "greeting": "Welcome",
+    "subtitle": "Let's get you set up.",
+    "context": ""
+  },
+  "theme": {
+    "accent": "#6C5CE7",
+    "accentHover": "#5A4BD6",
+    "accentSoft": "rgba(108, 92, 231, 0.08)",
+    "accentSofter": "rgba(108, 92, 231, 0.04)"
+  },
+  "tools": [
+    {
+      "id": "email",
+      "name": "Write an Email",
+      "icon": "mail",
+      "desc": "Draft, reply, or follow up",
+      "prompt": "Help me write an email. Ask me who it's to, the tone I want (professional, friendly, firm, etc.), and the key points I need to hit. Then write it."
+    },
+    {
+      "id": "document",
+      "name": "Analyze a Document",
+      "icon": "document",
+      "desc": "Upload anything — I'll break it down",
+      "prompt": "I want to analyze a document. If I haven't uploaded one yet, ask me to. Then give me: a clear summary, the key takeaways, any action items, and anything that looks off or needs attention. Plain language only."
+    },
+    {
+      "id": "social",
+      "name": "Social Media Post",
+      "icon": "share",
+      "desc": "Content that sounds like you, not AI",
+      "prompt": "Help me write a social media post. Ask me: what platform (Instagram, LinkedIn, X, Facebook), what I'm posting about, and the vibe I want. Give me 2-3 options that sound human, not corporate."
+    },
+    {
+      "id": "customer",
+      "name": "Customer Response",
+      "icon": "chat",
+      "desc": "Handle any message professionally",
+      "prompt": "I need help responding to a customer. I'll paste or describe their message. Help me write a reply that's professional, empathetic, and actually solves their problem. Ask me for the message first."
+    },
+    {
+      "id": "notes",
+      "name": "Meeting Notes",
+      "icon": "edit",
+      "desc": "Messy notes into clear action items",
+      "prompt": "I have meeting notes that need organizing. I'll paste them. Turn them into: 1) a clean summary (3-5 sentences), 2) action items with owners, 3) key decisions made, 4) anything unresolved that needs follow-up."
+    },
+    {
+      "id": "ideas",
+      "name": "Brainstorm",
+      "icon": "lightbulb",
+      "desc": "Strategy, names, plans — let's think",
+      "prompt": "Let's brainstorm. Ask me what I'm trying to figure out — business name, marketing angle, product idea, pricing, strategy, whatever. Then give me your honest best ideas with real pros and cons."
+    },
+    {
+      "id": "research",
+      "name": "Research Something",
+      "icon": "search",
+      "desc": "Companies, markets, competitors",
+      "prompt": "I need research on something. Ask me what I want to know about — it could be a company, a market, a competitor, an industry trend, or a specific question. Then dig in and give me what you find with sources where possible."
+    },
+    {
+      "id": "proposal",
+      "name": "Write a Proposal",
+      "icon": "dollar",
+      "desc": "Pitch, quote, or project scope",
+      "prompt": "Help me write a business proposal. Ask me: who's it for, what am I proposing, what's the price/scope, and any specifics I want included. Then write a clean, professional proposal I can send."
+    }
+  ]
+}

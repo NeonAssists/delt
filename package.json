@@ -1,0 +1,16 @@
+{
+  "name": "delt",
+  "version": "1.0.0",
+  "description": "A friendly AI assistant web interface — no terminal needed",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "multer": "2.1.1",
+    "uuid": "^10.0.0",
+    "ws": "^8.18.0"
+  }
+}
