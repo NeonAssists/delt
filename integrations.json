@@ -1,0 +1,351 @@
+{
+  "integrations": [
+    {
+      "id": "google-workspace",
+      "name": "Google Workspace",
+      "description": "Gmail, Drive, Calendar, Contacts, Sheets",
+      "icon": "google",
+      "category": "productivity",
+      "authType": "oauth2",
+      "oauth": {
+        "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth",
+        "tokenUrl": "https://oauth2.googleapis.com/token",
+        "scopes": [
+          "https://www.googleapis.com/auth/gmail.modify",
+          "https://www.googleapis.com/auth/drive",
+          "https://www.googleapis.com/auth/calendar",
+          "https://www.googleapis.com/auth/contacts.readonly",
+          "https://www.googleapis.com/auth/spreadsheets"
+        ]
+      },
+      "mcpServers": {
+        "google-drive": {
+          "command": "npx",
+          "args": ["-y", "@anthropic-ai/google-drive-mcp"],
+          "envMapping": { "GOOGLE_ACCESS_TOKEN": "accessToken" }
+        }
+      },
+      "setupSteps": []
+    },
+    {
+      "id": "github",
+      "name": "GitHub",
+      "description": "Repos, issues, pull requests, code search",
+      "icon": "github",
+      "category": "development",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Personal Access Token",
+        "placeholder": "ghp_...",
+        "helpUrl": "https://github.com/settings/tokens/new",
+        "scopes": "repo, read:org, read:user"
+      },
+      "mcpServers": {
+        "github": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-github"],
+          "envMapping": { "GITHUB_PERSONAL_ACCESS_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to github.com/settings/tokens",
+        "Click 'Generate new token (classic)'",
+        "Select scopes: repo, read:org, read:user",
+        "Click 'Generate token' and copy it"
+      ]
+    },
+    {
+      "id": "slack",
+      "name": "Slack",
+      "description": "Messages, channels, search workspace",
+      "icon": "slack",
+      "category": "communication",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Bot User OAuth Token",
+        "placeholder": "xoxb-...",
+        "helpUrl": "https://api.slack.com/apps",
+        "scopes": "channels:read, chat:write, users:read"
+      },
+      "mcpServers": {
+        "slack": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-slack"],
+          "envMapping": { "SLACK_BOT_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to api.slack.com/apps and click 'Create New App'",
+        "Choose 'From scratch', name it, pick your workspace",
+        "Go to 'OAuth & Permissions', add scopes: channels:read, chat:write, users:read",
+        "Click 'Install to Workspace' and copy the Bot User OAuth Token"
+      ]
+    },
+    {
+      "id": "notion",
+      "name": "Notion",
+      "description": "Pages, databases, search, create content",
+      "icon": "notion",
+      "category": "productivity",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Integration Token",
+        "placeholder": "ntn_...",
+        "helpUrl": "https://www.notion.so/my-integrations",
+        "scopes": "read, update, insert"
+      },
+      "mcpServers": {
+        "notion": {
+          "command": "npx",
+          "args": ["-y", "@notionhq/notion-mcp-server"],
+          "envMapping": { "OPENAPI_MCP_HEADERS": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to notion.so/my-integrations",
+        "Click 'New integration'",
+        "Name it, select your workspace, click Submit",
+        "Copy the Internal Integration Token",
+        "Share the pages you want accessible with your integration"
+      ]
+    },
+    {
+      "id": "linear",
+      "name": "Linear",
+      "description": "Issues, projects, teams, roadmaps",
+      "icon": "linear",
+      "category": "development",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "API Key",
+        "placeholder": "lin_api_...",
+        "helpUrl": "https://linear.app/settings/api",
+        "scopes": "read, write"
+      },
+      "mcpServers": {
+        "linear": {
+          "command": "npx",
+          "args": ["-y", "mcp-linear"],
+          "envMapping": { "LINEAR_API_KEY": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to linear.app/settings/api",
+        "Click 'Create key'",
+        "Name it and copy the API key"
+      ]
+    },
+    {
+      "id": "stripe",
+      "name": "Stripe",
+      "description": "Payments, customers, invoices, subscriptions",
+      "icon": "stripe",
+      "category": "finance",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Secret Key",
+        "placeholder": "sk_live_... or sk_test_...",
+        "helpUrl": "https://dashboard.stripe.com/apikeys",
+        "scopes": "read, write"
+      },
+      "mcpServers": {
+        "stripe": {
+          "command": "npx",
+          "args": ["-y", "@stripe/mcp"],
+          "envMapping": { "STRIPE_SECRET_KEY": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to dashboard.stripe.com/apikeys",
+        "Copy your Secret key (starts with sk_live_ or sk_test_)",
+        "Use a test key first if you want to be safe"
+      ]
+    },
+    {
+      "id": "shopify",
+      "name": "Shopify",
+      "description": "Products, orders, customers, inventory",
+      "icon": "shopify",
+      "category": "commerce",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Admin API Access Token",
+        "placeholder": "shpat_...",
+        "helpUrl": "https://admin.shopify.com/store/YOUR-STORE/settings/apps/development",
+        "scopes": "read_products, write_products, read_orders"
+      },
+      "mcpServers": {
+        "shopify": {
+          "command": "npx",
+          "args": ["-y", "@anthropic-ai/shopify-mcp"],
+          "envMapping": { "SHOPIFY_ACCESS_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to your Shopify Admin → Settings → Apps → Develop apps",
+        "Create an app, configure API scopes",
+        "Install the app and copy the Admin API access token"
+      ]
+    },
+    {
+      "id": "hubspot",
+      "name": "HubSpot",
+      "description": "CRM, contacts, deals, tickets",
+      "icon": "hubspot",
+      "category": "crm",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Private App Token",
+        "placeholder": "pat-...",
+        "helpUrl": "https://app.hubspot.com/private-apps/",
+        "scopes": "crm.objects.contacts, crm.objects.deals"
+      },
+      "mcpServers": {
+        "hubspot": {
+          "command": "npx",
+          "args": ["-y", "mcp-hubspot"],
+          "envMapping": { "HUBSPOT_ACCESS_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to HubSpot → Settings → Integrations → Private Apps",
+        "Create a private app",
+        "Select scopes: CRM (contacts, deals, tickets)",
+        "Create app and copy the access token"
+      ]
+    },
+    {
+      "id": "trello",
+      "name": "Trello",
+      "description": "Boards, cards, lists, checklists",
+      "icon": "trello",
+      "category": "productivity",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "API Key + Token",
+        "placeholder": "Your API token",
+        "helpUrl": "https://trello.com/power-ups/admin",
+        "scopes": "read, write"
+      },
+      "mcpServers": {
+        "trello": {
+          "command": "npx",
+          "args": ["-y", "mcp-trello"],
+          "envMapping": { "TRELLO_API_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to trello.com/power-ups/admin",
+        "Create a new Power-Up or use existing API key",
+        "Generate a Token with read/write access",
+        "Copy the token"
+      ]
+    },
+    {
+      "id": "asana",
+      "name": "Asana",
+      "description": "Tasks, projects, teams, timelines",
+      "icon": "asana",
+      "category": "productivity",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Personal Access Token",
+        "placeholder": "1/...",
+        "helpUrl": "https://app.asana.com/0/developer-console",
+        "scopes": "read, write"
+      },
+      "mcpServers": {
+        "asana": {
+          "command": "npx",
+          "args": ["-y", "mcp-asana"],
+          "envMapping": { "ASANA_ACCESS_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to app.asana.com → My Settings → Apps → Developer Console",
+        "Create a Personal Access Token",
+        "Copy the token"
+      ]
+    },
+    {
+      "id": "figma",
+      "name": "Figma",
+      "description": "Design files, components, comments",
+      "icon": "figma",
+      "category": "design",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "Personal Access Token",
+        "placeholder": "figd_...",
+        "helpUrl": "https://www.figma.com/developers/api#access-tokens",
+        "scopes": "file:read"
+      },
+      "mcpServers": {
+        "figma": {
+          "command": "npx",
+          "args": ["-y", "@anthropic-ai/figma-mcp"],
+          "envMapping": { "FIGMA_ACCESS_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to figma.com → Settings → Personal Access Tokens",
+        "Click 'Create a new personal access token'",
+        "Name it, set expiration, copy the token"
+      ]
+    },
+    {
+      "id": "quickbooks",
+      "name": "QuickBooks",
+      "description": "Invoices, expenses, reports, customers",
+      "icon": "quickbooks",
+      "category": "finance",
+      "authType": "token",
+      "tokenConfig": {
+        "label": "API Key",
+        "placeholder": "Your QuickBooks API key",
+        "helpUrl": "https://developer.intuit.com/app/developer/qbo/docs/get-started",
+        "scopes": "accounting"
+      },
+      "mcpServers": {
+        "quickbooks": {
+          "command": "npx",
+          "args": ["-y", "mcp-quickbooks"],
+          "envMapping": { "QUICKBOOKS_API_KEY": "token" }
+        }
+      },
+      "setupSteps": [
+        "Go to developer.intuit.com and sign in",
+        "Create an app in the Developer Dashboard",
+        "Get your Client ID and Secret from the Keys tab",
+        "Copy the credentials"
+      ]
+    },
+    {
+      "id": "custom-api",
+      "name": "Custom API",
+      "description": "Connect any service with an API key",
+      "icon": "api",
+      "category": "custom",
+      "authType": "custom",
+      "tokenConfig": {
+        "label": "API Key",
+        "placeholder": "Your API key",
+        "helpUrl": "",
+        "scopes": ""
+      },
+      "mcpServers": {
+        "fetch": {
+          "command": "npx",
+          "args": ["-y", "@anthropic-ai/mcp-server-fetch"],
+          "envMapping": {}
+        }
+      },
+      "setupSteps": [
+        "Find the API documentation for your service",
+        "Look for 'API Keys' or 'Developer Settings'",
+        "Generate a new key and copy it",
+        "Paste it here along with the API base URL"
+      ]
+    }
+  ]
+}

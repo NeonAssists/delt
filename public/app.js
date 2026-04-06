@@ -1341,6 +1341,218 @@
     }
   };
 
+  // --- Integrations Panel ---
+  const integrationsBtn = document.getElementById("integrations-btn");
+  const integrationsPanel = document.getElementById("integrations-panel");
+  const integrationsOverlay = document.getElementById("integrations-overlay");
+  const integrationsClose = document.getElementById("integrations-close");
+  const integrationsBody = document.getElementById("integrations-body");
+
+  const INTEGRATION_ICONS = {
+    google: "G", github: "GH", slack: "S", notion: "N", linear: "L",
+    stripe: "$", shopify: "Sh", hubspot: "H", trello: "T", asana: "A",
+    figma: "F", quickbooks: "QB", api: "{ }",
+  };
+
+  function openIntegrations() {
+    integrationsPanel.classList.remove("hidden");
+    integrationsOverlay.classList.remove("hidden");
+    loadIntegrations();
+  }
+
+  function closeIntegrations() {
+    integrationsPanel.classList.add("hidden");
+    integrationsOverlay.classList.add("hidden");
+  }
+
+  if (integrationsBtn) integrationsBtn.addEventListener("click", openIntegrations);
+  if (integrationsClose) integrationsClose.addEventListener("click", closeIntegrations);
+  if (integrationsOverlay) integrationsOverlay.addEventListener("click", closeIntegrations);
+
+  async function loadIntegrations() {
+    integrationsBody.innerHTML = '<div class="integrations-loading">Loading...</div>';
+    try {
+      const res = await fetch("/integrations");
+      const data = await res.json();
+      renderIntegrations(data.integrations || []);
+    } catch {
+      integrationsBody.innerHTML = '<div class="integrations-loading">Failed to load integrations.</div>';
+    }
+  }
+
+  function renderIntegrations(integrations) {
+    // Group by category
+    const categories = {};
+    for (const i of integrations) {
+      const cat = i.category || "other";
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat].push(i);
+    }
+
+    // Connected first
+    const connected = integrations.filter((i) => i.connected);
+    const disconnected = integrations.filter((i) => !i.connected);
+
+    let html = "";
+
+    if (connected.length) {
+      html += '<div class="integration-category-label">Connected</div>';
+      html += '<div class="integrations-grid">';
+      html += connected.map(renderIntegrationCard).join("");
+      html += '</div>';
+    }
+
+    if (disconnected.length) {
+      html += '<div class="integration-category-label">Available</div>';
+      html += '<div class="integrations-grid">';
+      html += disconnected.map(renderIntegrationCard).join("");
+      html += '</div>';
+    }
+
+    integrationsBody.innerHTML = html;
+
+    // Bind events via delegation
+    integrationsBody.addEventListener("click", handleIntegrationClick);
+  }
+
+  function renderIntegrationCard(i) {
+    const icon = INTEGRATION_ICONS[i.icon] || i.name.charAt(0);
+    if (i.connected) {
+      return `
+        <div class="integration-card connected" data-id="${i.id}">
+          <div class="integration-icon-box">${escapeHtml(icon)}</div>
+          <div class="integration-info">
+            <span class="integration-name">${escapeHtml(i.name)}</span>
+            <span class="integration-desc">${escapeHtml(i.description)}</span>
+          </div>
+          <div class="integration-actions">
+            <span class="integration-status"><span class="integration-status-dot"></span> Connected</span>
+            <button class="integration-disconnect-btn" data-action="disconnect" data-id="${i.id}">Remove</button>
+          </div>
+        </div>`;
+    }
+    return `
+      <div class="integration-card" data-id="${i.id}">
+        <div class="integration-icon-box">${escapeHtml(icon)}</div>
+        <div class="integration-info">
+          <span class="integration-name">${escapeHtml(i.name)}</span>
+          <span class="integration-desc">${escapeHtml(i.description)}</span>
+        </div>
+        <div class="integration-actions">
+          <button class="integration-connect-btn" data-action="connect" data-id="${i.id}" data-auth="${i.authType}">${i.authType === "oauth2" ? "Sign in" : "Connect"}</button>
+        </div>
+      </div>`;
+  }
+
+  async function handleIntegrationClick(e) {
+    const btn = e.target.closest("[data-action]");
+    if (!btn) return;
+
+    const id = btn.dataset.id;
+    const action = btn.dataset.action;
+
+    if (action === "disconnect") {
+      btn.textContent = "Removing...";
+      try {
+        await fetch(`/integrations/${id}/disconnect`, { method: "POST" });
+        loadIntegrations();
+      } catch {}
+      return;
+    }
+
+    if (action === "connect") {
+      const authType = btn.dataset.auth;
+      if (authType === "oauth2") {
+        startOAuthFlow(id);
+      } else {
+        showTokenWizard(id, btn.closest(".integration-card"));
+      }
+    }
+  }
+
+  // OAuth flow — open popup
+  async function startOAuthFlow(integrationId) {
+    try {
+      const res = await fetch(`/integrations/${integrationId}/auth-url`);
+      const data = await res.json();
+      if (data.url) {
+        const popup = window.open(data.url, "oauth", "width=500,height=700,left=200,top=100");
+        // Listen for completion message from popup
+        window.addEventListener("message", function handler(e) {
+          if (e.data?.type === "oauth-complete" && e.data?.integrationId === integrationId) {
+            window.removeEventListener("message", handler);
+            loadIntegrations();
+          }
+        });
+      } else {
+        alert(data.error || "OAuth not available for this service yet.");
+      }
+    } catch {
+      alert("Failed to start authentication.");
+    }
+  }
+
+  // Token wizard — show inline form
+  function showTokenWizard(integrationId, cardEl) {
+    // Fetch integration details from the card's data
+    const existingWizard = cardEl.querySelector(".token-wizard");
+    if (existingWizard) { existingWizard.remove(); return; }
+
+    // Find integration in the last loaded data
+    fetch("/integrations").then((r) => r.json()).then((data) => {
+      const integration = (data.integrations || []).find((i) => i.id === integrationId);
+      if (!integration) return;
+
+      const tc = integration.tokenConfig || {};
+      const steps = (integration.setupSteps || []).map((s, i) =>
+        `<li data-step="${i + 1}.">${escapeHtml(s)}</li>`
+      ).join("");
+
+      const wizard = document.createElement("div");
+      wizard.className = "token-wizard";
+      wizard.innerHTML = `
+        ${steps ? `<ol class="token-wizard-steps">${steps}</ol>` : ""}
+        ${tc.helpUrl ? `<a class="token-wizard-link" href="${tc.helpUrl}" target="_blank" rel="noopener">Open ${integration.name} settings &rarr;</a>` : ""}
+        <input class="token-wizard-input" type="password" placeholder="${escapeHtml(tc.placeholder || 'Paste your token here')}" autocomplete="off">
+        <button class="token-wizard-submit" disabled>Connect ${escapeHtml(integration.name)}</button>
+      `;
+
+      const input = wizard.querySelector(".token-wizard-input");
+      const submit = wizard.querySelector(".token-wizard-submit");
+
+      input.addEventListener("input", () => { submit.disabled = !input.value.trim(); });
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !submit.disabled) doConnect();
+      });
+      submit.addEventListener("click", doConnect);
+
+      async function doConnect() {
+        submit.disabled = true;
+        submit.textContent = "Connecting...";
+        try {
+          const res = await fetch(`/integrations/${integrationId}/connect`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: input.value.trim() }),
+          });
+          const result = await res.json();
+          if (result.ok) {
+            loadIntegrations();
+          } else {
+            submit.textContent = result.error || "Failed. Try again.";
+            submit.disabled = false;
+          }
+        } catch {
+          submit.textContent = "Connection failed. Try again.";
+          submit.disabled = false;
+        }
+      }
+
+      cardEl.appendChild(wizard);
+      input.focus();
+    });
+  }
+
   // --- Onboarding (first-time setup) ---
   const onboardingEl = document.getElementById("onboarding");
   const setupName = document.getElementById("setup-name");

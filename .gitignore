@@ -2,4 +2,6 @@ node_modules/
 logs/
 history/
 config.json
+credentials.json
+oauth-clients.json
 .gstack/

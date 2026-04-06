@@ -100,6 +100,12 @@
         </div>
       </div>
       <div class="header-right">
+        <button class="header-btn" id="integrations-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+          Integrations
+        </button>
         <button class="header-btn" id="new-chat-btn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -303,6 +309,21 @@
       </div>
     </div>
     <div class="btw-overlay hidden" id="btw-overlay"></div>
+
+    <!-- Integrations Panel -->
+    <div class="integrations-overlay hidden" id="integrations-overlay"></div>
+    <div class="integrations-panel hidden" id="integrations-panel">
+      <div class="integrations-header">
+        <div>
+          <h2 class="integrations-title">Integrations</h2>
+          <p class="integrations-subtitle">Connect your tools</p>
+        </div>
+        <button class="pane-close-btn" id="integrations-close">&times;</button>
+      </div>
+      <div class="integrations-body" id="integrations-body">
+        <div class="integrations-loading">Loading...</div>
+      </div>
+    </div>
 
     <!-- Full-screen drop zone -->
     <div class="drop-overlay hidden" id="drop-overlay">

@@ -6,6 +6,7 @@ const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 const os = require("os");
 const fs = require("fs");
+const crypto = require("crypto");
 const multer = require("multer");
 
 // ============================================
@@ -44,6 +45,127 @@ try {
   console.error("Could not load config:", e.message);
   process.exit(1);
 }
+
+// ============================================
+// Integration & Credential Management
+// ============================================
+const integrationsPath = path.join(__dirname, "integrations.json");
+const credentialsPath = path.join(__dirname, "credentials.json");
+const oauthClientsPath = path.join(__dirname, "oauth-clients.json");
+
+let integrationsRegistry = { integrations: [] };
+try {
+  integrationsRegistry = JSON.parse(fs.readFileSync(integrationsPath, "utf-8"));
+} catch {}
+
+let oauthClients = {};
+try {
+  oauthClients = JSON.parse(fs.readFileSync(oauthClientsPath, "utf-8"));
+} catch {}
+
+// Encryption using machine-specific key
+function getEncryptionKey() {
+  const raw = `delt:${os.hostname()}:${os.userInfo().username}:${__dirname}`;
+  return crypto.createHash("sha256").update(raw).digest();
+}
+
+function encryptData(data) {
+  const key = getEncryptionKey();
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  let encrypted = cipher.update(JSON.stringify(data), "utf8", "hex");
+  encrypted += cipher.final("hex");
+  const tag = cipher.getAuthTag().toString("hex");
+  return { iv: iv.toString("hex"), tag, data: encrypted };
+}
+
+function decryptData(encObj) {
+  const key = getEncryptionKey();
+  const iv = Buffer.from(encObj.iv, "hex");
+  const tag = Buffer.from(encObj.tag, "hex");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(tag);
+  let decrypted = decipher.update(encObj.data, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+  return JSON.parse(decrypted);
+}
+
+function loadCredentials() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(credentialsPath, "utf-8"));
+    return decryptData(raw);
+  } catch {
+    return {};
+  }
+}
+
+function saveCredentials(creds) {
+  const encrypted = encryptData(creds);
+  const tmpFile = credentialsPath + ".tmp." + process.pid;
+  fs.writeFileSync(tmpFile, JSON.stringify(encrypted));
+  fs.renameSync(tmpFile, credentialsPath);
+}
+
+function getCredential(integrationId) {
+  const creds = loadCredentials();
+  return creds[integrationId] || null;
+}
+
+function saveCredential(integrationId, data) {
+  const creds = loadCredentials();
+  creds[integrationId] = { ...data, enabled: true, updatedAt: new Date().toISOString() };
+  saveCredentials(creds);
+}
+
+function deleteCredential(integrationId) {
+  const creds = loadCredentials();
+  delete creds[integrationId];
+  saveCredentials(creds);
+}
+
+// Build MCP config from enabled integrations
+function buildMcpConfig() {
+  const creds = loadCredentials();
+  const mcpServers = {};
+
+  for (const integration of integrationsRegistry.integrations) {
+    const cred = creds[integration.id];
+    if (!cred || !cred.enabled) continue;
+
+    for (const [serverName, serverDef] of Object.entries(integration.mcpServers || {})) {
+      const env = {};
+      for (const [envVar, credKey] of Object.entries(serverDef.envMapping || {})) {
+        const val = cred[credKey];
+        if (val) env[envVar] = val;
+      }
+      mcpServers[serverName] = {
+        command: serverDef.command,
+        args: serverDef.args || [],
+        env
+      };
+    }
+  }
+
+  return { mcpServers };
+}
+
+// Build Claude args with MCP config injected
+function buildClaudeArgs(fullMessage) {
+  const args = [
+    "-p", fullMessage,
+    "--output-format", "stream-json",
+    "--verbose",
+    "--include-partial-messages",
+  ];
+  const mcpConfig = buildMcpConfig();
+  if (Object.keys(mcpConfig.mcpServers).length > 0) {
+    args.push("--mcp-config", JSON.stringify(mcpConfig));
+  }
+  return args;
+}
+
+// Pending OAuth states (CSRF protection)
+const pendingOAuthStates = new Map();
 
 // ============================================
 // Logging infrastructure
@@ -237,6 +359,197 @@ app.post("/setup", (req, res) => {
   }
 
   res.json({ ok: true, config });
+});
+
+// ============================================
+// Integration API Endpoints
+// ============================================
+
+// List all integrations with connection status
+app.get("/integrations", (req, res) => {
+  const creds = loadCredentials();
+  const result = integrationsRegistry.integrations.map((i) => ({
+    id: i.id,
+    name: i.name,
+    description: i.description,
+    icon: i.icon,
+    category: i.category,
+    authType: i.authType,
+    setupSteps: i.setupSteps || [],
+    tokenConfig: i.tokenConfig || null,
+    connected: !!(creds[i.id] && creds[i.id].enabled),
+    connectedAt: creds[i.id]?.updatedAt || null,
+  }));
+  res.json({ integrations: result });
+});
+
+// Connect an integration (token-based)
+app.post("/integrations/:id/connect", (req, res) => {
+  const { token, baseUrl } = req.body;
+  const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
+  if (!integration) return res.status(404).json({ error: "Integration not found" });
+
+  if (integration.authType === "token" || integration.authType === "custom") {
+    if (!token) return res.status(400).json({ error: "Token required" });
+    saveCredential(integration.id, { token, baseUrl: baseUrl || "", type: "token" });
+    res.json({ ok: true, connected: true });
+  } else {
+    res.status(400).json({ error: "Use OAuth flow for this integration" });
+  }
+});
+
+// Disconnect an integration
+app.post("/integrations/:id/disconnect", (req, res) => {
+  deleteCredential(req.params.id);
+  res.json({ ok: true, connected: false });
+});
+
+// Get OAuth authorization URL
+app.get("/integrations/:id/auth-url", (req, res) => {
+  const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
+  if (!integration || integration.authType !== "oauth2") {
+    return res.status(400).json({ error: "Not an OAuth integration" });
+  }
+
+  const state = uuidv4();
+  pendingOAuthStates.set(state, { integrationId: integration.id, createdAt: Date.now() });
+
+  // Clean old states (> 10 min)
+  for (const [k, v] of pendingOAuthStates) {
+    if (Date.now() - v.createdAt > 600000) pendingOAuthStates.delete(k);
+  }
+
+  const clientId = oauthClients[integration.id]?.clientId;
+  if (!clientId) return res.status(500).json({ error: "OAuth not configured for this service. Contact your admin." });
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: `http://localhost:${PORT}/oauth/callback`,
+    response_type: "code",
+    scope: integration.oauth.scopes.join(" "),
+    access_type: "offline",
+    prompt: "consent",
+    state,
+  });
+
+  res.json({ url: `${integration.oauth.authorizationUrl}?${params}` });
+});
+
+// OAuth callback handler
+app.get("/oauth/callback", async (req, res) => {
+  const { code, state, error } = req.query;
+
+  if (error) {
+    return res.send(`<html><body><h2>Authorization failed</h2><p>${error}</p><script>window.close()</script></body></html>`);
+  }
+
+  const pending = pendingOAuthStates.get(state);
+  if (!pending) {
+    return res.status(400).send(`<html><body><h2>Invalid state</h2><p>Try again.</p><script>window.close()</script></body></html>`);
+  }
+  pendingOAuthStates.delete(state);
+
+  const integration = integrationsRegistry.integrations.find((i) => i.id === pending.integrationId);
+  if (!integration) {
+    return res.status(400).send(`<html><body><h2>Unknown integration</h2><script>window.close()</script></body></html>`);
+  }
+
+  const clientConfig = oauthClients[integration.id];
+  if (!clientConfig) {
+    return res.status(500).send(`<html><body><h2>OAuth not configured</h2><script>window.close()</script></body></html>`);
+  }
+
+  // Exchange code for tokens
+  try {
+    const tokenRes = await fetch(integration.oauth.tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientConfig.clientId,
+        client_secret: clientConfig.clientSecret,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: `http://localhost:${PORT}/oauth/callback`,
+      }),
+    });
+
+    const tokens = await tokenRes.json();
+    if (tokens.error) {
+      return res.send(`<html><body><h2>Token exchange failed</h2><p>${tokens.error_description || tokens.error}</p><script>setTimeout(()=>window.close(),3000)</script></body></html>`);
+    }
+
+    saveCredential(integration.id, {
+      type: "oauth2",
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
+      scope: tokens.scope,
+    });
+
+    res.send(`<html><body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f7f7f8;">
+      <div style="text-align:center;">
+        <div style="font-size:48px;margin-bottom:16px;">&#10003;</div>
+        <h2 style="margin:0 0 8px;">Connected!</h2>
+        <p style="color:#666;">You can close this window.</p>
+      </div>
+      <script>
+        if (window.opener) window.opener.postMessage({type:"oauth-complete",integrationId:"${integration.id}"},"*");
+        setTimeout(()=>window.close(),2000);
+      </script>
+    </body></html>`);
+  } catch (err) {
+    res.status(500).send(`<html><body><h2>Connection failed</h2><p>${err.message}</p><script>setTimeout(()=>window.close(),3000)</script></body></html>`);
+  }
+});
+
+// Refresh OAuth token if expired
+async function refreshOAuthToken(integrationId) {
+  const cred = getCredential(integrationId);
+  if (!cred || cred.type !== "oauth2" || !cred.refreshToken) return null;
+  if (cred.expiresAt && Date.now() < cred.expiresAt - 60000) return cred.accessToken; // still valid
+
+  const integration = integrationsRegistry.integrations.find((i) => i.id === integrationId);
+  const clientConfig = oauthClients[integrationId];
+  if (!integration || !clientConfig) return cred.accessToken;
+
+  try {
+    const tokenRes = await fetch(integration.oauth.tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientConfig.clientId,
+        client_secret: clientConfig.clientSecret,
+        refresh_token: cred.refreshToken,
+        grant_type: "refresh_token",
+      }),
+    });
+    const tokens = await tokenRes.json();
+    if (tokens.access_token) {
+      saveCredential(integrationId, {
+        ...cred,
+        accessToken: tokens.access_token,
+        expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000,
+      });
+      return tokens.access_token;
+    }
+  } catch (e) {
+    console.error("Token refresh failed:", integrationId, e.message);
+  }
+  return cred.accessToken;
+}
+
+// Test an integration connection
+app.post("/integrations/:id/test", async (req, res) => {
+  const cred = getCredential(req.params.id);
+  if (!cred) return res.json({ ok: false, error: "Not connected" });
+
+  // For OAuth, try refreshing token
+  if (cred.type === "oauth2") {
+    const token = await refreshOAuthToken(req.params.id);
+    res.json({ ok: !!token, message: token ? "Token valid" : "Token refresh failed" });
+  } else {
+    res.json({ ok: true, message: "Credentials stored" });
+  }
 });
 
 // File upload endpoint
@@ -764,14 +1077,7 @@ wss.on("connection", (ws) => {
         ? buildSystemPrefix() + message
         : message;
 
-      const args = [
-        "-p",
-        fullMessage,
-        "--output-format",
-        "stream-json",
-        "--verbose",
-        "--include-partial-messages",
-      ];
+      const args = buildClaudeArgs(fullMessage);
 
       if (isFirst) {
         args.push("--session-id", sessionId);
@@ -951,14 +1257,7 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
 
       const fullMessage = btwPrefix + message;
 
-      const args = [
-        "-p",
-        fullMessage,
-        "--output-format",
-        "stream-json",
-        "--verbose",
-        "--include-partial-messages",
-      ];
+      const args = buildClaudeArgs(fullMessage);
 
       if (isFirst) {
         args.push("--session-id", btwSessionId);
@@ -1075,7 +1374,7 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
       const prefix = isFirst ? buildSystemPrefix() : "";
       const fullMessage = prefix + message;
 
-      const args = ["-p", fullMessage, "--output-format", "stream-json", "--verbose", "--include-partial-messages"];
+      const args = buildClaudeArgs(fullMessage);
       if (isFirst) {
         args.push("--session-id", pane2SessionId);
       } else {
