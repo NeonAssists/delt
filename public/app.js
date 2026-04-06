@@ -46,7 +46,7 @@
       }
       if (data.sessionId && data.messages) {
         sessionId = data.sessionId;
-        messagesEl.innerHTML = data.messages;
+        messagesEl.innerHTML = typeof DOMPurify !== "undefined" ? DOMPurify.sanitize(data.messages) : escapeHtml(data.messages);
         if (data.welcomeHidden && welcome) welcome.classList.add("hidden");
         // Re-attach copy buttons on restored code blocks
         messagesEl.querySelectorAll("pre").forEach((pre) => addCopyBtns(pre.closest(".message-content") || pre.parentElement));
@@ -210,6 +210,14 @@
       connected = true;
       reconnectDelay = 1000;
       setStatus("connected", "Ready");
+
+      // Auto-resume session from QR handoff
+      const params = new URLSearchParams(window.location.search);
+      const resumeId = params.get("resumeSession");
+      if (resumeId) {
+        resumeConversation(resumeId);
+        window.history.replaceState({}, "", "/");
+      }
     };
 
     ws.onclose = () => {
@@ -265,6 +273,7 @@
       case "done":
         hideTyping();
         finishResponse();
+        incrementBadge();
         break;
       case "stopped":
         hideTyping();
@@ -277,6 +286,10 @@
       case "error":
         hideTyping();
         showError(msg.message);
+        break;
+      case "sync-user":
+        // Message sent from another device on this session
+        addMessage("user", msg.message);
         break;
     }
   }
@@ -461,7 +474,11 @@
     try {
       if (typeof marked !== "undefined") {
         const fn = marked.parse || marked;
-        if (typeof fn === "function") return fn(text);
+        if (typeof fn === "function") {
+          const raw = fn(text);
+          if (typeof DOMPurify !== "undefined") return DOMPurify.sanitize(raw);
+          return raw;
+        }
       }
     } catch {}
     return escapeHtml(text).replace(/\n/g, "<br>");
@@ -902,7 +919,7 @@
 
   function escapeHtml(s) {
     if (!s) return "";
-    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
   function shortPath(p) {
@@ -2006,20 +2023,226 @@
   }
 
   // ============================================
-  // Install Gate
+  // Phone QR Handoff
+  // ============================================
+  const phoneToggle = document.getElementById("phone-toggle");
+  const qrModalOverlay = document.getElementById("qr-modal-overlay");
+  const qrModal = document.getElementById("qr-modal");
+  const qrModalClose = document.getElementById("qr-modal-close");
+  const qrImage = document.getElementById("qr-image");
+  const qrLoading = document.getElementById("qr-loading");
+  const qrStatusText = document.getElementById("qr-status-text");
+  const qrUrlRow = document.getElementById("qr-url-row");
+  const qrUrlInput = document.getElementById("qr-url-input");
+  const qrUrlCopy = document.getElementById("qr-url-copy");
+  const qrStopBtn = document.getElementById("qr-stop-btn");
+
+  let qrTunnelRunning = false;
+
+  function openQrModal() {
+    if (!qrModalOverlay) return;
+    qrModalOverlay.classList.remove("hidden");
+    // Check if tunnel already running
+    fetchMobileStatus().then((status) => {
+      if (status && status.running) {
+        // Tunnel already running — refresh with new token
+        startMobileTunnel();
+      } else {
+        startMobileTunnel();
+      }
+    });
+  }
+
+  function closeQrModal() {
+    if (qrModalOverlay) qrModalOverlay.classList.add("hidden");
+  }
+
+  async function fetchMobileStatus() {
+    try {
+      const res = await fetch("/mobile/status");
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async function startMobileTunnel() {
+    // Reset UI
+    if (qrLoading) qrLoading.classList.remove("hidden");
+    if (qrImage) qrImage.classList.add("hidden");
+    if (qrUrlRow) qrUrlRow.classList.add("hidden");
+    if (qrStopBtn) qrStopBtn.classList.add("hidden");
+    if (qrStatusText) qrStatusText.textContent = "Starting secure tunnel...";
+
+    try {
+      const res = await fetch("/mobile/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: sessionId || null }),
+      });
+      const data = await res.json();
+
+      if (data.error) {
+        if (qrLoading) qrLoading.classList.add("hidden");
+        if (qrStatusText) qrStatusText.textContent = data.error;
+        return;
+      }
+
+      qrTunnelRunning = true;
+
+      // Show QR code
+      if (qrImage) {
+        qrImage.src = data.qrImage;
+        qrImage.classList.remove("hidden");
+      }
+      if (qrLoading) qrLoading.classList.add("hidden");
+      if (qrStatusText) qrStatusText.textContent = "Scan with your phone camera";
+      if (qrUrlRow) qrUrlRow.classList.remove("hidden");
+      if (qrUrlInput) qrUrlInput.value = data.qrData;
+      if (qrStopBtn) qrStopBtn.classList.remove("hidden");
+    } catch (err) {
+      if (qrLoading) qrLoading.classList.add("hidden");
+      if (qrStatusText) qrStatusText.textContent = "Failed to start tunnel. Is cloudflared installed?";
+    }
+  }
+
+  async function stopMobileTunnel() {
+    try {
+      await fetch("/mobile/stop", { method: "POST" });
+    } catch {}
+    qrTunnelRunning = false;
+    closeQrModal();
+  }
+
+  if (phoneToggle) phoneToggle.addEventListener("click", openQrModal);
+  if (qrModalClose) qrModalClose.addEventListener("click", closeQrModal);
+  if (qrStopBtn) qrStopBtn.addEventListener("click", stopMobileTunnel);
+
+  // Close modal on overlay click
+  if (qrModalOverlay) {
+    qrModalOverlay.addEventListener("click", (e) => {
+      if (e.target === qrModalOverlay) closeQrModal();
+    });
+  }
+
+  // Copy URL button
+  if (qrUrlCopy) {
+    qrUrlCopy.addEventListener("click", () => {
+      if (qrUrlInput) {
+        navigator.clipboard.writeText(qrUrlInput.value);
+        qrUrlCopy.textContent = "Copied!";
+        setTimeout(() => (qrUrlCopy.textContent = "Copy"), 1500);
+      }
+    });
+  }
+
+  // Register service worker for PWA
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }
+
+  // ============================================
+  // PWA Install Prompt
+  // ============================================
+  let deferredInstallPrompt = null;
+  const PWA_DISMISS_KEY = "delt-pwa-dismissed";
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    // Don't show if user dismissed recently (7 days)
+    const dismissed = localStorage.getItem(PWA_DISMISS_KEY);
+    if (dismissed && Date.now() - parseInt(dismissed) < 7 * 86400000) return;
+    // Don't show if already in standalone mode
+    if (window.matchMedia("(display-mode: standalone)").matches) return;
+    showInstallBanner();
+  });
+
+  function showInstallBanner() {
+    if (document.getElementById("pwa-install-banner")) return;
+    const banner = document.createElement("div");
+    banner.id = "pwa-install-banner";
+    banner.innerHTML = `
+      <div class="pwa-banner-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </div>
+      <div class="pwa-banner-text">
+        <strong>Install Delt</strong>
+        <span>Get a desktop app — faster, no browser chrome</span>
+      </div>
+      <button class="pwa-banner-install" id="pwa-install-btn">Install</button>
+      <button class="pwa-banner-close" id="pwa-dismiss-btn">&times;</button>
+    `;
+    document.body.appendChild(banner);
+    // Animate in
+    requestAnimationFrame(() => banner.classList.add("visible"));
+
+    document.getElementById("pwa-install-btn").addEventListener("click", async () => {
+      if (!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      const result = await deferredInstallPrompt.userChoice;
+      if (result.outcome === "accepted") {
+        banner.classList.remove("visible");
+        setTimeout(() => banner.remove(), 300);
+      }
+      deferredInstallPrompt = null;
+    });
+
+    document.getElementById("pwa-dismiss-btn").addEventListener("click", () => {
+      localStorage.setItem(PWA_DISMISS_KEY, Date.now().toString());
+      banner.classList.remove("visible");
+      setTimeout(() => banner.remove(), 300);
+    });
+  }
+
+  // Badge API — show unread count on app icon
+  let unreadCount = 0;
+
+  function incrementBadge() {
+    if (document.visibilityState === "visible") return;
+    unreadCount++;
+    if ("setAppBadge" in navigator) {
+      navigator.setAppBadge(unreadCount).catch(() => {});
+    }
+  }
+
+  function clearBadge() {
+    unreadCount = 0;
+    if ("clearAppBadge" in navigator) {
+      navigator.clearAppBadge().catch(() => {});
+    }
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") clearBadge();
+  });
+
+  // ============================================
+  // Onboarding — first-time setup
   // ============================================
   const installGate = document.getElementById("install-gate");
   const appEl = document.getElementById("app");
-  const installStepDetect = document.getElementById("install-step-detect");
-  const installStepMissing = document.getElementById("install-step-missing");
-  const installStepAuth = document.getElementById("install-step-auth");
-  const installStepReady = document.getElementById("install-step-ready");
-  const installStatusDot = installGate?.querySelector(".install-status-dot");
-  const installStatusText = document.getElementById("install-status-text");
-  const installVersionText = document.getElementById("install-version-text");
 
-  function showInstallStep(step) {
-    [installStepDetect, installStepMissing, installStepAuth, installStepReady].forEach((s) => {
+  const obWelcome = document.getElementById("ob-welcome");
+  const obAccount = document.getElementById("ob-account");
+  const obSignin = document.getElementById("ob-signin");
+  const obReady = document.getElementById("ob-ready");
+
+  const obInstallBar = document.getElementById("ob-install-bar");
+  const obInstallFill = document.getElementById("ob-install-fill");
+  const obInstallLabel = document.getElementById("ob-install-label");
+  const obAuthDot = document.getElementById("ob-auth-dot");
+  const obAuthText = document.getElementById("ob-auth-text");
+
+  let installPollTimer = null;
+  let authPollTimer = null;
+
+  function showObStep(step) {
+    [obWelcome, obAccount, obSignin, obReady].forEach(s => {
       if (s) s.classList.add("hidden");
     });
     if (step) step.classList.remove("hidden");
@@ -2034,48 +2257,92 @@
     }
   }
 
-  async function runInstallCheck() {
-    showInstallStep(installStepDetect);
-    if (installStatusDot) installStatusDot.className = "install-status-dot checking";
-    if (installStatusText) installStatusText.textContent = "Checking for Claude CLI...";
+  // Silent install — runs npm in background on server
+  async function startSilentInstall() {
+    try {
+      await fetch("/install-silent", { method: "POST" });
+      if (obInstallFill) obInstallFill.classList.add("indeterminate");
+      pollInstallStatus();
+    } catch {
+      if (obInstallLabel) obInstallLabel.textContent = "Install failed — try restarting Delt";
+      if (obInstallBar) obInstallBar.classList.add("error");
+    }
+  }
 
+  function pollInstallStatus() {
+    installPollTimer = setInterval(async () => {
+      try {
+        const res = await fetch("/install-status");
+        const data = await res.json();
+        if (data.status === "installed") {
+          clearInterval(installPollTimer);
+          if (obInstallFill) obInstallFill.classList.remove("indeterminate");
+          if (obInstallBar) obInstallBar.classList.add("done");
+          if (obInstallLabel) obInstallLabel.textContent = "Engine installed — ready to connect";
+        } else if (data.status === "failed") {
+          clearInterval(installPollTimer);
+          if (obInstallFill) obInstallFill.classList.remove("indeterminate");
+          if (obInstallBar) obInstallBar.classList.add("error");
+          if (obInstallLabel) obInstallLabel.textContent = "Install issue — restart Delt to retry";
+        }
+      } catch {}
+    }, 2000);
+  }
+
+  function startAuthPoll() {
+    if (authPollTimer) clearInterval(authPollTimer);
+    authPollTimer = setInterval(async () => {
+      const health = await checkClaude();
+      if (health.authed) {
+        clearInterval(authPollTimer);
+        if (obAuthDot) obAuthDot.className = "ob-auth-dot ok";
+        if (obAuthText) obAuthText.textContent = "Connected!";
+        setTimeout(() => showObStep(obReady), 800);
+      }
+    }, 3000);
+  }
+
+  async function advanceToSignin() {
     const health = await checkClaude();
-
-    if (!health.installed) {
-      if (installStatusDot) installStatusDot.className = "install-status-dot fail";
-      if (installStatusText) installStatusText.textContent = "Claude CLI not found";
-      setTimeout(() => showInstallStep(installStepMissing), 600);
-      return false;
+    if (health.installed && health.authed) {
+      showObStep(obReady);
+      return;
     }
-
-    if (!health.authed) {
-      if (installStatusDot) installStatusDot.className = "install-status-dot fail";
-      if (installStatusText) installStatusText.textContent = "Not signed in";
-      setTimeout(() => showInstallStep(installStepAuth), 600);
-      return false;
+    if (health.installed) {
+      showObStep(obSignin);
+      startAuthPoll();
+      return;
     }
-
-    if (installStatusDot) installStatusDot.className = "install-status-dot ok";
-    if (installStatusText) installStatusText.textContent = "Connected";
-    if (installVersionText && health.version) {
-      installVersionText.textContent = `Claude CLI ${health.version} is installed and connected. Everything runs locally on your machine.`;
-    }
-    setTimeout(() => showInstallStep(installStepReady), 400);
-    return true;
+    // Not installed yet — wait for install
+    if (obInstallLabel) obInstallLabel.textContent = "Almost ready...";
+    const waitTimer = setInterval(async () => {
+      try {
+        const s = await fetch("/install-status").then(r => r.json());
+        if (s.status === "installed") {
+          clearInterval(waitTimer);
+          showObStep(obSignin);
+          startAuthPoll();
+        } else if (s.status === "failed") {
+          clearInterval(waitTimer);
+          if (obInstallBar) obInstallBar.classList.add("error");
+          if (obInstallLabel) obInstallLabel.textContent = "Install failed — restart Delt to retry";
+        }
+      } catch {}
+    }, 1500);
   }
 
   function showApp() {
     if (installGate) installGate.classList.add("hidden");
     if (appEl) appEl.classList.remove("hidden");
+    if (installPollTimer) clearInterval(installPollTimer);
+    if (authPollTimer) clearInterval(authPollTimer);
 
-    // Restore previous session if user navigated away
     const restored = restoreSession();
 
     loadConfig().then(() => {
       checkOnboarding();
       wsConnect();
 
-      // If we restored a session, tell server to resume it
       if (restored && sessionId && ws) {
         const waitForOpen = () => {
           if (ws.readyState === WebSocket.OPEN) {
@@ -2096,57 +2363,95 @@
     input.focus();
   }
 
-  // Install button — open terminal with install command
-  const installBtn = document.getElementById("install-btn");
-  if (installBtn) {
-    installBtn.addEventListener("click", () => {
-      // macOS: open Terminal.app and run the install
-      window.open("x-apple.terminal:///usr/bin/env?args=bash%20-c%20%22npm%20install%20-g%20%40anthropic-ai%2Fclaude-code%20%26%26%20echo%20%27Done!%20Go%20back%20to%20your%20browser.%27%20%26%26%20read%22");
-      // Fallback: also try applescript approach via a fetch
-      fetch("/run-install", { method: "POST" }).catch(() => {});
+  // Step 1: Get Started — kick off silent install + show account step
+  const obStartBtn = document.getElementById("ob-start");
+  if (obStartBtn) {
+    obStartBtn.addEventListener("click", async () => {
+      showObStep(obAccount);
+      const health = await checkClaude();
+      if (health.installed) {
+        if (obInstallBar) obInstallBar.classList.add("done");
+        if (obInstallFill) obInstallFill.style.width = "100%";
+        if (obInstallLabel) obInstallLabel.textContent = "Engine ready!";
+      } else {
+        startSilentInstall();
+      }
     });
   }
 
-  // Auth button — open terminal
-  const authBtn = document.getElementById("auth-btn");
-  if (authBtn) {
-    authBtn.addEventListener("click", () => {
-      window.open("x-apple.terminal:///usr/bin/env?args=bash%20-c%20%22claude%20%26%26%20echo%20%27Done!%20Go%20back%20to%20your%20browser.%27%20%26%26%20read%22");
+  // "I already have an account" — advance past account creation
+  const obHaveAccount = document.getElementById("ob-have-account");
+  if (obHaveAccount) {
+    obHaveAccount.addEventListener("click", () => advanceToSignin());
+  }
+
+  // Account link click — user opens claude.ai, they'll click "I have an account" when done
+  const obCreateLink = document.getElementById("ob-create-link");
+  if (obCreateLink) {
+    obCreateLink.addEventListener("click", () => {
+      // After clicking, reveal a "Done" button variant
+      setTimeout(() => {
+        if (obHaveAccount) obHaveAccount.textContent = "I've created my account — next step";
+      }, 1000);
+    });
+  }
+
+  // Copy auth command
+  const obAuthCopy = document.getElementById("ob-auth-copy");
+  if (obAuthCopy) {
+    obAuthCopy.addEventListener("click", () => {
+      navigator.clipboard.writeText("claude");
+      obAuthCopy.textContent = "Copied!";
+      setTimeout(() => (obAuthCopy.textContent = "Copy"), 1500);
+      // Start polling as soon as they copy — they're about to run it
+      startAuthPoll();
+    });
+  }
+
+  // Sign in button — opens terminal for auth (cross-platform)
+  const obSigninBtn = document.getElementById("ob-signin-btn");
+  if (obSigninBtn) {
+    obSigninBtn.addEventListener("click", () => {
       fetch("/run-auth", { method: "POST" }).catch(() => {});
+      if (obAuthDot) obAuthDot.className = "ob-auth-dot checking";
+      if (obAuthText) obAuthText.textContent = "Waiting for sign in...";
+      startAuthPoll();
     });
   }
 
-  // Copy install command
-  const installCopy = document.getElementById("install-copy");
-  const installCommand = document.getElementById("install-command");
-  if (installCopy && installCommand) {
-    installCopy.addEventListener("click", () => {
-      navigator.clipboard.writeText(installCommand.textContent);
-      installCopy.textContent = "Copied!";
-      setTimeout(() => (installCopy.textContent = "Copy"), 1500);
+  // Auth retry
+  const obAuthRetry = document.getElementById("ob-auth-retry");
+  if (obAuthRetry) {
+    obAuthRetry.addEventListener("click", async () => {
+      const health = await checkClaude();
+      if (health.authed) {
+        if (obAuthDot) obAuthDot.className = "ob-auth-dot ok";
+        if (obAuthText) obAuthText.textContent = "Connected!";
+        setTimeout(() => showObStep(obReady), 800);
+      } else {
+        if (obAuthDot) obAuthDot.className = "ob-auth-dot checking";
+        if (obAuthText) obAuthText.textContent = "Not connected yet — try signing in again";
+      }
     });
   }
 
-  // Retry buttons
-  const installRetry = document.getElementById("install-retry");
-  if (installRetry) installRetry.addEventListener("click", () => runInstallCheck());
-
-  const authRetry = document.getElementById("auth-retry");
-  if (authRetry) authRetry.addEventListener("click", () => runInstallCheck());
-
-  // Continue button
-  const installContinue = document.getElementById("install-continue");
-  if (installContinue) installContinue.addEventListener("click", showApp);
+  // Launch — enter the app
+  const obLaunchBtn = document.getElementById("ob-launch");
+  if (obLaunchBtn) {
+    obLaunchBtn.addEventListener("click", showApp);
+  }
 
   // --- Boot ---
-  // If already passed gate before, skip it
   (async () => {
     const health = await checkClaude();
     if (health.installed && health.authed) {
       showApp();
     } else {
       if (installGate) installGate.classList.remove("hidden");
-      runInstallCheck();
+      // If already installed but not authed, skip to sign-in
+      if (health.installed && !health.authed) {
+        showObStep(obSignin);
+      }
     }
   })();
 })();

@@ -11,6 +11,10 @@ MCP tools: mcp__filesystem__*
 Gmail, Calendar, Sheets, Drive
 MCP tools: mcp__gmail__*, mcp__google-calendar__*, mcp__google-sheets__*
 
+## GitHub
+Repos, issues, pull requests, code search
+MCP tools: mcp__github__*
+
 ## Apple Apps
 Reminders, Notes, Calendar, Contacts, Mail (macOS)
 MCP tools: mcp__apple__*

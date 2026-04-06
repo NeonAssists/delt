@@ -1,8 +1,9 @@
 require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 const express = require("express");
 const http = require("http");
+const https = require("https");
 const WebSocket = require("ws");
-const { spawn } = require("child_process");
+const { spawn, execSync: execSyncImport } = require("child_process");
 const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 const os = require("os");
@@ -10,11 +11,50 @@ const fs = require("fs");
 const crypto = require("crypto");
 const multer = require("multer");
 const nodemailer = require("nodemailer");
+const QRCode = require("qrcode");
+
+// ============================================
+// Local HTTPS — auto-generated self-signed cert
+// ============================================
+const CERT_DIR = path.join(os.homedir(), ".delt", "certs");
+const CERT_PATH = path.join(CERT_DIR, "localhost.crt");
+const KEY_PATH = path.join(CERT_DIR, "localhost.key");
+
+function ensureCerts() {
+  if (fs.existsSync(CERT_PATH) && fs.existsSync(KEY_PATH)) {
+    try {
+      const certPem = fs.readFileSync(CERT_PATH, "utf-8");
+      if (certPem.includes("-----BEGIN CERTIFICATE-----")) {
+        return { cert: certPem, key: fs.readFileSync(KEY_PATH, "utf-8") };
+      }
+    } catch {}
+  }
+
+  // Generate self-signed cert via openssl (available on macOS and most Linux)
+  try {
+    fs.mkdirSync(CERT_DIR, { recursive: true, mode: 0o700 });
+    execSyncImport(
+      `openssl req -x509 -newkey rsa:2048 -keyout "${KEY_PATH}" -out "${CERT_PATH}" ` +
+      `-days 365 -nodes -subj "/CN=localhost" ` +
+      `-addext "subjectAltName=DNS:localhost,IP:127.0.0.1"`,
+      { stdio: "pipe" }
+    );
+    fs.chmodSync(KEY_PATH, 0o600);
+    fs.chmodSync(CERT_PATH, 0o644);
+    console.log("  [HTTPS] Generated self-signed certificate");
+    return { cert: fs.readFileSync(CERT_PATH, "utf-8"), key: fs.readFileSync(KEY_PATH, "utf-8") };
+  } catch (e) {
+    console.warn("  [HTTPS] Could not generate cert — falling back to HTTP:", e.message);
+    return null;
+  }
+}
+
+const tlsCerts = ensureCerts();
 
 // ============================================
 // Stability helpers
 // ============================================
-const PROCESS_TIMEOUT_MS = 120000; // 2 min max per Claude request
+const PROCESS_TIMEOUT_MS = 600000; // 10 min — Claude needs time for tool use, file edits, multi-step tasks
 
 function safeSend(ws, data) {
   if (ws.readyState === WebSocket.OPEN) {
@@ -49,6 +89,11 @@ try {
 }
 
 // ============================================
+// Silent Install State (background CLI install)
+// ============================================
+let installState = { status: "idle", error: null, progress: "" };
+
+// ============================================
 // Integration & Credential Management
 // ============================================
 const integrationsPath = path.join(__dirname, "integrations.json");
@@ -65,10 +110,22 @@ try {
   oauthClients = JSON.parse(fs.readFileSync(oauthClientsPath, "utf-8"));
 } catch {}
 
-// Encryption using machine-specific key
+// Encryption using a random key persisted in a restricted file
+const keyFilePath = path.join(os.homedir(), ".delt", "encryption.key");
+
 function getEncryptionKey() {
-  const raw = `delt:${os.hostname()}:${os.userInfo().username}:${__dirname}`;
-  return crypto.createHash("sha256").update(raw).digest();
+  const keyDir = path.dirname(keyFilePath);
+  if (!fs.existsSync(keyDir)) fs.mkdirSync(keyDir, { recursive: true, mode: 0o700 });
+
+  try {
+    const buf = fs.readFileSync(keyFilePath);
+    if (buf.length === 32) return buf;
+  } catch {}
+
+  // First run — generate and store a random 256-bit key
+  const key = crypto.randomBytes(32);
+  fs.writeFileSync(keyFilePath, key, { mode: 0o600 });
+  return key;
 }
 
 function encryptData(data) {
@@ -92,10 +149,35 @@ function decryptData(encObj) {
   return JSON.parse(decrypted);
 }
 
+// Legacy key for migration from deterministic encryption
+function getLegacyEncryptionKey() {
+  const raw = `delt:${os.hostname()}:${os.userInfo().username}:${__dirname}`;
+  return crypto.createHash("sha256").update(raw).digest();
+}
+
+function decryptWithLegacyKey(encObj) {
+  const key = getLegacyEncryptionKey();
+  const iv = Buffer.from(encObj.iv, "hex");
+  const tag = Buffer.from(encObj.tag, "hex");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(tag);
+  let decrypted = decipher.update(encObj.data, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+  return JSON.parse(decrypted);
+}
+
 function loadCredentials() {
   try {
     const raw = JSON.parse(fs.readFileSync(credentialsPath, "utf-8"));
-    return decryptData(raw);
+    try {
+      return decryptData(raw);
+    } catch {
+      // Try legacy key and migrate if successful
+      const creds = decryptWithLegacyKey(raw);
+      console.log("[Security] Migrating credentials to new encryption key");
+      saveCredentials(creds);
+      return creds;
+    }
   } catch {
     return {};
   }
@@ -104,7 +186,7 @@ function loadCredentials() {
 function saveCredentials(creds) {
   const encrypted = encryptData(creds);
   const tmpFile = credentialsPath + ".tmp." + process.pid;
-  fs.writeFileSync(tmpFile, JSON.stringify(encrypted));
+  fs.writeFileSync(tmpFile, JSON.stringify(encrypted), { mode: 0o600 });
   fs.renameSync(tmpFile, credentialsPath);
 }
 
@@ -219,9 +301,9 @@ function buildMcpConfig() {
   return { mcpServers };
 }
 
-// Write MCP config to temp file — cached, only rewrites when integrations change
-const mcpConfigDir = path.join(os.tmpdir(), "delt-mcp");
-if (!fs.existsSync(mcpConfigDir)) fs.mkdirSync(mcpConfigDir, { recursive: true });
+// Write MCP config — cached, only rewrites when integrations change
+const mcpConfigDir = path.join(os.homedir(), ".delt", "mcp");
+if (!fs.existsSync(mcpConfigDir)) fs.mkdirSync(mcpConfigDir, { recursive: true, mode: 0o700 });
 
 let _mcpConfigCache = null;
 let _mcpConfigPath = null;
@@ -241,7 +323,7 @@ function writeMcpConfigFile() {
 
   _mcpConfigCache = json;
   _mcpConfigPath = path.join(mcpConfigDir, `mcp-${process.pid}.json`);
-  fs.writeFileSync(_mcpConfigPath, json);
+  fs.writeFileSync(_mcpConfigPath, json, { mode: 0o600 });
   return _mcpConfigPath;
 }
 
@@ -257,6 +339,14 @@ function buildClaudeArgs(fullMessage) {
   const mcpFile = writeMcpConfigFile();
   if (mcpFile) {
     args.push("--mcp-config", mcpFile);
+    // Auto-allow all MCP tools — user already authorized via Delt's integrations UI
+    const mcpConfig = buildMcpConfig();
+    const allowedTools = Object.keys(mcpConfig.mcpServers)
+      .map(name => `mcp__${name}__*`)
+      .join(",");
+    if (allowedTools) {
+      args.push("--allowedTools", allowedTools);
+    }
   }
 
   return args;
@@ -266,7 +356,7 @@ function buildClaudeArgs(fullMessage) {
 // Shared Claude stream handler
 // Eliminates ~120 lines of duplicate stdout/stderr/close logic
 // ============================================
-function attachStreamHandlers(proc, ws, { streamType, errorType, onText, onCost, onClose }) {
+function attachStreamHandlers(proc, ws, { streamType, errorType, onText, onCost, onBroadcast, onClose }) {
   let buffer = "";
 
   proc.stdout.on("data", (chunk) => {
@@ -279,6 +369,7 @@ function attachStreamHandlers(proc, ws, { streamType, errorType, onText, onCost,
       try {
         const obj = JSON.parse(line);
         safeSend(ws, { type: streamType, data: obj });
+        if (onBroadcast) onBroadcast(obj);
 
         if (obj.type === "assistant" && obj.message?.content) {
           for (const b of obj.message.content) {
@@ -319,6 +410,162 @@ function attachStreamHandlers(proc, ws, { streamType, errorType, onText, onCost,
 const pendingOAuthStates = new Map();
 
 // ============================================
+// Mobile QR Handoff — Cloudflare Tunnel
+// ============================================
+let tunnelProcess = null;
+let tunnelUrl = null;
+let tunnelStarting = false;
+
+// One-time tokens for mobile auth: token -> { createdAt, consumed }
+const mobileTokens = new Map();
+
+// Authenticated mobile sessions: cookieValue -> { createdAt }
+const mobileSessions = new Map();
+
+const MOBILE_TOKEN_TTL = 5 * 60 * 1000; // 5 minutes
+const MOBILE_SESSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+function generateMobileToken(activeSessionId) {
+  const token = uuidv4();
+  mobileTokens.set(token, { createdAt: Date.now(), consumed: false, sessionId: activeSessionId || null });
+  setTimeout(() => mobileTokens.delete(token), MOBILE_TOKEN_TTL);
+  return token;
+}
+
+function validateMobileToken(token) {
+  const entry = mobileTokens.get(token);
+  if (!entry) return false;
+  if (entry.consumed) return false;
+  if (Date.now() - entry.createdAt > MOBILE_TOKEN_TTL) {
+    mobileTokens.delete(token);
+    return false;
+  }
+  entry.consumed = true;
+  mobileTokens.delete(token);
+  return { valid: true, sessionId: entry.sessionId };
+}
+
+function createMobileSession() {
+  const sessionValue = uuidv4();
+  mobileSessions.set(sessionValue, { createdAt: Date.now() });
+  // Expire session after TTL
+  setTimeout(() => mobileSessions.delete(sessionValue), MOBILE_SESSION_TTL);
+  return sessionValue;
+}
+
+function validateMobileSession(cookieValue) {
+  const session = mobileSessions.get(cookieValue);
+  if (!session) return false;
+  if (Date.now() - session.createdAt > MOBILE_SESSION_TTL) {
+    mobileSessions.delete(cookieValue);
+    return false;
+  }
+  return true;
+}
+
+function parseCookies(req) {
+  const cookies = {};
+  const header = req.headers.cookie;
+  if (!header) return cookies;
+  header.split(";").forEach((c) => {
+    const [name, ...rest] = c.trim().split("=");
+    cookies[name] = rest.join("=");
+  });
+  return cookies;
+}
+
+function isLocalRequest(req) {
+  const ip = req.ip || req.connection?.remoteAddress || "";
+  return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1" || ip === "localhost";
+}
+
+function startTunnel() {
+  return new Promise((resolve, reject) => {
+    if (tunnelProcess && tunnelUrl) {
+      return resolve(tunnelUrl);
+    }
+    if (tunnelStarting) {
+      return reject(new Error("Tunnel is already starting"));
+    }
+
+    tunnelStarting = true;
+    let resolved = false;
+
+    const proc = spawn("cloudflared", ["tunnel", "--url", `http://localhost:${PORT}`], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    proc.on("error", (err) => {
+      tunnelStarting = false;
+      if (!resolved) {
+        resolved = true;
+        if (err.code === "ENOENT") {
+          reject(new Error("cloudflared not installed. Install it with: brew install cloudflared"));
+        } else {
+          reject(err);
+        }
+      }
+    });
+
+    // cloudflared prints the URL to stderr
+    let stderrBuffer = "";
+    proc.stderr.on("data", (chunk) => {
+      stderrBuffer += chunk.toString();
+      // Look for the trycloudflare.com URL
+      const match = stderrBuffer.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+      if (match && !resolved) {
+        resolved = true;
+        tunnelUrl = match[0];
+        tunnelProcess = proc;
+        tunnelStarting = false;
+        console.log("[Mobile] Tunnel ready:", tunnelUrl);
+        resolve(tunnelUrl);
+      }
+    });
+
+    proc.on("close", (code) => {
+      tunnelStarting = false;
+      tunnelProcess = null;
+      tunnelUrl = null;
+      if (!resolved) {
+        resolved = true;
+        reject(new Error(`cloudflared exited with code ${code}`));
+      }
+    });
+
+    // Timeout after 30 seconds
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        tunnelStarting = false;
+        if (proc && !proc.killed) proc.kill("SIGTERM");
+        reject(new Error("Tunnel startup timed out after 30 seconds"));
+      }
+    }, 30000);
+  });
+}
+
+function stopTunnel() {
+  if (tunnelProcess) {
+    tunnelProcess.kill("SIGTERM");
+    tunnelProcess = null;
+    tunnelUrl = null;
+    console.log("[Mobile] Tunnel stopped");
+  }
+}
+
+// Cleanup tunnel on shutdown
+function cleanupTunnel() {
+  stopTunnel();
+}
+
+process.on("SIGTERM", cleanupTunnel);
+process.on("SIGINT", () => {
+  cleanupTunnel();
+  process.exit(0);
+});
+
+// ============================================
 // Logging infrastructure
 // ============================================
 const logsDir = path.join(__dirname, "logs");
@@ -341,23 +588,29 @@ function weekStr(date) {
   return `${d.getFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
+// Serialize writes per file path to prevent race conditions losing entries
+const logWriteQueues = new Map();
+
 function appendLog(filePath, entry) {
-  let existing = [];
-  try {
-    existing = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  } catch (e) {
-    if (e.code !== "ENOENT") console.error("Log read error:", filePath, e.message);
-  }
-  existing.push(entry);
-  // Atomic write: temp file + rename to prevent corruption on concurrent writes
-  const tmpFile = filePath + ".tmp." + process.pid;
-  try {
-    fs.writeFileSync(tmpFile, JSON.stringify(existing, null, 2));
-    fs.renameSync(tmpFile, filePath);
-  } catch (e) {
-    console.error("Log write error:", filePath, e.message);
-    try { fs.unlinkSync(tmpFile); } catch {}
-  }
+  const prev = logWriteQueues.get(filePath) || Promise.resolve();
+  const next = prev.then(() => {
+    let existing = [];
+    try {
+      existing = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    } catch (e) {
+      if (e.code !== "ENOENT") console.error("Log read error:", filePath, e.message);
+    }
+    existing.push(entry);
+    const tmpFile = filePath + ".tmp." + process.pid;
+    try {
+      fs.writeFileSync(tmpFile, JSON.stringify(existing, null, 2));
+      fs.renameSync(tmpFile, filePath);
+    } catch (e) {
+      console.error("Log write error:", filePath, e.message);
+      try { fs.unlinkSync(tmpFile); } catch {}
+    }
+  }).catch((e) => console.error("Log queue error:", filePath, e.message));
+  logWriteQueues.set(filePath, next);
 }
 
 function logConversation({ sessionId, user, userMessage, assistantMessage, toolsUsed, costUsd, durationMs }) {
@@ -403,6 +656,16 @@ function safeName(param) {
   return String(param || "").replace(/[^a-zA-Z0-9._-]/g, "");
 }
 
+// Escape HTML to prevent reflected XSS
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function listLogFiles(dir) {
   try {
     return fs.readdirSync(dir)
@@ -414,13 +677,51 @@ function listLogFiles(dir) {
   }
 }
 
+// ============================================
+// Rate limiting — per-IP, in-memory
+// ============================================
+const rateLimitBuckets = new Map(); // ip -> { count, resetAt }
+
+function rateLimit(windowMs, maxHits) {
+  return (req, res, next) => {
+    // Local requests get a much higher limit
+    if (isLocalRequest(req)) return next();
+
+    const ip = req.ip || req.connection?.remoteAddress || "unknown";
+    const now = Date.now();
+    let bucket = rateLimitBuckets.get(ip);
+
+    if (!bucket || now > bucket.resetAt) {
+      bucket = { count: 0, resetAt: now + windowMs };
+      rateLimitBuckets.set(ip, bucket);
+    }
+
+    bucket.count++;
+    if (bucket.count > maxHits) {
+      return res.status(429).json({ error: "Too many requests. Try again later." });
+    }
+    next();
+  };
+}
+
+// Prune stale buckets every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, bucket] of rateLimitBuckets) {
+    if (now > bucket.resetAt) rateLimitBuckets.delete(ip);
+  }
+}, 300000);
+
 const app = express();
-const server = http.createServer(app);
+const server = tlsCerts
+  ? https.createServer({ cert: tlsCerts.cert, key: tlsCerts.key }, app)
+  : http.createServer(app);
+const useHttps = !!tlsCerts;
 const wss = new WebSocket.Server({ server });
 
-// File uploads
-const uploadDir = path.join(os.tmpdir(), "delt-uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+// File uploads — use ~/.delt/uploads instead of world-readable /tmp
+const uploadDir = path.join(os.homedir(), ".delt", "uploads");
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true, mode: 0o700 });
 
 const storage = multer.diskStorage({
   destination: uploadDir,
@@ -431,11 +732,57 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
 
+// OAuth callback — Desktop app redirects to root with ?code=&state=
+app.use((req, res, next) => {
+  if (req.path === "/" && req.query.code && req.query.state) {
+    return res.redirect(`/oauth/callback?${new URLSearchParams(req.query)}`);
+  }
+  next();
+});
+
+// ============================================
+// Mobile Auth Middleware — before static files
+// ============================================
+app.use((req, res, next) => {
+  // Local requests bypass auth entirely
+  if (isLocalRequest(req)) return next();
+
+  // Allow the mobile auth endpoint itself
+  if (req.path === "/mobile/auth") return next();
+
+  // Allow manifest/sw/icons for PWA install
+  if (req.path === "/manifest.json" || req.path === "/sw.js" || req.path.startsWith("/icon-")) return next();
+
+  // Check for valid mobile session cookie
+  const cookies = parseCookies(req);
+  if (cookies["delt-mobile-auth"] && validateMobileSession(cookies["delt-mobile-auth"])) {
+    return next();
+  }
+
+  // Check for valid token in query param (one-time, consumed on use)
+  const tokenResult = req.query.token ? validateMobileToken(req.query.token) : null;
+  if (tokenResult && tokenResult.valid) {
+    const sessionValue = createMobileSession();
+    const isSecure = req.protocol === "https" || req.get("x-forwarded-proto") === "https";
+    res.cookie("delt-mobile-auth", sessionValue, {
+      maxAge: MOBILE_SESSION_TTL,
+      httpOnly: true,
+      sameSite: isSecure ? "none" : "lax",
+      secure: isSecure,
+      path: "/",
+    });
+    return next();
+  }
+
+  // No valid auth — block access
+  res.status(401).json({ error: "Unauthorized. Scan the QR code from Delt to access." });
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json());
 
 // Health check — detect if claude CLI is installed and authed
-const { execSync } = require("child_process");
+const execSync = execSyncImport;
 
 app.get("/health", (req, res) => {
   let installed = false;
@@ -447,15 +794,15 @@ app.get("/health", (req, res) => {
     installed = true;
   } catch {}
 
-  // If installed, check if it can run (has auth)
+  // Check auth by looking for Claude config/credentials, not by making an API call
   if (installed) {
     try {
-      const out = execSync('claude -p "say ok" --output-format text 2>/dev/null', { timeout: 15000 }).toString().trim();
-      authed = out.length > 0;
+      const claudeDir = path.join(os.homedir(), ".claude");
+      authed = fs.existsSync(claudeDir) && fs.readdirSync(claudeDir).length > 0;
     } catch {}
   }
 
-  res.json({ installed, version, authed });
+  res.json({ installed, version, authed, https: useHttps });
 });
 
 // Serve config
@@ -463,23 +810,174 @@ app.get("/config", (req, res) => {
   res.json(config);
 });
 
-// Open Terminal.app with install command (macOS)
+// Open terminal with install command (cross-platform)
 app.post("/run-install", (req, res) => {
   try {
-    spawn("osascript", ["-e", `tell application "Terminal" to do script "npm install -g @anthropic-ai/claude-code && echo '\\n\\nDone! Go back to your browser.' && read"`], { detached: true, stdio: "ignore" }).unref();
+    const platform = process.platform;
+    if (platform === "darwin") {
+      spawn("osascript", ["-e", `tell application "Terminal" to do script "npm install -g @anthropic-ai/claude-code && echo '\\n\\nDone! Go back to your browser.' && read"`], { detached: true, stdio: "ignore" }).unref();
+    } else if (platform === "win32") {
+      spawn("cmd", ["/c", "start", "cmd", "/k", "npm install -g @anthropic-ai/claude-code"], { detached: true, stdio: "ignore" }).unref();
+    } else {
+      // Linux — try common terminal emulators
+      const terminals = ["gnome-terminal", "konsole", "xfce4-terminal", "xterm"];
+      let launched = false;
+      for (const term of terminals) {
+        try {
+          if (term === "gnome-terminal") {
+            spawn(term, ["--", "bash", "-c", "npm install -g @anthropic-ai/claude-code; echo 'Done! Go back to your browser.'; read"], { detached: true, stdio: "ignore" }).unref();
+          } else {
+            spawn(term, ["-e", "bash -c 'npm install -g @anthropic-ai/claude-code; echo Done!; read'"], { detached: true, stdio: "ignore" }).unref();
+          }
+          launched = true;
+          break;
+        } catch {}
+      }
+      if (!launched) return res.json({ ok: false, error: "no_terminal", platform });
+    }
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Open Terminal.app with claude auth
+// Open terminal with claude auth (cross-platform)
 app.post("/run-auth", (req, res) => {
   try {
-    spawn("osascript", ["-e", `tell application "Terminal" to do script "claude"`], { detached: true, stdio: "ignore" }).unref();
-    res.json({ ok: true });
+    const platform = process.platform;
+    if (platform === "darwin") {
+      spawn("osascript", ["-e", `tell application "Terminal" to do script "claude"`], { detached: true, stdio: "ignore" }).unref();
+    } else if (platform === "win32") {
+      spawn("cmd", ["/c", "start", "cmd", "/k", "claude"], { detached: true, stdio: "ignore" }).unref();
+    } else {
+      const terminals = ["gnome-terminal", "konsole", "xfce4-terminal", "xterm"];
+      let launched = false;
+      for (const term of terminals) {
+        try {
+          if (term === "gnome-terminal") {
+            spawn(term, ["--", "bash", "-c", "claude; read"], { detached: true, stdio: "ignore" }).unref();
+          } else {
+            spawn(term, ["-e", "bash -c 'claude; read'"], { detached: true, stdio: "ignore" }).unref();
+          }
+          launched = true;
+          break;
+        } catch {}
+      }
+      if (!launched) return res.json({ ok: false, error: "no_terminal", platform });
+    }
+    res.json({ ok: true, platform });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================
+// Silent Background Install & Auth Endpoints
+// ============================================
+
+// Kick off background install of Claude Code CLI
+app.post("/install-silent", (req, res) => {
+  // Already installed — skip
+  if (installState.status === "installed") {
+    return res.json({ ok: true, status: "installed" });
+  }
+  // Already in progress — don't start a second one
+  if (installState.status === "installing") {
+    return res.json({ ok: true, status: "installing" });
+  }
+
+  // Detect platform
+  const platform = process.platform; // "darwin", "linux", "win32"
+
+  // Check for npm, then npx
+  let npmCmd = null;
+  try {
+    execSync("npm --version 2>/dev/null", { timeout: 5000 });
+    npmCmd = "npm";
+  } catch {
+    try {
+      execSync("npx --version 2>/dev/null", { timeout: 5000 });
+      npmCmd = "npx";
+    } catch {
+      return res.json({ ok: false, error: "node_required" });
+    }
+  }
+
+  // Start the install
+  installState = { status: "installing", error: null, progress: "" };
+
+  const installCmd = npmCmd === "npx"
+    ? "npx -y @anthropic-ai/claude-code"
+    : "npm install -g @anthropic-ai/claude-code";
+
+  const shell = platform === "win32" ? "cmd" : "/bin/sh";
+  const shellFlag = platform === "win32" ? "/c" : "-c";
+
+  const child = spawn(shell, [shellFlag, installCmd], {
+    detached: true,
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env },
+  });
+
+  child.stdout.on("data", (data) => {
+    installState.progress += data.toString();
+    // Keep only last 2000 chars to avoid unbounded growth
+    if (installState.progress.length > 2000) {
+      installState.progress = installState.progress.slice(-2000);
+    }
+  });
+
+  child.stderr.on("data", (data) => {
+    installState.progress += data.toString();
+    if (installState.progress.length > 2000) {
+      installState.progress = installState.progress.slice(-2000);
+    }
+  });
+
+  child.on("close", (code) => {
+    if (code === 0) {
+      installState.status = "installed";
+      installState.error = null;
+    } else {
+      installState.status = "failed";
+      installState.error = `Install exited with code ${code}. ${installState.progress.slice(-500)}`;
+    }
+  });
+
+  child.on("error", (err) => {
+    installState.status = "failed";
+    installState.error = err.message;
+  });
+
+  child.unref();
+
+  res.json({ ok: true, status: "installing" });
+});
+
+// Poll install progress
+app.get("/install-status", (req, res) => {
+  res.json({
+    status: installState.status,
+    error: installState.error,
+    progress: installState.progress,
+  });
+});
+
+// Confirm CLI install and return auth URL for user to complete OAuth
+app.post("/auth-silent", (req, res) => {
+  try {
+    const version = execSync("claude --version 2>/dev/null", { timeout: 5000 }).toString().trim();
+    res.json({
+      ok: true,
+      version,
+      authUrl: "https://claude.ai/login",
+    });
+  } catch {
+    res.json({
+      ok: false,
+      error: "claude_not_installed",
+      authUrl: null,
+    });
   }
 });
 
@@ -638,7 +1136,7 @@ app.get("/integrations/mcp-status", (req, res) => {
 });
 
 // Test an MCP server can spawn
-app.post("/integrations/:id/test", async (req, res) => {
+app.post("/integrations/:id/test", rateLimit(60000, 5), async (req, res) => {
   const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
   if (!integration) return res.status(404).json({ error: "Not found" });
 
@@ -691,7 +1189,7 @@ app.post("/integrations/:id/test", async (req, res) => {
 });
 
 // Get OAuth authorization URL
-app.get("/integrations/:id/auth-url", (req, res) => {
+app.get("/integrations/:id/auth-url", rateLimit(60000, 5), (req, res) => {
   const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
   if (!integration || integration.authType !== "oauth2") {
     return res.status(400).json({ error: "Not an OAuth integration" });
@@ -721,20 +1219,12 @@ app.get("/integrations/:id/auth-url", (req, res) => {
   res.json({ url: `${integration.oauth.authorizationUrl}?${params}` });
 });
 
-// OAuth callback — Desktop app redirects to root with ?code=&state=
-app.get("/", (req, res, next) => {
-  if (req.query.code && req.query.state) {
-    return res.redirect(`/oauth/callback?${new URLSearchParams(req.query)}`);
-  }
-  next();
-});
-
 // OAuth callback handler
 app.get("/oauth/callback", async (req, res) => {
   const { code, state, error } = req.query;
 
   if (error) {
-    return res.send(`<html><body><h2>Authorization failed</h2><p>${error}</p><script>window.close()</script></body></html>`);
+    return res.send(`<html><body><h2>Authorization failed</h2><p>${escapeHtml(error)}</p><script>window.close()</script></body></html>`);
   }
 
   const pending = pendingOAuthStates.get(state);
@@ -769,7 +1259,7 @@ app.get("/oauth/callback", async (req, res) => {
 
     const tokens = await tokenRes.json();
     if (tokens.error) {
-      return res.send(`<html><body><h2>Token exchange failed</h2><p>${tokens.error_description || tokens.error}</p><script>setTimeout(()=>window.close(),3000)</script></body></html>`);
+      return res.send(`<html><body><h2>Token exchange failed</h2><p>${escapeHtml(tokens.error_description || tokens.error)}</p><script>setTimeout(()=>window.close(),3000)</script></body></html>`);
     }
 
     saveCredential(integration.id, {
@@ -825,12 +1315,12 @@ app.get("/oauth/callback", async (req, res) => {
         <p style="color:#666;">You can close this window.</p>
       </div>
       <script>
-        if (window.opener) window.opener.postMessage({type:"oauth-complete",integrationId:"${integration.id}"},"*");
+        if (window.opener) window.opener.postMessage({type:"oauth-complete",integrationId:${JSON.stringify(integration.id)}},window.location.origin);
         setTimeout(()=>window.close(),2000);
       </script>
     </body></html>`);
   } catch (err) {
-    res.status(500).send(`<html><body><h2>Connection failed</h2><p>${err.message}</p><script>setTimeout(()=>window.close(),3000)</script></body></html>`);
+    res.status(500).send(`<html><body><h2>Connection failed</h2><p>${escapeHtml(err.message)}</p><script>setTimeout(()=>window.close(),3000)</script></body></html>`);
   }
 });
 
@@ -873,7 +1363,7 @@ async function refreshOAuthToken(integrationId) {
 // File upload endpoint
 const uploadedFileMap = new Map();
 
-app.post("/upload", upload.array("files", 10), (req, res) => {
+app.post("/upload", rateLimit(60000, 20), upload.array("files", 10), (req, res) => {
   const uploaded = (req.files || []).map((f) => {
     const id = path.basename(f.path);
     uploadedFileMap.set(id, f.path);
@@ -882,6 +1372,94 @@ app.post("/upload", upload.array("files", 10), (req, res) => {
   });
   res.json({ files: uploaded });
 });
+
+// ============================================
+// Mobile QR Handoff API
+// ============================================
+
+// Start tunnel, generate token + QR
+app.post("/mobile/start", rateLimit(60000, 3), async (req, res) => {
+  try {
+    const activeSessionId = req.body?.sessionId || null;
+    const url = await startTunnel();
+    const token = generateMobileToken(activeSessionId);
+    const authUrl = `${url}/mobile/auth?token=${token}`;
+
+    // Generate QR code as data URL
+    const qrDataUrl = await QRCode.toDataURL(authUrl, {
+      width: 400,
+      margin: 2,
+      color: { dark: "#18182B", light: "#FFFFFF" },
+      errorCorrectionLevel: "M",
+    });
+
+    res.json({
+      url,
+      token,
+      qrData: authUrl,
+      qrImage: qrDataUrl,
+      status: "running",
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message, status: "error" });
+  }
+});
+
+// Tunnel status
+app.get("/mobile/status", (req, res) => {
+  res.json({
+    running: !!tunnelProcess,
+    url: tunnelUrl || null,
+    starting: tunnelStarting,
+  });
+});
+
+// Stop tunnel
+app.post("/mobile/stop", (req, res) => {
+  stopTunnel();
+  res.json({ ok: true, status: "stopped" });
+});
+
+// Mobile auth — validates one-time token, sets session cookie, redirects to /
+app.get("/mobile/auth", rateLimit(60000, 10), (req, res) => {
+  const token = req.query.token;
+  if (!token) {
+    return res.status(400).send(mobileAuthPage("Missing token", false));
+  }
+
+  const result = validateMobileToken(token);
+  if (result && result.valid) {
+    const sessionValue = createMobileSession();
+    res.cookie("delt-mobile-auth", sessionValue, {
+      maxAge: MOBILE_SESSION_TTL,
+      httpOnly: true,
+      sameSite: "none",
+      secure: true,
+      path: "/",
+    });
+    // Redirect to app with session ID so phone auto-resumes computer's conversation
+    const redirectUrl = result.sessionId ? `/?resumeSession=${result.sessionId}` : "/";
+    return res.send(`<!DOCTYPE html><html><head>
+      <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+      <meta name="apple-mobile-web-app-capable" content="yes">
+      <style>body{display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:-apple-system,system-ui,sans-serif;background:#f7f7f8;}
+      .box{text-align:center;}.icon{font-size:48px;margin-bottom:12px;}.title{font-size:20px;font-weight:600;margin-bottom:6px;}.sub{color:#888;font-size:14px;}</style>
+      </head><body><div class="box"><div class="icon">&#10003;</div><div class="title">Connected to Delt</div><div class="sub">Opening...</div></div>
+      <script>setTimeout(function(){window.location.href="${redirectUrl}";},800);</script></body></html>`);
+  }
+
+  return res.status(401).send(mobileAuthPage("Token expired or invalid. Get a new QR code from Delt.", false));
+});
+
+function mobileAuthPage(message, success) {
+  const color = success ? "#10B981" : "#EF4444";
+  const icon = success ? "&#10003;" : "&#10007;";
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f7f7f8;}
+.card{text-align:center;padding:40px;}.icon{font-size:48px;color:${color};margin-bottom:16px;}
+h2{margin:0 0 8px;color:#18182B;font-size:20px;}p{color:#5C5C72;font-size:15px;}</style>
+</head><body><div class="card"><div class="icon">${icon}</div><h2>${success ? "Connected!" : "Access Denied"}</h2><p>${message}</p></div></body></html>`;
+}
 
 // ============================================
 // Log API endpoints
@@ -1300,12 +1878,38 @@ app.put("/memory", (req, res) => {
 });
 
 app.get("/memory/session/:sid", (req, res) => {
-  const content = safeRead(path.join(memSessionsDir, `${req.params.sid}.md`));
-  res.json({ sessionId: req.params.sid, content });
+  const sid = safeName(req.params.sid);
+  const content = safeRead(path.join(memSessionsDir, `${sid}.md`));
+  res.json({ sessionId: sid, content });
 });
 
 // Active sessions
 const sessions = new Map();
+
+// Cross-device sync: sessionId → Set of WebSocket clients
+const sessionClients = new Map();
+
+function broadcastToSession(sessionId, data, excludeWs) {
+  const clients = sessionClients.get(sessionId);
+  if (!clients) return;
+  for (const client of clients) {
+    if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
+      safeSend(client, data);
+    }
+  }
+}
+
+function registerClient(sessionId, ws) {
+  if (!sessionClients.has(sessionId)) sessionClients.set(sessionId, new Set());
+  sessionClients.get(sessionId).add(ws);
+}
+
+function unregisterClient(ws) {
+  for (const [sid, clients] of sessionClients) {
+    clients.delete(ws);
+    if (clients.size === 0) sessionClients.delete(sid);
+  }
+}
 
 // Generate integrations context for Claude
 function buildIntegrationsContext() {
@@ -1379,6 +1983,8 @@ function buildSystemPrefix() {
 
 wss.on("connection", (ws) => {
   let sessionId = null;
+
+  ws.on("close", () => unregisterClient(ws));
   let currentProcess = null;
   let messageCount = 0;
 
@@ -1439,6 +2045,7 @@ wss.on("connection", (ws) => {
         sessionId = uuidv4();
         messageCount = 0;
         sessions.set(sessionId, { created: Date.now() });
+        registerClient(sessionId, ws);
         safeSend(ws, { type: "session", sessionId });
       }
 
@@ -1476,6 +2083,8 @@ wss.on("connection", (ws) => {
       currentProcess = proc;
       spawnWithTimeout(proc, ws, "error");
       safeSend(ws, { type: "thinking" });
+      broadcastToSession(sessionId, { type: "thinking" }, ws);
+      broadcastToSession(sessionId, { type: "sync-user", message: currentUserMessage }, ws);
 
       attachStreamHandlers(proc, ws, {
         streamType: "stream",
@@ -1485,6 +2094,7 @@ wss.on("connection", (ws) => {
           if (toolName) currentToolsUsed.push(toolName);
         },
         onCost: (cost) => { currentCost = cost; },
+        onBroadcast: (data) => { broadcastToSession(sessionId, { type: "stream", data }, ws); },
         onClose: (code) => {
           try {
             logConversation({
@@ -1502,6 +2112,7 @@ wss.on("connection", (ws) => {
           } catch (e) { console.error("History save failed:", e.message); }
           persistExchange(sessionId, currentUserMessage, currentAssistantText, "chat");
           safeSend(ws, { type: "done", code });
+          broadcastToSession(sessionId, { type: "done", code }, ws);
           currentProcess = null;
         },
       });
@@ -1516,9 +2127,11 @@ wss.on("connection", (ws) => {
 
     if (msg.type === "resume-session") {
       if (currentProcess) currentProcess.kill("SIGINT");
+      unregisterClient(ws);
       sessionId = msg.sessionId;
       messageCount = 1; // Not first message, so --resume will be used
       sessions.set(sessionId, { created: Date.now() });
+      registerClient(sessionId, ws);
       safeSend(ws, { type: "session", sessionId });
       safeSend(ws, { type: "resumed", sessionId });
     }
@@ -1817,7 +2430,7 @@ function logSignupLocally(entry) {
   fs.writeFileSync(signupsPath, JSON.stringify(signups, null, 2));
 }
 
-app.post("/api/signup", async (req, res) => {
+app.post("/api/signup", rateLimit(60000, 5), async (req, res) => {
   const { email, name } = req.body;
   if (!email || !email.includes("@")) {
     return res.status(400).json({ error: "Valid email required" });
@@ -1967,7 +2580,11 @@ server.on("error", (err) => {
 });
 
 server.listen(PORT, "127.0.0.1", () => {
+  const proto = useHttps ? "https" : "http";
   console.log(`\n  ${config.business?.name || "Delt"} is running!`);
-  console.log(`  http://localhost:${PORT}`);
+  console.log(`  ${proto}://localhost:${PORT}`);
+  if (useHttps) {
+    console.log(`  HTTPS enabled (self-signed cert at ~/.delt/certs/)`);
+  }
   console.log(`  Bound to localhost only — not accessible from other devices.\n`);
 });

@@ -9,78 +9,127 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%E2%9A%A1</text></svg>">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon-192.svg">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Delt">
+  <meta name="theme-color" content="#6C5CE7">
 </head>
 <body>
-  <!-- Install gate — shown if claude CLI is not detected -->
-  <div id="install-gate" class="install-gate hidden">
-    <div class="install-card">
-      <div class="install-step" id="install-step-detect">
-        <div class="install-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="4" y="4" width="16" height="16" rx="2"/><line x1="8" y1="10" x2="8" y2="10.01"/><line x1="12" y1="10" x2="12" y2="10.01"/><line x1="8" y1="14" x2="16" y2="14"/>
-          </svg>
-        </div>
-        <h1 class="install-title">One quick setup</h1>
-        <p class="install-desc">This app runs on your computer using the Claude CLI. Everything stays local and private — no data leaves your machine.</p>
-        <div class="install-status" id="install-status">
-          <span class="install-status-dot checking"></span>
-          <span id="install-status-text">Checking for Claude CLI...</span>
-        </div>
-      </div>
+  <!-- Onboarding — first-time setup for new users -->
+  <div id="install-gate" class="onboard hidden">
+    <div class="onboard-card">
 
-      <div class="install-step hidden" id="install-step-missing">
-        <div class="install-icon warn">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="4" y="4" width="16" height="16" rx="2"/><line x1="8" y1="10" x2="8" y2="10.01"/><line x1="12" y1="10" x2="12" y2="10.01"/><line x1="8" y1="14" x2="16" y2="14"/>
-          </svg>
-        </div>
-        <h2 class="install-title">Claude CLI not found</h2>
-        <p class="install-desc">Click below to open Terminal and install it. It's one command, takes about 30 seconds.</p>
-        <button class="install-btn" id="install-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
-          </svg>
-          Install via Terminal
-        </button>
-        <div class="install-manual">
-          <p class="install-manual-label">Or copy and paste this into Terminal yourself:</p>
-          <div class="install-code">
-            <code id="install-command">npm install -g @anthropic-ai/claude-code</code>
-            <button class="install-copy" id="install-copy">Copy</button>
+      <!-- Step 1: Welcome -->
+      <div class="onboard-step" id="ob-welcome">
+        <div class="ob-badge">Private & Local</div>
+        <h1 class="ob-hero-title">Meet <span class="ob-highlight">Delt</span></h1>
+        <p class="ob-hero-sub">Your AI assistant that runs entirely on your computer. No cloud, no tracking — just you and your data.</p>
+        <div class="ob-features">
+          <div class="ob-feature">
+            <div class="ob-feature-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+            <div>
+              <strong>100% private</strong>
+              <span>Everything stays on your machine</span>
+            </div>
+          </div>
+          <div class="ob-feature">
+            <div class="ob-feature-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+            </div>
+            <div>
+              <strong>Connects your tools</strong>
+              <span>Gmail, Calendar, GitHub & more</span>
+            </div>
+          </div>
+          <div class="ob-feature">
+            <div class="ob-feature-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>
+              </svg>
+            </div>
+            <div>
+              <strong>Free to use</strong>
+              <span>Powered by Claude — no API key needed</span>
+            </div>
           </div>
         </div>
-        <button class="install-retry" id="install-retry">I've installed it — check again</button>
+        <button class="ob-btn primary" id="ob-start">Get started</button>
+        <p class="ob-hint">Setup takes about 2 minutes</p>
       </div>
 
-      <div class="install-step hidden" id="install-step-auth">
-        <div class="install-icon warn">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Step 2: Create Account + Silent Install -->
+      <div class="onboard-step hidden" id="ob-account">
+        <div class="ob-step-num">Step 1 of 2</div>
+        <div class="ob-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          </svg>
+        </div>
+        <h2 class="ob-title">Create your Claude account</h2>
+        <p class="ob-sub">Delt is powered by Claude AI. You need a free account to get started — it takes about a minute.</p>
+        <a class="ob-btn primary" href="https://claude.ai/login" target="_blank" rel="noopener" id="ob-create-link">
+          Create free account
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+          </svg>
+        </a>
+        <button class="ob-link" id="ob-have-account">I already have an account</button>
+        <div class="ob-install-bar" id="ob-install-bar">
+          <div class="ob-install-track">
+            <div class="ob-install-fill" id="ob-install-fill"></div>
+          </div>
+          <span class="ob-install-label" id="ob-install-label">Installing Delt engine...</span>
+        </div>
+      </div>
+
+      <!-- Step 3: Sign In -->
+      <div class="onboard-step hidden" id="ob-signin">
+        <div class="ob-step-num">Step 2 of 2</div>
+        <div class="ob-icon accent">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
           </svg>
         </div>
-        <h2 class="install-title">Sign in to Claude</h2>
-        <p class="install-desc">Claude CLI is installed, but you need to sign in first. Run <code>claude</code> in Terminal and follow the auth prompt.</p>
-        <button class="install-btn" id="auth-btn">
+        <h2 class="ob-title">Connect your account</h2>
+        <p class="ob-sub">Open a terminal and run the command below. It will open a browser window to sign in — then come back here.</p>
+        <div class="ob-auth-cmd">
+          <code>claude</code>
+          <button class="ob-auth-copy" id="ob-auth-copy">Copy</button>
+        </div>
+        <button class="ob-btn primary" id="ob-signin-btn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
           </svg>
-          Open Terminal
+          Open Terminal for me
         </button>
-        <button class="install-retry" id="auth-retry">I've signed in — check again</button>
+        <div class="ob-auth-status" id="ob-auth-status">
+          <span class="ob-auth-dot checking" id="ob-auth-dot"></span>
+          <span id="ob-auth-text">Waiting for sign in...</span>
+        </div>
+        <button class="ob-link" id="ob-auth-retry">I've signed in — check again</button>
       </div>
 
-      <div class="install-step hidden" id="install-step-ready">
-        <div class="install-icon ok">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Step 4: Ready -->
+      <div class="onboard-step hidden" id="ob-ready">
+        <div class="ob-icon success">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="20 6 9 17 4 12"/>
           </svg>
         </div>
-        <h2 class="install-title">You're all set</h2>
-        <p class="install-desc" id="install-version-text">Claude CLI is installed and connected. Everything runs locally on your machine.</p>
-        <button class="install-btn" id="install-continue">Let's go</button>
+        <h2 class="ob-title">You're all set</h2>
+        <p class="ob-sub">Everything runs locally on your machine. Your conversations, files, and data — all private, always.</p>
+        <button class="ob-btn primary" id="ob-launch">Start chatting</button>
       </div>
 
-      <div class="install-privacy">
+      <div class="ob-privacy">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
@@ -137,6 +186,13 @@
       <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle history">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
+      <button class="phone-toggle" id="phone-toggle" title="Connect your phone">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+          <line x1="12" y1="18" x2="12" y2="18.01"/>
         </svg>
       </button>
 
@@ -403,7 +459,48 @@
     </div>
   </div>
 
+  <!-- QR Phone Handoff Modal -->
+  <div class="qr-modal-overlay hidden" id="qr-modal-overlay">
+    <div class="qr-modal" id="qr-modal">
+      <button class="qr-modal-close" id="qr-modal-close">&times;</button>
+      <div class="qr-modal-content">
+        <div class="qr-modal-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+            <line x1="12" y1="18" x2="12" y2="18.01"/>
+          </svg>
+        </div>
+        <h2 class="qr-modal-title">Connect your phone</h2>
+        <p class="qr-modal-subtitle" id="qr-status-text">Starting secure tunnel...</p>
+        <div class="qr-code-area" id="qr-code-area">
+          <div class="qr-loading" id="qr-loading">
+            <div class="qr-spinner"></div>
+            <span>Connecting...</span>
+          </div>
+          <img id="qr-image" class="qr-image hidden" alt="QR Code">
+        </div>
+        <div class="qr-url-row hidden" id="qr-url-row">
+          <input type="text" class="qr-url-input" id="qr-url-input" readonly>
+          <button class="qr-url-copy" id="qr-url-copy">Copy</button>
+        </div>
+        <button class="qr-stop-btn hidden" id="qr-stop-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+          </svg>
+          Disconnect tunnel
+        </button>
+        <p class="qr-privacy-note">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          One-time link. Expires in 5 minutes. Your data stays on this machine.
+        </p>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
