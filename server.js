@@ -389,7 +389,11 @@ app.post("/integrations/:id/connect", (req, res) => {
   const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
   if (!integration) return res.status(404).json({ error: "Integration not found" });
 
-  if (integration.authType === "token" || integration.authType === "custom") {
+  if (integration.authType === "enable") {
+    // MCP server handles its own auth — just enable it
+    saveCredential(integration.id, { type: "enable" });
+    res.json({ ok: true, connected: true });
+  } else if (integration.authType === "token" || integration.authType === "custom") {
     if (!token) return res.status(400).json({ error: "Token required" });
     saveCredential(integration.id, { token, baseUrl: baseUrl || "", type: "token" });
     res.json({ ok: true, connected: true });

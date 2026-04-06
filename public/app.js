@@ -1014,6 +1014,16 @@
     openPane2();
   });
 
+  // Logo click → fresh session + home
+  const logoLink = document.getElementById("logo-link");
+  if (logoLink) {
+    logoLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      closePane2();
+      clearChat();
+    });
+  }
+
   // --- Activity Summary (Welcome Screen + Badge) ---
   const activitySummary = document.getElementById("activity-summary");
   const activityStats = document.getElementById("activity-stats");
@@ -1439,7 +1449,7 @@
           <span class="integration-desc">${escapeHtml(i.description)}</span>
         </div>
         <div class="integration-actions">
-          <button class="integration-connect-btn" data-action="connect" data-id="${i.id}" data-auth="${i.authType}">${i.authType === "oauth2" ? "Sign in" : "Connect"}</button>
+          <button class="integration-connect-btn" data-action="connect" data-id="${i.id}" data-auth="${i.authType}">${i.authType === "enable" ? "Enable" : i.authType === "oauth2" ? "Sign in" : "Connect"}</button>
         </div>
       </div>`;
   }
@@ -1462,7 +1472,19 @@
 
     if (action === "connect") {
       const authType = btn.dataset.auth;
-      if (authType === "oauth2") {
+      if (authType === "enable") {
+        // MCP server handles its own auth — just enable it
+        btn.textContent = "Enabling...";
+        btn.disabled = true;
+        try {
+          await fetch(`/integrations/${id}/connect`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          loadIntegrations();
+        } catch { btn.textContent = "Failed"; btn.disabled = false; }
+      } else if (authType === "oauth2") {
         startOAuthFlow(id);
       } else {
         showTokenWizard(id, btn.closest(".integration-card"));
@@ -1505,14 +1527,15 @@
 
       const tc = integration.tokenConfig || {};
       const steps = (integration.setupSteps || []).map((s, i) =>
-        `<li data-step="${i + 1}.">${escapeHtml(s)}</li>`
+        `<li data-step="${i + 1}">${escapeHtml(s)}</li>`
       ).join("");
 
       const wizard = document.createElement("div");
       wizard.className = "token-wizard";
       wizard.innerHTML = `
+        <div class="token-wizard-title">How to get your ${escapeHtml(tc.label || "API key")}</div>
         ${steps ? `<ol class="token-wizard-steps">${steps}</ol>` : ""}
-        ${tc.helpUrl ? `<a class="token-wizard-link" href="${tc.helpUrl}" target="_blank" rel="noopener">Open ${integration.name} settings &rarr;</a>` : ""}
+        ${tc.helpUrl ? `<a class="token-wizard-link" href="${tc.helpUrl}" target="_blank" rel="noopener">Open ${escapeHtml(integration.name)} settings &rarr;</a>` : ""}
         <input class="token-wizard-input" type="password" placeholder="${escapeHtml(tc.placeholder || 'Paste your token here')}" autocomplete="off">
         <button class="token-wizard-submit" disabled>Connect ${escapeHtml(integration.name)}</button>
       `;

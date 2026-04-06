@@ -2,6 +2,11 @@ node_modules/
 logs/
 history/
 config.json
+config.json.bak
 credentials.json
 oauth-clients.json
 .gstack/
+demo-captures/
+demo-video.html
+*.mp4
+memory/

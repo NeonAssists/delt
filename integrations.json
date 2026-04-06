@@ -6,26 +6,20 @@
       "description": "Gmail, Drive, Calendar, Contacts, Sheets",
       "icon": "google",
       "category": "productivity",
-      "authType": "oauth2",
-      "oauth": {
-        "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth",
-        "tokenUrl": "https://oauth2.googleapis.com/token",
-        "scopes": [
-          "https://www.googleapis.com/auth/gmail.modify",
-          "https://www.googleapis.com/auth/drive",
-          "https://www.googleapis.com/auth/calendar",
-          "https://www.googleapis.com/auth/contacts.readonly",
-          "https://www.googleapis.com/auth/spreadsheets"
-        ]
-      },
+      "authType": "enable",
       "mcpServers": {
         "google-drive": {
           "command": "npx",
           "args": ["-y", "@anthropic-ai/google-drive-mcp"],
-          "envMapping": { "GOOGLE_ACCESS_TOKEN": "accessToken" }
+          "envMapping": {}
         }
       },
-      "setupSteps": []
+      "setupSteps": [
+        "Click Enable below",
+        "The first time you use a Google tool, a browser window will open",
+        "Sign in with your Google account and grant access",
+        "That's it — authentication is handled automatically"
+      ]
     },
     {
       "id": "github",
@@ -36,8 +30,8 @@
       "authType": "token",
       "tokenConfig": {
         "label": "Personal Access Token",
-        "placeholder": "ghp_...",
-        "helpUrl": "https://github.com/settings/tokens/new",
+        "placeholder": "ghp_xxxxxxxxxxxxxxxxxxxx",
+        "helpUrl": "https://github.com/settings/tokens?type=beta",
         "scopes": "repo, read:org, read:user"
       },
       "mcpServers": {
@@ -48,10 +42,11 @@
         }
       },
       "setupSteps": [
-        "Go to github.com/settings/tokens",
-        "Click 'Generate new token (classic)'",
-        "Select scopes: repo, read:org, read:user",
-        "Click 'Generate token' and copy it"
+        "Open GitHub and go to Settings → Developer Settings → Personal Access Tokens",
+        "Click 'Generate new token' and choose Fine-grained or Classic",
+        "Give it a name like 'Delt' and select the repos you want to access",
+        "Click 'Generate token' at the bottom of the page",
+        "Copy the token immediately — you won't see it again"
       ]
     },
     {
@@ -63,7 +58,7 @@
       "authType": "token",
       "tokenConfig": {
         "label": "Bot User OAuth Token",
-        "placeholder": "xoxb-...",
+        "placeholder": "xoxb-xxxxxxxxxxxx-xxxxxxxxxxxx",
         "helpUrl": "https://api.slack.com/apps",
         "scopes": "channels:read, chat:write, users:read"
       },
@@ -75,10 +70,11 @@
         }
       },
       "setupSteps": [
-        "Go to api.slack.com/apps and click 'Create New App'",
-        "Choose 'From scratch', name it, pick your workspace",
-        "Go to 'OAuth & Permissions', add scopes: channels:read, chat:write, users:read",
-        "Click 'Install to Workspace' and copy the Bot User OAuth Token"
+        "Go to api.slack.com/apps and sign in",
+        "Click 'Create New App' → 'From scratch'",
+        "Name it 'Delt' and pick your workspace",
+        "Go to 'OAuth & Permissions' in the sidebar, scroll to 'Scopes', and add: channels:read, chat:write, users:read",
+        "Scroll up and click 'Install to Workspace', then copy the Bot User OAuth Token"
       ]
     },
     {
@@ -90,8 +86,8 @@
       "authType": "token",
       "tokenConfig": {
         "label": "Integration Token",
-        "placeholder": "ntn_...",
-        "helpUrl": "https://www.notion.so/my-integrations",
+        "placeholder": "ntn_xxxxxxxxxxxxxxxxxxxx",
+        "helpUrl": "https://www.notion.so/profile/integrations",
         "scopes": "read, update, insert"
       },
       "mcpServers": {
@@ -102,11 +98,11 @@
         }
       },
       "setupSteps": [
-        "Go to notion.so/my-integrations",
-        "Click 'New integration'",
-        "Name it, select your workspace, click Submit",
-        "Copy the Internal Integration Token",
-        "Share the pages you want accessible with your integration"
+        "Go to notion.so/profile/integrations",
+        "Click 'New integration' and name it 'Delt'",
+        "Select your workspace and click Submit",
+        "Copy the Internal Integration Token that appears",
+        "Important: Go to the Notion pages you want accessible, click ··· → Connections → Add your Delt integration"
       ]
     },
     {
@@ -117,9 +113,9 @@
       "category": "development",
       "authType": "token",
       "tokenConfig": {
-        "label": "API Key",
-        "placeholder": "lin_api_...",
-        "helpUrl": "https://linear.app/settings/api",
+        "label": "Personal API Key",
+        "placeholder": "lin_api_xxxxxxxxxxxxxxxxxxxx",
+        "helpUrl": "https://linear.app/settings/account/api",
         "scopes": "read, write"
       },
       "mcpServers": {
@@ -130,9 +126,10 @@
         }
       },
       "setupSteps": [
-        "Go to linear.app/settings/api",
-        "Click 'Create key'",
-        "Name it and copy the API key"
+        "Go to Linear → Settings (gear icon) → Account → API",
+        "Click 'Create key' under Personal API Keys",
+        "Give it a label like 'Delt' and click Create",
+        "Copy the key that appears"
       ]
     },
     {
@@ -144,7 +141,7 @@
       "authType": "token",
       "tokenConfig": {
         "label": "Secret Key",
-        "placeholder": "sk_live_... or sk_test_...",
+        "placeholder": "sk_test_xxxxxxxxxxxxxxxxxxxx",
         "helpUrl": "https://dashboard.stripe.com/apikeys",
         "scopes": "read, write"
       },
@@ -156,9 +153,10 @@
         }
       },
       "setupSteps": [
-        "Go to dashboard.stripe.com/apikeys",
-        "Copy your Secret key (starts with sk_live_ or sk_test_)",
-        "Use a test key first if you want to be safe"
+        "Go to dashboard.stripe.com and sign in",
+        "Click Developers → API Keys in the top nav",
+        "Copy your Secret key (starts with sk_test_ or sk_live_)",
+        "Tip: use a Test mode key first to try it safely"
       ]
     },
     {
@@ -170,8 +168,8 @@
       "authType": "token",
       "tokenConfig": {
         "label": "Admin API Access Token",
-        "placeholder": "shpat_...",
-        "helpUrl": "https://admin.shopify.com/store/YOUR-STORE/settings/apps/development",
+        "placeholder": "shpat_xxxxxxxxxxxxxxxxxxxx",
+        "helpUrl": "https://admin.shopify.com/settings/apps/development",
         "scopes": "read_products, write_products, read_orders"
       },
       "mcpServers": {
@@ -182,9 +180,11 @@
         }
       },
       "setupSteps": [
-        "Go to your Shopify Admin → Settings → Apps → Develop apps",
-        "Create an app, configure API scopes",
-        "Install the app and copy the Admin API access token"
+        "Go to your Shopify Admin (your-store.myshopify.com/admin)",
+        "Navigate to Settings → Apps and sales channels → Develop apps",
+        "Click 'Create an app', name it 'Delt'",
+        "Under 'Configuration', select the API scopes you need",
+        "Click 'Install app' and copy the Admin API access token"
       ]
     },
     {
@@ -195,8 +195,8 @@
       "category": "crm",
       "authType": "token",
       "tokenConfig": {
-        "label": "Private App Token",
-        "placeholder": "pat-...",
+        "label": "Private App Access Token",
+        "placeholder": "pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
         "helpUrl": "https://app.hubspot.com/private-apps/",
         "scopes": "crm.objects.contacts, crm.objects.deals"
       },
@@ -208,10 +208,11 @@
         }
       },
       "setupSteps": [
-        "Go to HubSpot → Settings → Integrations → Private Apps",
-        "Create a private app",
-        "Select scopes: CRM (contacts, deals, tickets)",
-        "Create app and copy the access token"
+        "Go to HubSpot → Settings (gear icon) → Account Setup → Integrations → Private Apps",
+        "Click 'Create a private app'",
+        "Name it 'Delt' and go to the Scopes tab",
+        "Select: CRM → Contacts (Read/Write), Deals (Read/Write), Tickets (Read)",
+        "Click 'Create app' and copy the access token that appears"
       ]
     },
     {
@@ -222,8 +223,8 @@
       "category": "productivity",
       "authType": "token",
       "tokenConfig": {
-        "label": "API Key + Token",
-        "placeholder": "Your API token",
+        "label": "API Token",
+        "placeholder": "your-trello-api-token",
         "helpUrl": "https://trello.com/power-ups/admin",
         "scopes": "read, write"
       },
@@ -235,10 +236,11 @@
         }
       },
       "setupSteps": [
-        "Go to trello.com/power-ups/admin",
-        "Create a new Power-Up or use existing API key",
-        "Generate a Token with read/write access",
-        "Copy the token"
+        "Go to trello.com/power-ups/admin and sign in",
+        "Click 'New' to create a Power-Up (or use an existing one)",
+        "Go to the API Key section and click 'Generate a new API Key'",
+        "Then click the 'Token' link next to your key to generate a token",
+        "Authorize it and copy the token"
       ]
     },
     {
@@ -250,8 +252,8 @@
       "authType": "token",
       "tokenConfig": {
         "label": "Personal Access Token",
-        "placeholder": "1/...",
-        "helpUrl": "https://app.asana.com/0/developer-console",
+        "placeholder": "1/12345678:abcdefxxxxxxxxxx",
+        "helpUrl": "https://app.asana.com/0/my-apps",
         "scopes": "read, write"
       },
       "mcpServers": {
@@ -262,9 +264,11 @@
         }
       },
       "setupSteps": [
-        "Go to app.asana.com → My Settings → Apps → Developer Console",
-        "Create a Personal Access Token",
-        "Copy the token"
+        "Go to Asana → click your profile picture → My Settings",
+        "Go to the Apps tab, then click 'Developer console' at the bottom",
+        "Click 'Create new token'",
+        "Name it 'Delt', agree to the terms, and click Create",
+        "Copy the token — you won't be able to see it again"
       ]
     },
     {
@@ -276,7 +280,7 @@
       "authType": "token",
       "tokenConfig": {
         "label": "Personal Access Token",
-        "placeholder": "figd_...",
+        "placeholder": "figd_xxxxxxxxxxxxxxxxxxxx",
         "helpUrl": "https://www.figma.com/developers/api#access-tokens",
         "scopes": "file:read"
       },
@@ -288,48 +292,23 @@
         }
       },
       "setupSteps": [
-        "Go to figma.com → Settings → Personal Access Tokens",
+        "Go to figma.com and click your avatar → Settings",
+        "Scroll down to 'Personal access tokens'",
         "Click 'Create a new personal access token'",
-        "Name it, set expiration, copy the token"
-      ]
-    },
-    {
-      "id": "quickbooks",
-      "name": "QuickBooks",
-      "description": "Invoices, expenses, reports, customers",
-      "icon": "quickbooks",
-      "category": "finance",
-      "authType": "token",
-      "tokenConfig": {
-        "label": "API Key",
-        "placeholder": "Your QuickBooks API key",
-        "helpUrl": "https://developer.intuit.com/app/developer/qbo/docs/get-started",
-        "scopes": "accounting"
-      },
-      "mcpServers": {
-        "quickbooks": {
-          "command": "npx",
-          "args": ["-y", "mcp-quickbooks"],
-          "envMapping": { "QUICKBOOKS_API_KEY": "token" }
-        }
-      },
-      "setupSteps": [
-        "Go to developer.intuit.com and sign in",
-        "Create an app in the Developer Dashboard",
-        "Get your Client ID and Secret from the Keys tab",
-        "Copy the credentials"
+        "Name it 'Delt', choose an expiration, and click 'Create token'",
+        "Copy the token immediately"
       ]
     },
     {
       "id": "custom-api",
       "name": "Custom API",
-      "description": "Connect any service with an API key",
+      "description": "Connect any service that has an API key",
       "icon": "api",
       "category": "custom",
       "authType": "custom",
       "tokenConfig": {
         "label": "API Key",
-        "placeholder": "Your API key",
+        "placeholder": "Paste your API key here",
         "helpUrl": "",
         "scopes": ""
       },
@@ -341,10 +320,10 @@
         }
       },
       "setupSteps": [
-        "Find the API documentation for your service",
-        "Look for 'API Keys' or 'Developer Settings'",
-        "Generate a new key and copy it",
-        "Paste it here along with the API base URL"
+        "Find the API docs for the service you want to connect",
+        "Look for 'API Keys', 'Developer Settings', or 'Integrations' in their settings",
+        "Create a new API key and copy it",
+        "Paste it below"
       ]
     }
   ]

@@ -471,6 +471,19 @@ header {
   gap: 10px;
 }
 
+.logo-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 4px 8px 4px 4px;
+  margin: -4px -8px -4px -4px;
+  transition: background 0.15s ease;
+}
+.logo-link:hover { background: var(--bg-elevated); }
+
 .logo-mark {
   width: 30px;
   height: 30px;
@@ -904,6 +917,7 @@ header {
 
 .integration-card {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
@@ -911,6 +925,9 @@ header {
   border: 1px solid var(--border-light);
   border-radius: var(--r-sm);
   transition: all 0.15s ease;
+}
+.integration-card .token-wizard {
+  flex-basis: 100%;
 }
 .integration-card:hover {
   border-color: var(--border);
@@ -1015,54 +1032,87 @@ header {
 /* Token wizard (inline) */
 .token-wizard {
   margin-top: 12px;
-  padding: 14px;
+  padding: 18px 16px;
   background: var(--bg-page);
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--r);
   animation: msg-in 0.15s ease;
+}
+
+.token-wizard-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 12px;
 }
 
 .token-wizard-steps {
   list-style: none;
   padding: 0;
-  margin: 0 0 12px;
+  margin: 0 0 14px;
 }
 .token-wizard-steps li {
   position: relative;
-  padding: 4px 0 4px 20px;
+  padding: 6px 0 6px 28px;
   font-size: 13px;
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: 1.6;
+  border-left: 2px solid var(--border-light);
+  margin-left: 8px;
+}
+.token-wizard-steps li:last-child {
+  border-left-color: transparent;
 }
 .token-wizard-steps li::before {
   content: attr(data-step);
   position: absolute;
-  left: 0;
+  left: -9px;
+  top: 5px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
   font-weight: 700;
-  color: var(--accent);
-  font-size: 12px;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .token-wizard-link {
-  display: inline-block;
-  margin-bottom: 10px;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid rgba(108, 92, 231, 0.15);
+  border-radius: 8px;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+.token-wizard-link:hover {
+  background: rgba(108, 92, 231, 0.12);
   text-decoration: none;
 }
-.token-wizard-link:hover { text-decoration: underline; }
 
 .token-wizard-input {
   width: 100%;
-  padding: 10px 12px;
+  padding: 11px 14px;
   font-family: var(--mono);
   font-size: 13px;
   border: 1.5px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--bg-surface);
   color: var(--text-primary);
   outline: none;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  box-sizing: border-box;
 }
 .token-wizard-input:focus {
   border-color: var(--accent);
@@ -1072,18 +1122,19 @@ header {
 
 .token-wizard-submit {
   width: 100%;
-  padding: 10px;
+  padding: 11px;
   background: var(--accent);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   font-family: var(--font);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
+  transition: all 0.15s;
 }
-.token-wizard-submit:hover { background: var(--accent-hover); }
-.token-wizard-submit:disabled { opacity: 0.4; cursor: default; }
+.token-wizard-submit:hover { background: var(--accent-hover); transform: translateY(-1px); }
+.token-wizard-submit:disabled { opacity: 0.35; cursor: default; transform: none; }
 
 .integration-category-label {
   font-size: 11px;
