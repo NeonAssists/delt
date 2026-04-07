@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delt — AI that handles your busy work</title>
+  <meta name="description" content="Delt is an AI assistant that connects to your email, calendar, and apps — and actually does things for you. Private, runs on your computer.">
+
+  <!-- Open Graph (iMessage, Slack, LinkedIn, Facebook) -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://delt-site.fly.dev/">
+  <meta property="og:title" content="Delt — AI that handles your busy work">
+  <meta property="og:description" content="Connects your email, calendar, and apps. Handles tasks for you. Runs privately on your computer.">
+  <meta property="og:image" content="https://delt-site.fly.dev/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Delt — AI that handles your busy work">
+  <meta name="twitter:description" content="Connects your email, calendar, and apps. Handles tasks for you. Private. Free.">
+  <meta name="twitter:image" content="https://delt-site.fly.dev/og.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect rx='20' width='100' height='100' fill='%237C3AED'/><text x='50' y='72' text-anchor='middle' font-size='60' font-weight='900' fill='white'>D</text></svg>">
+  <style>
+    :root {
+      --bg: #FAFAFD;
+      --surface: #FFFFFF;
+      --surface-2: #F5F3FA;
+      --border: #E8E5F0;
+      --text: #0C0A14;
+      --text-2: #55526A;
+      --text-3: #8E8BA3;
+      --purple: #7C3AED;
+      --indigo: #6366F1;
+      --cyan: #06B6D4;
+      --mint: #10B981;
+      --amber: #F59E0B;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: clip;
+    }
+
+    /* ---- Reveal on scroll ---- */
+    .r { opacity: 0; transform: translateY(28px); transition: opacity .7s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1); }
+    .r.v { opacity: 1; transform: none; }
+    .d1{transition-delay:.06s} .d2{transition-delay:.12s} .d3{transition-delay:.18s} .d4{transition-delay:.24s}
+
+    /* ---- NAV ---- */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100; height: 56px;
+      display: flex; align-items: center; justify-content: space-between; padding: 0 32px;
+      background: rgba(250,250,253,.82); backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border-bottom: 1px solid transparent; transition: border-color .3s;
+      overflow: visible;
+    }
+    nav.scrolled { border-color: var(--border); }
+    .nav-left { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .nav-mark {
+      width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--purple), var(--indigo));
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 14px; color: #fff;
+    }
+    .nav-name { font-size: 16px; font-weight: 800; letter-spacing: -.04em; white-space: nowrap; }
+    .nav-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .nav-link {
+      padding: 7px 16px; border-radius: 8px; text-decoration: none;
+      font-size: 13px; font-weight: 500; color: var(--text-2); transition: all .2s;
+      white-space: nowrap;
+    }
+    .nav-link:hover { color: var(--text); background: var(--surface-2); }
+    .nav-cta {
+      padding: 8px 20px; border-radius: 100px; text-decoration: none;
+      background: var(--text); color: #fff; font-weight: 600; font-size: 12px;
+      transition: opacity .2s; white-space: nowrap; flex-shrink: 0;
+    }
+    .nav-cta:hover { opacity: .85; }
+
+    /* ---- SHARED ---- */
+    section { padding: 100px 32px; }
+    .container { max-width: 1080px; margin: 0 auto; }
+    .section-label {
+      display: inline-block; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .12em; color: var(--purple);
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: clamp(28px, 4vw, 44px); font-weight: 800;
+      letter-spacing: -.04em; line-height: 1.1; margin-bottom: 16px;
+    }
+    .section-sub {
+      font-size: 17px; color: var(--text-2); line-height: 1.65;
+      max-width: 560px;
+    }
+
+    /* ---- HERO ---- */
+    .hero {
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center;
+      padding: 120px 32px 80px; position: relative;
+    }
+    .hero-bg {
+      position: absolute; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse 50% 40% at 50% 20%, rgba(124,58,237,.05) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 50% at 30% 60%, rgba(99,102,241,.03) 0%, transparent 70%),
+        radial-gradient(ellipse 30% 40% at 70% 70%, rgba(6,182,212,.03) 0%, transparent 70%);
+    }
+    .hero-content { position: relative; z-index: 1; max-width: 760px; }
+    .hero-pill {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 6px 16px 6px 10px; border-radius: 100px;
+      background: rgba(124,58,237,.06); border: 1px solid rgba(124,58,237,.1);
+      font-size: 12px; font-weight: 600; color: var(--purple); margin-bottom: 28px;
+    }
+    .hero-pill .dot {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--mint);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.4)} 50%{box-shadow:0 0 0 6px rgba(16,185,129,0)} }
+    .hero h1 {
+      font-size: clamp(44px, 6vw, 76px); font-weight: 900;
+      letter-spacing: -.06em; line-height: .95; margin-bottom: 24px;
+    }
+    .hero h1 em {
+      font-style: normal;
+      background: linear-gradient(135deg, var(--purple), var(--indigo), var(--cyan));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      display: inline-block; padding-right: .15em;
+    }
+    .hero-sub {
+      font-size: 18px; color: var(--text-2); line-height: 1.65;
+      margin-bottom: 40px; max-width: 520px; margin-left: auto; margin-right: auto;
+    }
+    .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn-primary {
+      padding: 14px 32px; border-radius: 100px; border: none;
+      background: linear-gradient(135deg, var(--purple), var(--indigo));
+      color: #fff; font-weight: 700; font-size: 15px; font-family: var(--font);
+      cursor: pointer; transition: all .25s; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 8px;
+      box-shadow: 0 4px 24px rgba(124,58,237,.2);
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 32px rgba(124,58,237,.3); }
+    .btn-secondary {
+      padding: 14px 28px; border-radius: 100px; border: 1.5px solid var(--border);
+      background: var(--surface); color: var(--text); font-weight: 600; font-size: 14px;
+      font-family: var(--font); cursor: pointer; transition: all .25s; text-decoration: none;
+    }
+    .btn-secondary:hover { border-color: var(--purple); color: var(--purple); }
+
+    /* ---- APP MOCKUP ---- */
+    .mockup-wrap {
+      margin-top: 64px; perspective: 1200px; max-width: 920px; margin-left: auto; margin-right: auto;
+    }
+    .mockup {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; overflow: hidden;
+      box-shadow: 0 24px 80px rgba(12,10,20,.08), 0 2px 8px rgba(12,10,20,.04);
+      transform: rotateX(2deg); transition: transform .5s;
+    }
+    .mockup:hover { transform: rotateX(0); }
+    .mock-bar {
+      height: 40px; background: var(--surface-2); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 16px; gap: 8px;
+    }
+    .mock-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .mock-dot.rd { background: #EF4444; }
+    .mock-dot.yw { background: #F59E0B; }
+    .mock-dot.gn { background: #10B981; }
+    .mock-url {
+      flex: 1; text-align: center; font-size: 11px; color: var(--text-3);
+      font-weight: 500;
+    }
+
+    /* Delt app mockup */
+    .d-bar {
+      height: 38px; background: var(--surface); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 12px; gap: 8px;
+    }
+    .d-logo { width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(135deg,var(--purple),var(--indigo)); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: #fff; flex-shrink: 0; }
+    .d-name { font-size: 13px; font-weight: 700; letter-spacing: -.03em; }
+    .d-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--mint); margin-left: 2px; flex-shrink: 0; }
+    .d-st { font-size: 9px; color: var(--mint); font-weight: 600; }
+    .d-badges { display: flex; gap: 4px; margin-left: 4px; }
+    .d-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 100px; font-size: 8px; font-weight: 600; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); }
+    .d-badge i { width: 4px; height: 4px; border-radius: 50%; background: var(--mint); display: block; }
+    .d-bar-r { margin-left: auto; display: flex; gap: 4px; }
+    .d-bar-btn { height: 24px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font-size: 9px; font-weight: 600; color: var(--text-2); display: inline-flex; align-items: center; gap: 3px; }
+    .d-bar-btn.active { border-color: var(--purple); color: var(--purple); background: rgba(124,58,237,.04); }
+
+    .d-layout { display: flex; min-height: 320px; }
+    .d-main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 20px 12px; text-align: center; }
+    .d-greet { font-size: 22px; font-weight: 800; letter-spacing: -.04em; margin-bottom: 4px; }
+    .d-sub { font-size: 12px; color: var(--text-3); margin-bottom: 16px; }
+    .d-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 100%; max-width: 380px; margin-bottom: 12px; }
+    .d-action { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); text-align: left; }
+    .d-action-icon { width: 24px; height: 24px; border-radius: 7px; background: rgba(124,58,237,.06); display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; color: var(--purple); }
+    .d-action-text h4 { font-size: 10px; font-weight: 700; line-height: 1.2; }
+    .d-action-text p { font-size: 8px; color: var(--text-3); line-height: 1.3; margin: 0; }
+    .d-hint { font-size: 9px; color: var(--text-3); margin-bottom: 8px; }
+    .d-inputbar { width: 100%; max-width: 380px; display: flex; align-items: center; gap: 6px; padding: 7px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 100px; }
+    .d-inputbar span { flex: 1; font-size: 10px; color: var(--text-3); }
+    .d-send { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg,var(--purple),var(--indigo)); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+    /* Integrations drawer */
+    .d-integ { width: 200px; border-left: 1px solid var(--border); background: var(--surface); padding: 12px 10px; flex-shrink: 0; overflow-y: auto; }
+    .d-integ-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding: 0 2px; }
+    .d-integ-hdr h3 { font-size: 12px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+    .d-integ-hdr span { font-size: 9px; color: var(--text-3); }
+    .d-integ-label { font-size: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); padding: 0 2px; margin: 8px 0 4px; }
+    .d-integ-card { display: flex; align-items: center; gap: 7px; padding: 6px 7px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 3px; }
+    .d-integ-card.on { border-color: rgba(16,185,129,.3); background: rgba(16,185,129,.03); }
+    .d-integ-icon { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 11px; }
+    .d-integ-name { font-size: 10px; font-weight: 600; display: block; }
+    .d-integ-desc { font-size: 8px; color: var(--text-3); display: block; }
+    .d-integ-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--mint); flex-shrink: 0; }
+    .d-integ-btn { padding: 2px 7px; border-radius: 5px; background: linear-gradient(135deg,var(--purple),var(--indigo)); color: #fff; font-size: 8px; font-weight: 600; flex-shrink: 0; }
+
+    /* ---- PROBLEM ---- */
+    .problem { background: var(--surface); }
+    .problem-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+      margin-top: 48px;
+    }
+    .pain-card {
+      padding: 28px 24px; border-radius: 14px; border: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .pain-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; margin-bottom: 16px;
+    }
+    .pain-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; letter-spacing: -.02em; }
+    .pain-card p { font-size: 13.5px; color: var(--text-2); line-height: 1.6; }
+
+    /* ---- HOW IT WORKS ---- */
+    .how { background: var(--bg); }
+    .steps {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px;
+      margin-top: 56px; position: relative;
+    }
+    .steps::before {
+      content: ''; position: absolute; top: 24px; left: 80px; right: 80px;
+      height: 2px; background: linear-gradient(90deg, var(--purple), var(--indigo), var(--cyan));
+      opacity: .2; z-index: 0;
+    }
+    .step {
+      text-align: center; position: relative; z-index: 1;
+    }
+    .step-num {
+      width: 48px; height: 48px; border-radius: 14px; margin: 0 auto 20px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 18px; color: #fff;
+      background: linear-gradient(135deg, var(--purple), var(--indigo));
+      box-shadow: 0 4px 16px rgba(124,58,237,.2);
+    }
+    .step-visual {
+      width: 100%; aspect-ratio: 4/3; border-radius: 12px;
+      border: 1px solid var(--border); background: var(--surface);
+      margin-bottom: 16px; overflow: hidden; position: relative;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .step h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; letter-spacing: -.01em; }
+    .step p { font-size: 13px; color: var(--text-2); line-height: 1.5; }
+
+    /* Step visuals */
+    .sv-download { flex-direction: column; gap: 8px; }
+    .sv-download .sv-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--purple), var(--indigo));
+      display: flex; align-items: center; justify-content: center;
+    }
+    .sv-download .sv-arrow { font-size: 24px; color: #fff; line-height: 1; }
+    .sv-download .sv-label { font-size: 10px; color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
+
+    .sv-terminal {
+      display: flex; flex-direction: column; background: var(--surface-2); width: 100%; height: 100%;
+      padding: 14px; align-items: flex-start; justify-content: center;
+    }
+    .sv-terminal .sv-t-bar { display: flex; gap: 5px; margin-bottom: 10px; }
+    .sv-terminal .sv-t-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .sv-terminal .sv-t-line {
+      font-family: 'JetBrains Mono', monospace; font-size: 9.5px; line-height: 1.7;
+      color: var(--purple); white-space: nowrap;
+    }
+    .sv-terminal .sv-t-line .g { color: var(--mint); }
+    .sv-terminal .sv-t-line .w { color: var(--text-2); }
+    .sv-terminal .sv-t-line .cursor {
+      display: inline-block; width: 6px; height: 12px; background: var(--purple);
+      animation: blink 1s infinite;
+    }
+    @keyframes blink { 0%,50%{opacity:1} 51%,100%{opacity:0} }
+
+    .sv-login {
+      flex-direction: column; gap: 8px; padding: 16px;
+    }
+    .sv-login-box {
+      width: 90%; padding: 10px 12px; border-radius: 8px;
+      border: 1.5px solid var(--border); background: var(--surface);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .sv-login-avatar {
+      width: 24px; height: 24px; border-radius: 6px;
+      background: linear-gradient(135deg, #f97316, #ef4444);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; color: #fff; font-weight: 700;
+    }
+    .sv-login-text { font-size: 10px; color: var(--text-2); }
+    .sv-login-btn {
+      width: 90%; padding: 7px; border-radius: 8px;
+      background: var(--text); color: #fff; text-align: center;
+      font-size: 10px; font-weight: 600;
+    }
+
+    .sv-ready {
+      flex-direction: column; gap: 6px;
+    }
+    .sv-check {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: rgba(16,185,129,.1); display: flex; align-items: center;
+      justify-content: center; font-size: 22px; color: var(--mint);
+    }
+    .sv-ready-label { font-size: 11px; font-weight: 600; color: var(--mint); }
+
+    /* ---- WHAT IT DOES ---- */
+    .what { background: var(--surface); }
+    .examples {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;
+      margin-top: 48px;
+    }
+    .example-card {
+      border: 1px solid var(--border); border-radius: 14px;
+      overflow: hidden; background: var(--bg); transition: border-color .2s;
+    }
+    .example-card:hover { border-color: rgba(124,58,237,.3); }
+    .example-head {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .example-icon {
+      width: 32px; height: 32px; border-radius: 8px; display: flex;
+      align-items: center; justify-content: center; font-size: 16px;
+    }
+    .example-head h3 { font-size: 14px; font-weight: 700; }
+    .example-head span { font-size: 11px; color: var(--text-3); font-weight: 500; }
+    .example-chat {
+      padding: 16px 20px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .ex-msg {
+      padding: 10px 14px; border-radius: 12px; font-size: 12.5px; line-height: 1.55;
+      max-width: 90%;
+    }
+    .ex-user {
+      background: linear-gradient(135deg, var(--purple), var(--indigo));
+      color: #fff; align-self: flex-end; border-bottom-right-radius: 4px;
+    }
+    .ex-ai {
+      background: var(--surface); border: 1px solid var(--border);
+      align-self: flex-start; border-bottom-left-radius: 4px;
+    }
+    .ex-ai .tool-badge {
+      display: inline-flex; padding: 1px 6px; border-radius: 5px;
+      font-size: 9px; font-weight: 600; background: rgba(124,58,237,.08);
+      color: var(--purple); margin: 0 1px;
+    }
+
+    /* ---- WHY DELT ---- */
+    .why { background: #1C0F3A; color: #fff; position: relative; overflow: hidden; }
+    .why .section-label { color: rgba(167,139,250,.8); }
+    .why .section-sub { color: rgba(255,255,255,.6); }
+    .why-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+      margin-top: 48px;
+    }
+    .why-card {
+      padding: 28px 24px; border-radius: 14px;
+      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
+      backdrop-filter: blur(8px); transition: background .2s;
+    }
+    .why-card:hover { background: rgba(255,255,255,.08); }
+    .why-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; margin-bottom: 16px;
+      background: rgba(255,255,255,.06);
+    }
+    .why-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+    .why-card p { font-size: 13.5px; color: rgba(255,255,255,.55); line-height: 1.6; }
+    .why-bg {
+      position: absolute; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse 50% 60% at 20% 80%, rgba(124,58,237,.15) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 50% at 80% 20%, rgba(99,102,241,.1) 0%, transparent 70%);
+    }
+    .why .container { position: relative; z-index: 1; }
+
+    /* ---- INSTALL ---- */
+    .install { background: var(--bg); text-align: center; }
+    .install-box {
+      max-width: 600px; margin: 48px auto 0; padding: 40px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: 0 16px 64px rgba(12,10,20,.06);
+    }
+    .install-step {
+      display: flex; align-items: flex-start; gap: 16px;
+      text-align: left; margin-bottom: 24px;
+    }
+    .install-step:last-child { margin-bottom: 0; }
+    .install-step-num {
+      width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
+      background: rgba(124,58,237,.08); color: var(--purple);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 13px;
+    }
+    .install-step h4 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .install-step p { font-size: 13px; color: var(--text-2); line-height: 1.5; }
+    .install-step code {
+      display: inline-block; margin-top: 6px; padding: 6px 12px;
+      border-radius: 8px; background: #1a1625; color: #a78bfa;
+      font-family: 'JetBrains Mono', monospace; font-size: 12px;
+      user-select: all; cursor: pointer; letter-spacing: -.01em;
+    }
+    .install-divider {
+      width: 2px; height: 20px; background: rgba(124,58,237,.12);
+      margin: 0 0 24px 15px;
+    }
+    .install-cta {
+      margin-top: 32px; display: flex; flex-direction: column;
+      align-items: center; gap: 12px;
+    }
+    .install-note {
+      font-size: 12px; color: var(--text-3); display: flex;
+      align-items: center; gap: 6px;
+    }
+
+    /* Install tabs */
+    .install-tabs {
+      display: flex; gap: 0; margin-bottom: 32px;
+      border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    }
+    .install-tab {
+      flex: 1; padding: 12px 20px; background: var(--bg);
+      border: none; font-family: var(--font); font-size: 14px;
+      font-weight: 600; color: var(--text-2); cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: all .2s;
+    }
+    .install-tab + .install-tab { border-left: 1px solid var(--border); }
+    .install-tab.active { background: var(--surface); color: var(--purple); }
+    .install-tab:hover:not(.active) { color: var(--text); }
+    .install-tab svg { flex-shrink: 0; }
+    .install-pane { display: none; }
+    .install-pane.active { display: block; }
+    .pkg-hero {
+      text-align: center; padding: 8px 0 0;
+    }
+    .pkg-icon {
+      width: 72px; height: 72px; border-radius: 18px; margin: 0 auto 16px;
+      background: linear-gradient(135deg, var(--purple), var(--indigo));
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 8px 24px rgba(124,58,237,.2);
+    }
+    .pkg-icon svg { width: 36px; height: 36px; }
+    .pkg-hero h4 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+    .pkg-hero p { font-size: 13px; color: var(--text-2); line-height: 1.5; margin-bottom: 20px; }
+    .pkg-steps {
+      display: flex; gap: 16px; margin-bottom: 24px; text-align: left;
+    }
+    .pkg-step {
+      flex: 1; padding: 14px 16px; border-radius: 10px;
+      background: var(--bg); border: 1px solid var(--border);
+    }
+    .pkg-step-num {
+      width: 22px; height: 22px; border-radius: 7px;
+      background: rgba(124,58,237,.08); color: var(--purple);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 11px; margin-bottom: 8px;
+    }
+    .pkg-step h5 { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+    .pkg-step p { font-size: 12px; color: var(--text-2); line-height: 1.45; }
+    .btn-download {
+      padding: 14px 32px; border-radius: 100px; border: none;
+      background: linear-gradient(135deg, var(--purple), var(--indigo));
+      color: #fff; font-weight: 700; font-size: 15px; font-family: var(--font);
+      cursor: pointer; transition: all .25s; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 8px;
+      box-shadow: 0 4px 24px rgba(124,58,237,.2);
+    }
+    .btn-download:hover { transform: translateY(-1px); box-shadow: 0 8px 32px rgba(124,58,237,.3); }
+    .install-or {
+      display: flex; align-items: center; gap: 12px; margin: 0 0 4px;
+      font-size: 12px; color: var(--text-3); font-weight: 500;
+    }
+    .install-or::before, .install-or::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    /* ---- FAQ ---- */
+    .faq { background: var(--surface); }
+    .faq-list { max-width: 640px; margin: 48px auto 0; }
+    .faq-item {
+      border-bottom: 1px solid var(--border); cursor: pointer;
+    }
+    .faq-q {
+      padding: 20px 0; display: flex; justify-content: space-between;
+      align-items: center; font-size: 15px; font-weight: 600;
+    }
+    .faq-q::after {
+      content: '+'; font-size: 20px; color: var(--text-3); font-weight: 400;
+      transition: transform .2s;
+    }
+    .faq-item.open .faq-q::after { transform: rotate(45deg); }
+    .faq-a {
+      max-height: 0; overflow: hidden; transition: max-height .3s ease;
+    }
+    .faq-item.open .faq-a { max-height: 200px; }
+    .faq-a p {
+      padding: 0 0 20px; font-size: 14px; color: var(--text-2); line-height: 1.65;
+    }
+
+    /* ---- FOOTER ---- */
+    footer {
+      padding: 40px 32px; text-align: center; border-top: 1px solid var(--border);
+    }
+    footer p { font-size: 12px; color: var(--text-3); }
+    footer .foot-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      margin-top: 8px; font-size: 11px; color: var(--mint); font-weight: 600;
+    }
+
+    /* ---- RESPONSIVE ---- */
+    @media (max-width: 768px) {
+      section { padding: 72px 20px; }
+      .problem-grid, .why-grid { grid-template-columns: 1fr; }
+      .steps { grid-template-columns: repeat(2, 1fr); }
+      .steps::before { display: none; }
+      .examples { grid-template-columns: 1fr; }
+      .hero-actions { flex-direction: column; align-items: center; }
+      nav { padding: 0 16px; }
+      .nav-link { display: none; }
+      .d-integ { display: none; }
+      .d-badges { display: none; }
+      .d-actions { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      .steps { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav id="nav">
+    <div class="nav-left">
+      <div class="nav-mark">D</div>
+      <span class="nav-name">Delt</span>
+    </div>
+    <div class="nav-right">
+      <a class="nav-link" href="#how">How it works</a>
+      <a class="nav-link" href="#what">Examples</a>
+      <a class="nav-link" href="#why">Why Delt</a>
+      <a class="nav-cta" href="#install">Install</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-content">
+      <div class="hero-pill r"><span class="dot"></span> Private &middot; Free &middot; On your computer</div>
+      <h1 class="r d1">Meet <em>Delt</em></h1>
+      <p class="hero-sub r d2">An AI assistant that connects to your email, calendar, and apps &mdash; and handles things for you. No copying and pasting. No switching tabs. Just ask.</p>
+      <div class="hero-actions r d3">
+        <a class="btn-primary" href="#install">Install Delt</a>
+        <a class="btn-secondary" href="#how">See how it works</a>
+      </div>
+    </div>
+
+    <div class="mockup-wrap r d4">
+      <div class="mockup">
+        <div class="mock-bar">
+          <div class="mock-dot rd"></div>
+          <div class="mock-dot yw"></div>
+          <div class="mock-dot gn"></div>
+          <div class="mock-url">localhost &mdash; Delt</div>
+        </div>
+        <!-- Delt app bar -->
+        <div class="d-bar">
+          <div class="d-logo">D</div>
+          <span class="d-name">delt</span>
+          <div class="d-dot"></div>
+          <span class="d-st">Ready</span>
+          <div class="d-badges">
+            <div class="d-badge"><i></i> Local</div>
+            <div class="d-badge"><i></i> Google</div>
+            <div class="d-badge"><i></i> GitHub</div>
+            <div class="d-badge"><i></i> Figma</div>
+            <div class="d-badge"><i></i> Apple</div>
+          </div>
+          <div class="d-bar-r">
+            <div class="d-bar-btn active">&#10010; Integrations</div>
+            <div class="d-bar-btn">+ New chat</div>
+          </div>
+        </div>
+        <!-- Main layout: chat + integrations drawer -->
+        <div class="d-layout">
+          <div class="d-main">
+            <div class="d-greet">Hey Nate</div>
+            <div class="d-sub">What are we working on?</div>
+            <div class="d-actions">
+              <div class="d-action"><div class="d-action-icon">&#9993;</div><div class="d-action-text"><h4>Write an Email</h4><p>Draft, reply, or follow up</p></div></div>
+              <div class="d-action"><div class="d-action-icon">&#128196;</div><div class="d-action-text"><h4>Analyze a Document</h4><p>Upload anything &mdash; I'll break it down</p></div></div>
+              <div class="d-action"><div class="d-action-icon">&#128172;</div><div class="d-action-text"><h4>Social Media Post</h4><p>Content that sounds like you</p></div></div>
+              <div class="d-action"><div class="d-action-icon">&#128101;</div><div class="d-action-text"><h4>Customer Response</h4><p>Handle any message professionally</p></div></div>
+              <div class="d-action"><div class="d-action-icon">&#128221;</div><div class="d-action-text"><h4>Meeting Notes</h4><p>Messy notes into action items</p></div></div>
+              <div class="d-action"><div class="d-action-icon">&#128161;</div><div class="d-action-text"><h4>Brainstorm</h4><p>Strategy, names, plans</p></div></div>
+              <div class="d-action"><div class="d-action-icon">&#128269;</div><div class="d-action-text"><h4>Research Something</h4><p>Companies, markets, competitors</p></div></div>
+              <div class="d-action"><div class="d-action-icon">&#128203;</div><div class="d-action-text"><h4>Write a Proposal</h4><p>Pitch, quote, or project scope</p></div></div>
+            </div>
+            <div class="d-hint">Or just type anything below.</div>
+            <div class="d-inputbar">
+              <span>Ask me anything...</span>
+              <div class="d-send"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></div>
+            </div>
+          </div>
+          <!-- Integrations drawer open -->
+          <div class="d-integ">
+            <div class="d-integ-hdr"><h3>Integrations</h3><span>5 connected</span></div>
+            <div class="d-integ-label">Connected</div>
+            <div class="d-integ-card on"><div class="d-integ-icon" style="background:rgba(124,58,237,.06)">&#128187;</div><div style="flex:1;min-width:0"><span class="d-integ-name">Local Computer</span><span class="d-integ-desc">Files, apps, system</span></div><div class="d-integ-dot"></div></div>
+            <div class="d-integ-card on"><div class="d-integ-icon" style="background:rgba(66,133,244,.06)">&#9993;</div><div style="flex:1;min-width:0"><span class="d-integ-name">Google Workspace</span><span class="d-integ-desc">Gmail, Calendar, Drive</span></div><div class="d-integ-dot"></div></div>
+            <div class="d-integ-card on"><div class="d-integ-icon" style="background:rgba(36,41,47,.05)">&#128736;</div><div style="flex:1;min-width:0"><span class="d-integ-name">GitHub</span><span class="d-integ-desc">Repos, PRs, issues</span></div><div class="d-integ-dot"></div></div>
+            <div class="d-integ-card on"><div class="d-integ-icon" style="background:rgba(162,89,255,.06)">&#9998;</div><div style="flex:1;min-width:0"><span class="d-integ-name">Figma</span><span class="d-integ-desc">Design files</span></div><div class="d-integ-dot"></div></div>
+            <div class="d-integ-card on"><div class="d-integ-icon" style="background:rgba(0,0,0,.04)">&#63743;</div><div style="flex:1;min-width:0"><span class="d-integ-name">Apple</span><span class="d-integ-desc">Contacts, Reminders</span></div><div class="d-integ-dot"></div></div>
+            <div class="d-integ-label">Available</div>
+            <div class="d-integ-card"><div class="d-integ-icon" style="background:rgba(74,21,75,.06)">&#128172;</div><div style="flex:1;min-width:0"><span class="d-integ-name">Slack</span><span class="d-integ-desc">Messages &amp; channels</span></div><div class="d-integ-btn">Connect</div></div>
+            <div class="d-integ-card"><div class="d-integ-icon" style="background:rgba(99,91,255,.06)">&#128179;</div><div style="flex:1;min-width:0"><span class="d-integ-name">Stripe</span><span class="d-integ-desc">Payments &amp; billing</span></div><div class="d-integ-btn">Connect</div></div>
+            <div class="d-integ-card"><div class="d-integ-icon" style="background:rgba(0,161,224,.06)">&#9729;</div><div style="flex:1;min-width:0"><span class="d-integ-name">Salesforce</span><span class="d-integ-desc">CRM &amp; pipeline</span></div><div class="d-integ-btn">Connect</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- THE PROBLEM -->
+  <section class="problem" id="problem">
+    <div class="container">
+      <span class="section-label r">The problem</span>
+      <h2 class="section-title r d1">AI that talks but can't help</h2>
+      <p class="section-sub r d2">Most AI tools give you answers you have to copy somewhere else. You still end up switching between ten tabs doing everything yourself. Delt does the work for you.</p>
+
+      <div class="problem-grid">
+        <div class="pain-card r d1">
+          <div class="pain-icon" style="background: rgba(239,68,68,.08);">
+            <span>&#128203;</span>
+          </div>
+          <h3>Copy-paste everything</h3>
+          <p>You paste stuff into ChatGPT, copy the response back out. Emails, docs, messages &mdash; back and forth all day.</p>
+        </div>
+        <div class="pain-card r d2">
+          <div class="pain-icon" style="background: rgba(245,158,11,.08);">
+            <span>&#128274;</span>
+          </div>
+          <h3>Your data leaves your machine</h3>
+          <p>Cloud AI tools store your conversations on their servers. You don't know who sees your emails, code, or files.</p>
+        </div>
+        <div class="pain-card r d3">
+          <div class="pain-icon" style="background: rgba(99,102,241,.08);">
+            <span>&#128268;</span>
+          </div>
+          <h3>Nothing is connected</h3>
+          <p>Your AI can't check your email, look at your calendar, or touch your files. It just sits there waiting for you to feed it.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how" id="how">
+    <div class="container">
+      <span class="section-label r">How it works</span>
+      <h2 class="section-title r d1">Up and running in 3 minutes</h2>
+      <p class="section-sub r d2">Install it, sign in once, and you're done. Delt handles the technical stuff behind the scenes.</p>
+
+      <div class="steps">
+        <div class="step r d1">
+          <div class="step-num">1</div>
+          <div class="step-visual sv-download">
+            <div class="sv-icon"><span class="sv-arrow">&darr;</span></div>
+            <div class="sv-label">Run installer</div>
+          </div>
+          <h3>Install Delt</h3>
+          <p>Download the installer or paste one line. It sets everything up for you automatically.</p>
+        </div>
+        <div class="step r d2">
+          <div class="step-num">2</div>
+          <div class="step-visual">
+            <div class="sv-terminal">
+              <div class="sv-t-bar">
+                <div class="sv-t-dot" style="background:#EF4444"></div>
+                <div class="sv-t-dot" style="background:#F59E0B"></div>
+                <div class="sv-t-dot" style="background:#10B981"></div>
+              </div>
+              <div class="sv-t-line"><span class="g">&#10003;</span> <span class="w">Node.js v22.4</span></div>
+              <div class="sv-t-line"><span class="g">&#10003;</span> <span class="w">Claude Code installed</span></div>
+              <div class="sv-t-line"><span class="g">&#10003;</span> <span class="w">Delt server running</span></div>
+              <div class="sv-t-line"><span class="w">Open </span>localhost:38291<span class="cursor"></span></div>
+            </div>
+          </div>
+          <h3>It sets itself up</h3>
+          <p>Delt handles the behind-the-scenes setup. You just wait a minute.</p>
+        </div>
+        <div class="step r d3">
+          <div class="step-num">3</div>
+          <div class="step-visual sv-login">
+            <div class="sv-login-box">
+              <div class="sv-login-avatar">C</div>
+              <div class="sv-login-text">Sign in to Claude</div>
+            </div>
+            <div class="sv-login-btn">Continue with Google</div>
+          </div>
+          <h3>Sign in once</h3>
+          <p>Sign in to your Claude account (free or paid). Your credentials save locally &mdash; never again.</p>
+        </div>
+        <div class="step r d4">
+          <div class="step-num">4</div>
+          <div class="step-visual sv-ready">
+            <div class="sv-check">&#10003;</div>
+            <div class="sv-ready-label">You're in</div>
+          </div>
+          <h3>Start talking</h3>
+          <p>Delt opens in your browser. Ask it anything. Connect your tools. It runs on every login.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHAT IT CAN DO -->
+  <section class="what" id="what">
+    <div class="container">
+      <span class="section-label r">What it does</span>
+      <h2 class="section-title r d1">Just ask. Delt does it.</h2>
+      <p class="section-sub r d2">Delt doesn't just give you answers &mdash; it takes action. Here's what a few minutes looks like.</p>
+
+      <div class="examples">
+        <div class="example-card r d1">
+          <div class="example-head">
+            <div class="example-icon" style="background: rgba(239,68,68,.08);">&#9993;</div>
+            <div>
+              <h3>Email triage</h3>
+              <span>Gmail connected</span>
+            </div>
+          </div>
+          <div class="example-chat">
+            <div class="ex-msg ex-user">Check my email &mdash; anything urgent?</div>
+            <div class="ex-msg ex-ai">
+              You have 14 new emails. 2 need attention:<br><br>
+              1. <strong>Sarah Chen</strong> &mdash; contract revision, she's waiting on your sign-off<br>
+              2. <strong>AWS</strong> &mdash; billing alert, you're at 90% of your spend limit<br><br>
+              Want me to draft a reply to Sarah?
+              <span class="tool-badge">Gmail</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="example-card r d2">
+          <div class="example-head">
+            <div class="example-icon" style="background: rgba(16,185,129,.08);">&#128193;</div>
+            <div>
+              <h3>File work</h3>
+              <span>Local filesystem</span>
+            </div>
+          </div>
+          <div class="example-chat">
+            <div class="ex-msg ex-user">Find all invoices from March and total them up</div>
+            <div class="ex-msg ex-ai">
+              Found 8 invoice PDFs in ~/Documents/Invoices/2026-03/.<br><br>
+              Total: <strong>$14,280.00</strong><br>
+              Largest: Acme Corp ($4,200)<br>
+              Smallest: Stripe fees ($89)<br><br>
+              Want me to create a summary spreadsheet?
+              <span class="tool-badge">Files</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="example-card r d3">
+          <div class="example-head">
+            <div class="example-icon" style="background: rgba(124,58,237,.08);">&#128187;</div>
+            <div>
+              <h3>Code &amp; GitHub</h3>
+              <span>GitHub connected</span>
+            </div>
+          </div>
+          <div class="example-chat">
+            <div class="ex-msg ex-user">Review my open PRs and merge anything that's approved</div>
+            <div class="ex-msg ex-ai">
+              3 open PRs:<br>
+              &#10003; <strong>#142</strong> "Fix auth redirect" &mdash; approved, CI green. <strong>Merged.</strong><br>
+              &#10003; <strong>#139</strong> "Update deps" &mdash; approved. <strong>Merged.</strong><br>
+              &#9679; <strong>#145</strong> "New dashboard" &mdash; 1 pending review, holding.
+              <span class="tool-badge">GitHub</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="example-card r d4">
+          <div class="example-head">
+            <div class="example-icon" style="background: rgba(6,182,212,.08);">&#128197;</div>
+            <div>
+              <h3>Calendar &amp; scheduling</h3>
+              <span>Google Calendar connected</span>
+            </div>
+          </div>
+          <div class="example-chat">
+            <div class="ex-msg ex-user">What does my week look like? Block off Friday afternoon for deep work.</div>
+            <div class="ex-msg ex-ai">
+              This week: 12 meetings, heaviest on Tuesday (5 meetings).<br><br>
+              Wednesday afternoon and Thursday morning are open.<br><br>
+              <strong>Done</strong> &mdash; blocked "Deep Work" on Friday 1&ndash;5pm. Want me to decline any conflicts?
+              <span class="tool-badge">Calendar</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHY DELT -->
+  <section class="why" id="why">
+    <div class="why-bg"></div>
+    <div class="container">
+      <span class="section-label r">Why Delt</span>
+      <h2 class="section-title r d1">The AI assistant that<br>doesn't compromise</h2>
+      <p class="section-sub r d2">Most AI tools make you choose between power and privacy. Delt gives you both.</p>
+
+      <div class="why-grid">
+        <div class="why-card r d1">
+          <div class="why-icon">&#128274;</div>
+          <h3>100% local</h3>
+          <p>Delt runs on your machine. Your conversations, files, and credentials never touch a third-party server. Only API calls to Claude leave your computer &mdash; same as any AI tool.</p>
+        </div>
+        <div class="why-card r d2">
+          <div class="why-icon">&#128268;</div>
+          <h3>Actually connected</h3>
+          <p>Delt connects to Gmail, Calendar, GitHub, Figma, Stripe, your files, and more. One conversation, all your tools.</p>
+        </div>
+        <div class="why-card r d3">
+          <div class="why-icon">&#9889;</div>
+          <h3>Powered by Claude</h3>
+          <p>Powered by the same Claude AI behind Claude.ai. Use your free account or any paid plan. No extra charges or setup.</p>
+        </div>
+        <div class="why-card r d1">
+          <div class="why-icon">&#128736;</div>
+          <h3>Simple interface</h3>
+          <p>No command lines or coding. Delt opens in your browser like a regular app. Talk to it like a person.</p>
+        </div>
+        <div class="why-card r d2">
+          <div class="why-icon">&#128241;</div>
+          <h3>Works on your phone</h3>
+          <p>Scan a QR code and use Delt from your phone. Still runs on your computer &mdash; your phone is just a remote screen.</p>
+        </div>
+        <div class="why-card r d3">
+          <div class="why-icon">&#127968;</div>
+          <h3>Starts automatically</h3>
+          <p>Installs as a background service. Delt is running every time you log in. Open your browser, it's there.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INSTALL -->
+  <section class="install" id="install">
+    <div class="container">
+      <span class="section-label r">Get started</span>
+      <h2 class="section-title r d1">Install Delt in 3 minutes</h2>
+      <p class="section-sub r d2" style="margin: 0 auto 0;">Pick your install method. Both do the same thing &mdash; get Delt running on your machine.</p>
+
+      <div class="install-box r d3">
+
+        <div class="install-tabs">
+          <button class="install-tab active" onclick="switchTab('pkg')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+            Mac installer
+          </button>
+          <button class="install-tab" onclick="switchTab('terminal')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            Terminal
+          </button>
+        </div>
+
+        <!-- PKG tab -->
+        <div class="install-pane active" id="pane-pkg">
+          <div class="pkg-hero">
+            <div class="pkg-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </div>
+            <h4>Download for Mac</h4>
+            <p>macOS installer. Download, unzip, and run.</p>
+          </div>
+
+          <div class="pkg-steps">
+            <div class="pkg-step">
+              <div class="pkg-step-num">1</div>
+              <h5>Download &amp; open</h5>
+              <p>Download the .zip file. Unzip and double-click to run the installer.</p>
+            </div>
+            <div class="pkg-step">
+              <div class="pkg-step-num">2</div>
+              <h5>Sign in to Claude</h5>
+              <p>Delt opens and walks you through a one-time Claude sign-in.</p>
+            </div>
+            <div class="pkg-step">
+              <div class="pkg-step-num">3</div>
+              <h5>You're in</h5>
+              <p>Delt auto-starts on login. Open your browser, it's there.</p>
+            </div>
+          </div>
+
+          <div class="install-cta">
+            <a class="btn-download" href="/public/Delt-v2.0.0.zip" id="download-btn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download Delt-v2.0.0.zip
+            </a>
+            <span class="install-note">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              macOS 13+ &middot; ~25 MB
+            </span>
+          </div>
+        </div>
+
+        <!-- Terminal tab -->
+        <div class="install-pane" id="pane-terminal">
+          <div class="install-step">
+            <div class="install-step-num">1</div>
+            <div>
+              <h4>Open Terminal and run this</h4>
+              <p>This installs Node.js (if needed), Claude Code, and Delt. Takes about 2 minutes.</p>
+              <code id="install-cmd">curl -fsSL https://delt-site.fly.dev/install.sh | bash</code>
+            </div>
+          </div>
+          <div class="install-divider"></div>
+          <div class="install-step">
+            <div class="install-step-num">2</div>
+            <div>
+              <h4>Sign in to Claude</h4>
+              <p>Delt opens in your browser and walks you through signing in. Use your existing Claude account (free or paid) &mdash; or create one in 30 seconds.</p>
+            </div>
+          </div>
+          <div class="install-divider"></div>
+          <div class="install-step">
+            <div class="install-step-num">3</div>
+            <div>
+              <h4>Start talking</h4>
+              <p>That's it. Delt is running. Ask it anything, connect your tools, or just say hi. It auto-starts on every login.</p>
+            </div>
+          </div>
+
+          <div class="install-cta">
+            <button class="btn-primary" onclick="copyInstall()" id="copy-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy install command
+            </button>
+            <span class="install-note">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Mac &amp; Linux &middot; Requires macOS 13+ or Ubuntu 20+
+            </span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="faq" id="faq">
+    <div class="container">
+      <span class="section-label r">Questions</span>
+      <h2 class="section-title r d1">Before you ask</h2>
+
+      <div class="faq-list">
+        <div class="faq-item r d1">
+          <div class="faq-q">Is my data actually private?</div>
+          <div class="faq-a"><p>Yes. Delt runs entirely on your computer. Your files, credentials, and conversations are stored locally at ~/.delt/. The only thing that leaves your machine is the conversation text sent to Claude's API &mdash; same as using claude.ai directly. No analytics, no tracking, no third-party servers.</p></div>
+        </div>
+        <div class="faq-item r d2">
+          <div class="faq-q">Do I need a paid Claude account?</div>
+          <div class="faq-a"><p>No. The free Claude account works. You'll hit usage limits faster, but everything functions. Pro ($20/mo) or Max ($100-200/mo) plans give you more usage and faster responses.</p></div>
+        </div>
+        <div class="faq-item r d3">
+          <div class="faq-q">What's the difference between Delt and ChatGPT?</div>
+          <div class="faq-a"><p>ChatGPT gives you answers. Delt takes action &mdash; it reads your email, manages your calendar, edits your files, and handles tasks. It's like having an assistant, not just a search bar.</p></div>
+        </div>
+        <div class="faq-item r d1">
+          <div class="faq-q">How do integrations work?</div>
+          <div class="faq-a"><p>Click "connect" inside Delt and sign in to each service (like you would any app). That's it &mdash; Delt remembers the connection and can use it from then on.</p></div>
+        </div>
+        <div class="faq-item r d2">
+          <div class="faq-q">Does it work offline?</div>
+          <div class="faq-a"><p>The Delt interface works offline (it's a PWA). But Claude AI requires an internet connection to process your messages. Your integrations (Gmail, GitHub, etc.) also need internet to sync.</p></div>
+        </div>
+        <div class="faq-item r d3">
+          <div class="faq-q">Can I uninstall it?</div>
+          <div class="faq-a"><p>Yes. Run the uninstall script or just delete ~/Delt and ~/.delt. It removes the auto-start service too. Clean uninstall, nothing left behind.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <p>Delt by Neonotics &middot; Private AI for people who get things done.</p>
+    <div class="foot-badge">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      100% local &middot; Your data never leaves your computer
+    </div>
+  </footer>
+
+  <script>
+    // Scroll reveal
+    const ro = new IntersectionObserver((es) => {
+      es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('v'); ro.unobserve(e.target); }});
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.r').forEach(el => ro.observe(el));
+
+    // Nav scroll
+    window.addEventListener('scroll', () => {
+      document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 10);
+    });
+
+    // FAQ toggle
+    document.querySelectorAll('.faq-item').forEach(item => {
+      item.querySelector('.faq-q').addEventListener('click', () => {
+        item.classList.toggle('open');
+      });
+    });
+
+    // Copy install command
+    // Install tabs
+    function switchTab(tab) {
+      document.querySelectorAll('.install-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.install-pane').forEach(p => p.classList.remove('active'));
+      document.getElementById('pane-' + tab).classList.add('active');
+      event.currentTarget.classList.add('active');
+    }
+
+    function copyInstall() {
+      const cmd = 'curl -fsSL https://delt-site.fly.dev/install.sh | bash';
+      navigator.clipboard.writeText(cmd).then(() => {
+        const btn = document.getElementById('copy-btn');
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
+        setTimeout(() => {
+          btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy install command';
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>
