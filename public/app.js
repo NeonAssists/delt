@@ -214,9 +214,12 @@
       // Auto-resume session from QR handoff
       const params = new URLSearchParams(window.location.search);
       const resumeId = params.get("resumeSession");
+      // Clean auth tokens and session params from URL bar
+      if (params.has("token") || params.has("resumeSession")) {
+        window.history.replaceState({}, "", "/");
+      }
       if (resumeId) {
         resumeConversation(resumeId);
-        window.history.replaceState({}, "", "/");
       }
     };
 
@@ -247,11 +250,11 @@
   function handleServer(msg) {
     // Route btw-* and pane2-* to their handlers
     if (msg.type && msg.type.startsWith("btw-")) {
-      if (typeof handleBtwServer === "function") handleBtwServer(msg);
+      if (btwPane) btwPane.handleServer(msg);
       return;
     }
     if (msg.type && msg.type.startsWith("pane2-")) {
-      if (typeof handlePane2Server === "function") handlePane2Server(msg);
+      if (pane2Pane) pane2Pane.handleServer(msg);
       return;
     }
 
@@ -695,6 +698,223 @@
     setStatus("connected", "Ready");
   }
 
+  // ============================================
+  // Shared ChatPane factory — eliminates duplicated
+  // chat logic between Pane 2 and BTW
+  // ============================================
+  function createChatPane(opts) {
+    // opts:
+    //   messagesEl    - container for messages
+    //   inputEl       - textarea input
+    //   sendBtnEl     - send button
+    //   stopBtnEl     - stop button
+    //   welcomeEl     - welcome/empty element (optional, hidden on first msg)
+    //   scrollFn      - function to scroll down
+    //   wsPrefix      - "pane2" or "btw"
+    //   wsChatType    - ws type for sending chat, e.g. "pane2-chat" or "btw"
+    //   wsStopType    - ws type for stop, e.g. "pane2-stop" or "btw-stop"
+    //   addMsgFn      - function(role, text) to add a message, returns the element
+    //   showTypingFn  - function() to show typing indicator (optional)
+    //   hideTypingFn  - function() to hide typing indicator (optional)
+    //   showActivityFn - function(tool) to show tool activity (optional)
+    //   finalizeActivityFn - function() to finalize activities on done (optional)
+    //   getContentEl  - function(msgEl) to get the content element from a msg el
+    //   onDone        - callback on done (optional)
+    //   onSend        - callback on send (optional)
+    //   sessionIdKey  - if truthy, manages its own sessionId (string key for server msg)
+    //   hasQueue      - whether to support message queue
+
+    let paneBusy = false;
+    let paneCurrentEl = null;
+    let paneLastText = "";
+    let paneSessionId = null;
+    const paneQueue = [];
+
+    const prefix = opts.wsPrefix; // e.g. "pane2" or "btw"
+
+    function setPaneBusy(val) {
+      paneBusy = val;
+      if (opts.sendBtnEl) opts.sendBtnEl.classList.toggle("hidden", val);
+      if (opts.stopBtnEl) opts.stopBtnEl.classList.toggle("hidden", !val);
+      if (!val && opts.inputEl) opts.inputEl.focus();
+    }
+
+    function send(text) {
+      text = text || (opts.inputEl ? opts.inputEl.value.trim() : "");
+      if (!text || !connected) return;
+
+      // Hide welcome/empty
+      if (opts.welcomeEl) opts.welcomeEl.classList.add("hidden");
+
+      opts.addMsgFn("user", text);
+      if (opts.inputEl) { opts.inputEl.value = ""; opts.inputEl.style.height = "auto"; }
+      if (opts.sendBtnEl) opts.sendBtnEl.disabled = true;
+
+      if (paneBusy && opts.hasQueue) {
+        const note = document.createElement("div");
+        note.className = prefix === "btw" ? "btw-activity" : "queued-indicator";
+        note.innerHTML = prefix === "btw"
+          ? `<span class="btw-activity-dot active"></span><span class="btw-activity-label">Queued — will run next</span>`
+          : "Queued — will run next";
+        if (prefix !== "btw") note.textContent = "Queued — will run next";
+        opts.messagesEl.appendChild(note);
+        opts.scrollFn();
+        paneQueue.push({ text, noteEl: note });
+        return;
+      }
+
+      if (paneBusy) return; // no queue, just drop
+
+      dispatch(text);
+    }
+
+    function dispatch(text) {
+      const payload = { type: opts.wsChatType, message: text };
+      if (paneSessionId) payload.sessionId = paneSessionId;
+      ws.send(JSON.stringify(payload));
+      setPaneBusy(true);
+      paneCurrentEl = null;
+      paneLastText = "";
+      if (opts.finalizeActivityFn) opts.finalizeActivityFn(true); // reset state
+      if (opts.onSend) opts.onSend();
+      setTimeout(loadSidebarHistory, 300);
+    }
+
+    function processQueue() {
+      if (!paneQueue.length) return;
+      const next = paneQueue.shift();
+      if (next.noteEl) next.noteEl.remove();
+      dispatch(next.text);
+    }
+
+    function handleStream(data) {
+      if (!data || !data.type) return;
+
+      if (data.type === "assistant") {
+        if (opts.hideTypingFn) opts.hideTypingFn();
+        const content = data.message?.content;
+        if (!content || !Array.isArray(content)) return;
+
+        if (!paneCurrentEl) {
+          paneCurrentEl = opts.addMsgFn("assistant", "");
+        }
+
+        let text = "";
+        const tools = [];
+        for (const b of content) {
+          if (b.type === "text") text += b.text;
+          else if (b.type === "tool_use") tools.push(b);
+        }
+
+        if (text && text !== paneLastText) {
+          paneLastText = text;
+          const el = opts.getContentEl(paneCurrentEl);
+          if (el) {
+            // For BTW, preserve activity elements appended to the body
+            if (prefix === "btw") {
+              const activities = el.querySelectorAll(".btw-activity");
+              el.innerHTML = renderMd(text);
+              activities.forEach((a) => el.appendChild(a));
+            } else {
+              el.innerHTML = renderMd(text);
+            }
+          }
+          opts.scrollFn();
+        }
+
+        if (opts.showActivityFn) {
+          for (const t of tools) opts.showActivityFn(t, paneCurrentEl);
+        }
+      }
+
+      if (data.type === "result") {
+        if (opts.hideTypingFn) opts.hideTypingFn();
+        if (!paneCurrentEl && data.result) {
+          paneCurrentEl = opts.addMsgFn("assistant", "");
+          const el = opts.getContentEl(paneCurrentEl);
+          if (el) el.innerHTML = renderMd(data.result);
+        }
+        opts.scrollFn();
+      }
+    }
+
+    function handleServerMsg(msg) {
+      switch (msg.type) {
+        case prefix + "-session":
+          paneSessionId = msg.sessionId;
+          break;
+        case prefix + "-thinking":
+          if (opts.showTypingFn) opts.showTypingFn();
+          break;
+        case prefix + "-stream":
+          handleStream(msg.data);
+          break;
+        case prefix + "-done":
+          if (opts.hideTypingFn) opts.hideTypingFn();
+          if (opts.finalizeActivityFn) opts.finalizeActivityFn();
+          paneCurrentEl = null;
+          paneLastText = "";
+          setPaneBusy(false);
+          if (opts.onDone) opts.onDone();
+          loadSidebarHistory();
+          if (opts.hasQueue) processQueue();
+          break;
+        case prefix + "-stopped":
+          if (opts.hideTypingFn) opts.hideTypingFn();
+          setPaneBusy(false);
+          break;
+        case prefix + "-error":
+          if (opts.hideTypingFn) opts.hideTypingFn();
+          if (msg.message) {
+            const errEl = document.createElement("div");
+            errEl.className = "error-banner";
+            if (prefix === "btw") errEl.style.fontSize = "12px";
+            errEl.textContent = msg.message;
+            opts.messagesEl.appendChild(errEl);
+            opts.scrollFn();
+          }
+          setPaneBusy(false);
+          break;
+        case prefix + "-cleared":
+          opts.messagesEl.innerHTML = "";
+          if (opts.welcomeEl) {
+            opts.messagesEl.appendChild(opts.welcomeEl);
+            opts.welcomeEl.style.display = "";
+          }
+          paneCurrentEl = null;
+          paneLastText = "";
+          setPaneBusy(false);
+          break;
+      }
+    }
+
+    function reset() {
+      paneSessionId = null;
+      paneBusy = false;
+      paneCurrentEl = null;
+      paneLastText = "";
+      paneQueue.length = 0;
+    }
+
+    function stop() {
+      if (ws && paneBusy) ws.send(JSON.stringify({ type: opts.wsStopType }));
+    }
+
+    function getSessionId() { return paneSessionId; }
+    function isBusy() { return paneBusy; }
+
+    return {
+      send,
+      handleServer: handleServerMsg,
+      handleStream,
+      reset,
+      stop,
+      getSessionId,
+      isBusy,
+      setPaneBusy,
+    };
+  }
+
   // --- Pane 2 (second chat session) ---
   const pane2 = document.getElementById("pane-2");
   const pane2Close = document.getElementById("pane-2-close");
@@ -706,12 +926,60 @@
   const pane2ToolsGrid = document.getElementById("pane-2-tools-grid");
   const pane2ScrollAnchor = document.getElementById("pane-2-scroll-anchor");
 
-  let pane2SessionId = null;
-  let pane2Busy = false;
-  let pane2CurrentEl = null;
-  let pane2LastText = "";
-  const pane2SeenTools = new Set();
   let pane2Open = false;
+
+  function pane2ScrollDown() {
+    requestAnimationFrame(() => {
+      if (pane2ScrollAnchor) pane2ScrollAnchor.scrollIntoView({ behavior: "smooth", block: "end" });
+    });
+  }
+
+  function pane2AddMsg(role, text) {
+    if (pane2Welcome) pane2Welcome.classList.add("hidden");
+    const biz = config?.business || {};
+    const avatar = role === "user" ? "Y" : (biz.name || "A").charAt(0);
+    const sender = role === "user" ? "You" : (biz.name || "Assistant");
+    const el = document.createElement("div");
+    el.className = `message ${role}`;
+    if (role === "user") {
+      el.innerHTML = `
+        <div class="message-avatar" style="background:var(--accent);color:white;">${avatar}</div>
+        <div class="message-body">
+          <div class="message-sender">${sender}</div>
+          <div class="message-content" style="background:var(--accent-soft);padding:12px 18px;border-radius:var(--r-lg) var(--r-lg) 4px var(--r-lg);display:inline-block;">${escapeHtml(text)}</div>
+        </div>
+      `;
+    } else {
+      el.innerHTML = `
+        <div class="message-avatar" style="background:var(--accent-soft);color:var(--accent);font-weight:700;">${avatar}</div>
+        <div class="message-body">
+          <div class="message-sender">${sender}</div>
+          <div class="message-content"></div>
+        </div>
+      `;
+    }
+    pane2Messages.appendChild(el);
+    pane2ScrollDown();
+    return el;
+  }
+
+  const pane2Pane = createChatPane({
+    messagesEl: pane2Messages,
+    inputEl: pane2Input,
+    sendBtnEl: pane2Send,
+    stopBtnEl: pane2Stop,
+    welcomeEl: pane2Welcome,
+    scrollFn: pane2ScrollDown,
+    wsPrefix: "pane2",
+    wsChatType: "pane2-chat",
+    wsStopType: "pane2-stop",
+    addMsgFn: pane2AddMsg,
+    getContentEl: (msgEl) => msgEl ? msgEl.querySelector(".message-content") : null,
+    hasQueue: false,
+    onDone: () => {
+      if (pane2Input) pane2Input.focus();
+    },
+  });
 
   function openPane2() {
     if (pane2Open || !pane2) return;
@@ -721,11 +989,7 @@
     if (p1Header) p1Header.classList.remove("hidden");
     pane2Messages.innerHTML = "";
     pane2Welcome.classList.remove("hidden");
-    pane2SessionId = null;
-    pane2Busy = false;
-    pane2CurrentEl = null;
-    pane2LastText = "";
-    pane2SeenTools.clear();
+    pane2Pane.reset();
     // Render tools in pane 2
     if (config?.tools) {
       renderPane2Tools(config.tools);
@@ -744,8 +1008,7 @@
     pane2.classList.add("hidden");
     const p1Header = document.getElementById("pane-1-header");
     if (p1Header) p1Header.classList.add("hidden");
-    pane2SessionId = null;
-    pane2Busy = false;
+    pane2Pane.reset();
     input.focus();
   }
 
@@ -763,122 +1026,9 @@
     pane2ToolsGrid.querySelectorAll(".tool-card").forEach((card) => {
       card.addEventListener("click", () => {
         const tool = (config.tools || []).find((t) => t.id === card.dataset.toolId);
-        if (tool) sendPane2Message(tool.prompt);
+        if (tool) pane2Pane.send(tool.prompt);
       });
     });
-  }
-
-  function sendPane2Message(text) {
-    text = text || (pane2Input ? pane2Input.value.trim() : "");
-    if (!text || pane2Busy || !connected) return;
-    pane2Welcome.classList.add("hidden");
-
-    // Add user message to pane 2
-    const userEl = document.createElement("div");
-    userEl.className = "message user";
-    const biz = config?.business || {};
-    userEl.innerHTML = `
-      <div class="message-avatar" style="background:var(--accent);color:white;">Y</div>
-      <div class="message-body">
-        <div class="message-sender">You</div>
-        <div class="message-content" style="background:var(--accent-soft);padding:12px 18px;border-radius:var(--r-lg) var(--r-lg) 4px var(--r-lg);display:inline-block;">${escapeHtml(text)}</div>
-      </div>
-    `;
-    pane2Messages.appendChild(userEl);
-    if (pane2Input) { pane2Input.value = ""; pane2Input.style.height = "auto"; }
-    pane2Send.disabled = true;
-
-    // Send via WebSocket with pane2 tag
-    ws.send(JSON.stringify({ type: "pane2-chat", message: text, sessionId: pane2SessionId }));
-    pane2Busy = true;
-    pane2Send.classList.add("hidden");
-    pane2Stop.classList.remove("hidden");
-    pane2CurrentEl = null;
-    pane2LastText = "";
-    pane2SeenTools.clear();
-    pane2ScrollDown();
-  }
-
-  function pane2ScrollDown() {
-    requestAnimationFrame(() => {
-      if (pane2ScrollAnchor) pane2ScrollAnchor.scrollIntoView({ behavior: "smooth", block: "end" });
-    });
-  }
-
-  function handlePane2Server(msg) {
-    switch (msg.type) {
-      case "pane2-session":
-        pane2SessionId = msg.sessionId;
-        break;
-      case "pane2-thinking":
-        // Show typing dots in pane 2
-        break;
-      case "pane2-stream":
-        handlePane2Stream(msg.data);
-        break;
-      case "pane2-done":
-        pane2CurrentEl = null;
-        pane2LastText = "";
-        pane2Busy = false;
-        pane2Send.classList.remove("hidden");
-        pane2Stop.classList.add("hidden");
-        if (pane2Input) pane2Input.focus();
-        break;
-      case "pane2-error":
-        pane2Busy = false;
-        pane2Send.classList.remove("hidden");
-        pane2Stop.classList.add("hidden");
-        break;
-    }
-  }
-
-  function handlePane2Stream(data) {
-    if (!data || !data.type) return;
-    if (data.type === "assistant") {
-      const content = data.message?.content;
-      if (!content || !Array.isArray(content)) return;
-      if (!pane2CurrentEl) {
-        const biz = config?.business || {};
-        const avatar = (biz.name || "A").charAt(0);
-        pane2CurrentEl = document.createElement("div");
-        pane2CurrentEl.className = "message assistant";
-        pane2CurrentEl.innerHTML = `
-          <div class="message-avatar" style="background:var(--accent-soft);color:var(--accent);font-weight:700;">${avatar}</div>
-          <div class="message-body">
-            <div class="message-sender">${biz.name || "Assistant"}</div>
-            <div class="message-content"></div>
-          </div>
-        `;
-        pane2Messages.appendChild(pane2CurrentEl);
-      }
-      let text = "";
-      for (const b of content) {
-        if (b.type === "text") text += b.text;
-      }
-      if (text && text !== pane2LastText) {
-        pane2LastText = text;
-        const el = pane2CurrentEl.querySelector(".message-content");
-        if (el) el.innerHTML = renderMd(text);
-        pane2ScrollDown();
-      }
-    }
-    if (data.type === "result") {
-      if (!pane2CurrentEl && data.result) {
-        const biz = config?.business || {};
-        const avatar = (biz.name || "A").charAt(0);
-        pane2CurrentEl = document.createElement("div");
-        pane2CurrentEl.className = "message assistant";
-        pane2CurrentEl.innerHTML = `
-          <div class="message-avatar" style="background:var(--accent-soft);color:var(--accent);font-weight:700;">${avatar}</div>
-          <div class="message-body">
-            <div class="message-sender">${biz.name || "Assistant"}</div>
-            <div class="message-content">${renderMd(data.result)}</div>
-          </div>
-        `;
-        pane2Messages.appendChild(pane2CurrentEl);
-      }
-      pane2ScrollDown();
-    }
   }
 
   if (pane2Close) pane2Close.addEventListener("click", closePane2);
@@ -891,13 +1041,11 @@
       pane2Send.disabled = !pane2Input.value.trim();
     });
     pane2Input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendPane2Message(); }
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); pane2Pane.send(); }
     });
   }
-  if (pane2Send) pane2Send.addEventListener("click", () => sendPane2Message());
-  if (pane2Stop) pane2Stop.addEventListener("click", () => {
-    if (ws && pane2Busy) ws.send(JSON.stringify({ type: "pane2-stop" }));
-  });
+  if (pane2Send) pane2Send.addEventListener("click", () => pane2Pane.send());
+  if (pane2Stop) pane2Stop.addEventListener("click", () => pane2Pane.stop());
 
   function setBusy(val) {
     busy = val;
@@ -1060,22 +1208,18 @@
 
 
   // ============================================
-  // BTW — Side Panel
+  // BTW — Side Panel (uses shared ChatPane)
   // ============================================
   const btwFab = document.getElementById("btw-fab");
   const btwPanel = document.getElementById("btw-panel");
   const btwCloseBtn = document.getElementById("btw-close");
   const btwMessagesEl = document.getElementById("btw-messages");
   const btwEmpty = document.getElementById("btw-empty");
-  const btwInput = document.getElementById("btw-input");
+  const btwInputEl = document.getElementById("btw-input");
   const btwSendBtn = document.getElementById("btw-send");
   const btwStopBtn = document.getElementById("btw-stop");
 
-  let btwBusy = false;
-  let btwCurrentEl = null;
-  let btwLastText = "";
   let btwTypingEl = null;
-  const btwSeenTools = new Set();
   let btwActiveActivity = null;
 
   const chatColumn = document.querySelector(".chat-column");
@@ -1084,7 +1228,7 @@
     btwPanel.classList.remove("hidden");
     btwFab.classList.add("panel-open");
     if (chatColumn) chatColumn.classList.add("multitask-open");
-    btwInput.focus();
+    btwInputEl.focus();
   }
 
   function closeBtw() {
@@ -1129,9 +1273,12 @@
     if (btwTypingEl) { btwTypingEl.remove(); btwTypingEl = null; }
   }
 
-  function btwShowActivity(tool) {
-    if (btwSeenTools.has(tool.id)) return;
-    btwSeenTools.add(tool.id);
+  // Shared seenTools set for BTW activity dedup — cleared on each new dispatch
+  const btwSeenToolsSet = new Set();
+
+  function btwShowActivity(tool, currentEl) {
+    if (btwSeenToolsSet.has(tool.id)) return;
+    btwSeenToolsSet.add(tool.id);
     const d = descTool(tool);
     if (btwActiveActivity) {
       const dot = btwActiveActivity.querySelector(".btw-activity-dot");
@@ -1144,8 +1291,8 @@
       <span class="btw-activity-label">${escapeHtml(d.label)}</span>
       ${d.detail ? `<span class="btw-activity-detail">${escapeHtml(d.detail)}</span>` : ""}
     `;
-    if (btwCurrentEl) {
-      btwCurrentEl.querySelector(".btw-msg-body").appendChild(el);
+    if (currentEl) {
+      currentEl.querySelector(".btw-msg-body").appendChild(el);
     } else {
       btwMessagesEl.appendChild(el);
     }
@@ -1153,161 +1300,54 @@
     btwScrollDown();
   }
 
-  function btwFinalizeActivities() {
-    if (btwActiveActivity) {
-      const dot = btwActiveActivity.querySelector(".btw-activity-dot");
-      if (dot) dot.className = "btw-activity-dot done";
-      btwActiveActivity = null;
+  function btwFinalizeActivities(resetOnly) {
+    if (!resetOnly) {
+      if (btwActiveActivity) {
+        const dot = btwActiveActivity.querySelector(".btw-activity-dot");
+        if (dot) dot.className = "btw-activity-dot done";
+      }
     }
-  }
-
-  function btwSetBusy(val) {
-    btwBusy = val;
-    if (btwSendBtn) btwSendBtn.classList.toggle("hidden", val);
-    if (btwStopBtn) btwStopBtn.classList.toggle("hidden", !val);
-    if (!val && btwInput) btwInput.focus();
+    btwActiveActivity = null;
   }
 
   function btwUpdateSend() {
-    if (btwSendBtn) btwSendBtn.disabled = !btwInput.value.trim();
+    if (btwSendBtn) btwSendBtn.disabled = !btwInputEl.value.trim();
   }
 
-  const btwQueue = [];
+  const btwPaneOpts = {
+    messagesEl: btwMessagesEl,
+    inputEl: btwInputEl,
+    sendBtnEl: btwSendBtn,
+    stopBtnEl: btwStopBtn,
+    welcomeEl: btwEmpty,
+    scrollFn: btwScrollDown,
+    wsPrefix: "btw",
+    wsChatType: "btw",
+    wsStopType: "btw-stop",
+    addMsgFn: btwAddMsg,
+    showTypingFn: btwShowTyping,
+    hideTypingFn: btwHideTyping,
+    showActivityFn: btwShowActivity,
+    finalizeActivityFn: btwFinalizeActivities,
+    getContentEl: (msgEl) => msgEl ? msgEl.querySelector(".btw-msg-body") : null,
+    hasQueue: true,
+    onSend: () => { btwSeenToolsSet.clear(); },
+  };
 
-  function btwSend() {
-    const text = btwInput.value.trim();
-    if (!text || !connected) return;
-    btwAddMsg("user", text);
-    btwInput.value = "";
-    btwInput.style.height = "auto";
-    btwUpdateSend();
+  const btwPane = createChatPane(btwPaneOpts);
 
-    if (btwBusy) {
-      // Queue it — show indicator
-      const note = document.createElement("div");
-      note.className = "btw-activity";
-      note.innerHTML = `<span class="btw-activity-dot active"></span><span class="btw-activity-label">Queued — will run next</span>`;
-      btwMessagesEl.appendChild(note);
-      btwScrollDown();
-      btwQueue.push({ text, noteEl: note });
-      return;
-    }
-
-    btwDispatch(text);
-  }
-
-  function btwDispatch(text) {
-    ws.send(JSON.stringify({ type: "btw", message: text }));
-    btwSetBusy(true);
-    btwCurrentEl = null;
-    btwLastText = "";
-    btwSeenTools.clear();
-    btwActiveActivity = null;
-    setTimeout(loadSidebarHistory, 300);
-  }
-
-  function btwProcessQueue() {
-    if (!btwQueue.length) return;
-    const next = btwQueue.shift();
-    if (next.noteEl) next.noteEl.remove();
-    btwDispatch(next.text);
-  }
-
-  function handleBtwServer(msg) {
-    switch (msg.type) {
-      case "btw-thinking":
-        btwShowTyping();
-        break;
-      case "btw-stream":
-        handleBtwStream(msg.data);
-        break;
-      case "btw-done":
-        btwHideTyping();
-        btwFinalizeActivities();
-        btwCurrentEl = null;
-        btwLastText = "";
-        btwSetBusy(false);
-        loadSidebarHistory();
-        btwProcessQueue();
-        break;
-      case "btw-stopped":
-        btwHideTyping();
-        btwSetBusy(false);
-        break;
-      case "btw-error":
-        btwHideTyping();
-        const errEl = document.createElement("div");
-        errEl.className = "error-banner";
-        errEl.style.fontSize = "12px";
-        errEl.textContent = msg.message;
-        btwMessagesEl.appendChild(errEl);
-        btwScrollDown();
-        btwSetBusy(false);
-        break;
-      case "btw-cleared":
-        btwMessagesEl.innerHTML = "";
-        if (btwEmpty) { btwMessagesEl.appendChild(btwEmpty); btwEmpty.style.display = ""; }
-        btwCurrentEl = null;
-        btwLastText = "";
-        btwSetBusy(false);
-        break;
-    }
-  }
-
-  function handleBtwStream(data) {
-    if (!data || !data.type) return;
-    if (data.type === "assistant") {
-      btwHideTyping();
-      const content = data.message?.content;
-      if (!content || !Array.isArray(content)) return;
-      if (!btwCurrentEl) {
-        btwCurrentEl = btwAddMsg("assistant", "");
-      }
-      let text = "";
-      const tools = [];
-      for (const b of content) {
-        if (b.type === "text") text += b.text;
-        else if (b.type === "tool_use") tools.push(b);
-      }
-      if (text && text !== btwLastText) {
-        btwLastText = text;
-        const body = btwCurrentEl.querySelector(".btw-msg-body");
-        if (body) {
-          const activities = body.querySelectorAll(".btw-activity");
-          body.innerHTML = renderMd(text);
-          activities.forEach((a) => body.appendChild(a));
-        }
-        btwScrollDown();
-      }
-      for (const t of tools) btwShowActivity(t);
-    }
-    if (data.type === "result") {
-      btwHideTyping();
-      if (!btwCurrentEl && data.result) {
-        btwCurrentEl = btwAddMsg("assistant", "");
-        const body = btwCurrentEl.querySelector(".btw-msg-body");
-        if (body) body.innerHTML = renderMd(data.result);
-      }
-      btwScrollDown();
-    }
-  }
-
-  if (btwInput) {
-    btwInput.addEventListener("input", () => {
-      btwInput.style.height = "auto";
-      btwInput.style.height = Math.min(btwInput.scrollHeight, 120) + "px";
+  if (btwInputEl) {
+    btwInputEl.addEventListener("input", () => {
+      btwInputEl.style.height = "auto";
+      btwInputEl.style.height = Math.min(btwInputEl.scrollHeight, 120) + "px";
       btwUpdateSend();
     });
-    btwInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); btwSend(); }
+    btwInputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); btwPane.send(); }
     });
   }
-  if (btwSendBtn) btwSendBtn.addEventListener("click", btwSend);
-  if (btwStopBtn) btwStopBtn.addEventListener("click", () => {
-    if (ws && btwBusy) ws.send(JSON.stringify({ type: "btw-stop" }));
-  });
-
-  // BTW and pane2 routing is handled directly in handleServer (no monkey-patch needed)
+  if (btwSendBtn) btwSendBtn.addEventListener("click", () => btwPane.send());
+  if (btwStopBtn) btwStopBtn.addEventListener("click", () => btwPane.stop());
 
   // --- Integrations Panel ---
   const integrationsBtn = document.getElementById("integrations-btn");

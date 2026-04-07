@@ -14,23 +14,42 @@ const nodemailer = require("nodemailer");
 const QRCode = require("qrcode");
 
 // ============================================
-// Local HTTPS — auto-generated self-signed cert
+// Extracted modules
+// ============================================
+const cryptoLib = require("./lib/crypto");
+const tunnel = require("./lib/tunnel");
+const logging = require("./lib/logging");
+const memoryLib = require("./lib/memory");
+const { rateLimit } = require("./lib/rate-limit");
+const mcpLib = require("./lib/mcp");
+
+// ============================================
+// Local HTTPS — opt-in only (DELT_HTTPS=1)
+// Localhost is already a secure context in Chrome/Edge/Firefox,
+// so PWA install works without HTTPS. Self-signed certs show
+// scary "connection not private" warnings — only enable when
+// the user explicitly opts in (e.g. custom domain, mkcert certs).
 // ============================================
 const CERT_DIR = path.join(os.homedir(), ".delt", "certs");
 const CERT_PATH = path.join(CERT_DIR, "localhost.crt");
 const KEY_PATH = path.join(CERT_DIR, "localhost.key");
 
-function ensureCerts() {
+function loadCerts() {
+  // Only load/generate certs if explicitly requested
+  if (!process.env.DELT_HTTPS) return null;
+
+  // Use existing certs (e.g. from mkcert) if present
   if (fs.existsSync(CERT_PATH) && fs.existsSync(KEY_PATH)) {
     try {
       const certPem = fs.readFileSync(CERT_PATH, "utf-8");
       if (certPem.includes("-----BEGIN CERTIFICATE-----")) {
+        console.log("  [HTTPS] Using certs from ~/.delt/certs/");
         return { cert: certPem, key: fs.readFileSync(KEY_PATH, "utf-8") };
       }
     } catch {}
   }
 
-  // Generate self-signed cert via openssl (available on macOS and most Linux)
+  // Auto-generate self-signed cert as last resort
   try {
     fs.mkdirSync(CERT_DIR, { recursive: true, mode: 0o700 });
     execSyncImport(
@@ -42,6 +61,7 @@ function ensureCerts() {
     fs.chmodSync(KEY_PATH, 0o600);
     fs.chmodSync(CERT_PATH, 0o644);
     console.log("  [HTTPS] Generated self-signed certificate");
+    console.log("  [HTTPS] Tip: Use mkcert for trusted local certs without browser warnings");
     return { cert: fs.readFileSync(CERT_PATH, "utf-8"), key: fs.readFileSync(KEY_PATH, "utf-8") };
   } catch (e) {
     console.warn("  [HTTPS] Could not generate cert — falling back to HTTP:", e.message);
@@ -49,7 +69,7 @@ function ensureCerts() {
   }
 }
 
-const tlsCerts = ensureCerts();
+const tlsCerts = loadCerts();
 
 // ============================================
 // Stability helpers
@@ -110,110 +130,14 @@ try {
   oauthClients = JSON.parse(fs.readFileSync(oauthClientsPath, "utf-8"));
 } catch {}
 
-// Encryption using a random key persisted in a restricted file
-const keyFilePath = path.join(os.homedir(), ".delt", "encryption.key");
-
-function getEncryptionKey() {
-  const keyDir = path.dirname(keyFilePath);
-  if (!fs.existsSync(keyDir)) fs.mkdirSync(keyDir, { recursive: true, mode: 0o700 });
-
-  try {
-    const buf = fs.readFileSync(keyFilePath);
-    if (buf.length === 32) return buf;
-  } catch {}
-
-  // First run — generate and store a random 256-bit key
-  const key = crypto.randomBytes(32);
-  fs.writeFileSync(keyFilePath, key, { mode: 0o600 });
-  return key;
-}
-
-function encryptData(data) {
-  const key = getEncryptionKey();
-  const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-  let encrypted = cipher.update(JSON.stringify(data), "utf8", "hex");
-  encrypted += cipher.final("hex");
-  const tag = cipher.getAuthTag().toString("hex");
-  return { iv: iv.toString("hex"), tag, data: encrypted };
-}
-
-function decryptData(encObj) {
-  const key = getEncryptionKey();
-  const iv = Buffer.from(encObj.iv, "hex");
-  const tag = Buffer.from(encObj.tag, "hex");
-  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-  decipher.setAuthTag(tag);
-  let decrypted = decipher.update(encObj.data, "hex", "utf8");
-  decrypted += decipher.final("utf8");
-  return JSON.parse(decrypted);
-}
-
-// Legacy key for migration from deterministic encryption
-function getLegacyEncryptionKey() {
-  const raw = `delt:${os.hostname()}:${os.userInfo().username}:${__dirname}`;
-  return crypto.createHash("sha256").update(raw).digest();
-}
-
-function decryptWithLegacyKey(encObj) {
-  const key = getLegacyEncryptionKey();
-  const iv = Buffer.from(encObj.iv, "hex");
-  const tag = Buffer.from(encObj.tag, "hex");
-  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-  decipher.setAuthTag(tag);
-  let decrypted = decipher.update(encObj.data, "hex", "utf8");
-  decrypted += decipher.final("utf8");
-  return JSON.parse(decrypted);
-}
-
-function loadCredentials() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(credentialsPath, "utf-8"));
-    try {
-      return decryptData(raw);
-    } catch {
-      // Try legacy key and migrate if successful
-      const creds = decryptWithLegacyKey(raw);
-      console.log("[Security] Migrating credentials to new encryption key");
-      saveCredentials(creds);
-      return creds;
-    }
-  } catch {
-    return {};
-  }
-}
-
-function saveCredentials(creds) {
-  const encrypted = encryptData(creds);
-  const tmpFile = credentialsPath + ".tmp." + process.pid;
-  fs.writeFileSync(tmpFile, JSON.stringify(encrypted), { mode: 0o600 });
-  fs.renameSync(tmpFile, credentialsPath);
-}
-
-function getCredential(integrationId) {
-  const creds = loadCredentials();
-  return creds[integrationId] || null;
-}
-
-function saveCredential(integrationId, data) {
-  const creds = loadCredentials();
-  creds[integrationId] = { ...data, enabled: true, updatedAt: new Date().toISOString() };
-  saveCredentials(creds);
-  invalidateMcpCache();
-  writeIntegrationsMd();
-}
-
-function deleteCredential(integrationId) {
-  const creds = loadCredentials();
-  delete creds[integrationId];
-  saveCredentials(creds);
-  invalidateMcpCache();
-  writeIntegrationsMd();
+// Harden sensitive file permissions on startup
+for (const f of [credentialsPath, oauthClientsPath]) {
+  try { fs.chmodSync(f, 0o600); } catch {}
 }
 
 // Write persistent integrations.md so Claude always knows what's connected
 function writeIntegrationsMd() {
-  const creds = loadCredentials();
+  const creds = cryptoLib.loadCredentials();
   const connected = integrationsRegistry.integrations.filter(
     (i) => creds[i.id] && creds[i.id].enabled
   );
@@ -243,113 +167,46 @@ function writeIntegrationsMd() {
   }
 }
 
-// Build MCP config from enabled integrations
-function buildMcpConfig() {
-  const creds = loadCredentials();
-  const mcpServers = {};
+// ============================================
+// Wire up extracted modules
+// ============================================
 
-  for (const integration of integrationsRegistry.integrations) {
-    const cred = creds[integration.id];
-    if (!cred || !cred.enabled) continue;
+// Initialize MCP module (needs loadCredentials, integrations, oauthClients)
+mcpLib.init({
+  loadCredentials: () => cryptoLib.loadCredentials(),
+  integrationsRegistry,
+  oauthClients,
+});
 
-    for (const [serverName, serverDef] of Object.entries(integration.mcpServers || {})) {
-      const env = {};
-      for (const [envVar, credKey] of Object.entries(serverDef.envMapping || {})) {
-        if (credKey.startsWith("_static:")) {
-          env[envVar] = credKey.slice(8);
-        } else {
-          const val = cred[credKey];
-          if (val) env[envVar] = val;
-        }
-      }
+// Initialize crypto module (needs callbacks from mcp + writeIntegrationsMd)
+cryptoLib.init({
+  credentialsPath,
+  integrationsRegistry,
+  invalidateMcpCache: () => mcpLib.invalidateMcpCache(),
+  writeIntegrationsMd,
+});
 
-      // Google Workspace: inject env vars per MCP server
-      if (integration.id === "google-workspace") {
-        const clientConfig = oauthClients["google-workspace"];
-        if (serverName === "google-calendar") {
-          env.CREDENTIALS_PATH = path.join(os.homedir(), ".delt", "google", "credentials.json");
-        } else if (serverName === "google-sheets" && clientConfig) {
-          env.GOOGLE_SHEETS_CLIENT_ID = clientConfig.clientId;
-          env.GOOGLE_SHEETS_CLIENT_SECRET = clientConfig.clientSecret;
-          if (cred.refreshToken) env.GOOGLE_SHEETS_REFRESH_TOKEN = cred.refreshToken;
-          if (cred.accessToken) env.GOOGLE_SHEETS_ACCESS_TOKEN = cred.accessToken;
-          env.TOKEN_PATH = path.join(os.homedir(), ".delt", "google", "token.json");
-        }
-      }
+// Initialize logging module (needs project base dir)
+logging.initDirs(__dirname);
 
-      // Local access: append directory args based on permission level
-      if (integration.id === "local-access") {
-        const dirs = cred.level === "full"
-          ? [os.homedir()]
-          : (cred.directories || []).filter(Boolean);
-        if (!dirs.length) continue; // skip if no directories configured
-        mcpServers[serverName] = {
-          command: serverDef.command,
-          args: [...(serverDef.args || []), ...dirs],
-          env,
-        };
-      } else {
-        mcpServers[serverName] = {
-          command: serverDef.command,
-          args: serverDef.args || [],
-          env,
-        };
-      }
-    }
+// Initialize memory module (needs project base dir + todayStr from logging)
+memoryLib.initDirs(__dirname, logging.todayStr);
+
+// Re-export frequently used functions for local convenience
+const { loadCredentials, saveCredentials, getCredential, saveCredential, deleteCredential } = cryptoLib;
+const { isLocalRequest, parseCookies, validateMobileToken, createMobileSession, validateMobileSession, generateMobileToken, startTunnel, stopTunnel, cleanupTunnel, getTunnelState, touchTunnelActivity, mobileAuthPage, MOBILE_SESSION_TTL } = tunnel;
+const { todayStr, weekStr, logConversation, readLogFile, safeName, escapeHtml, listLogFiles } = logging;
+const { safeRead, safeWrite, getStateContext, persistExchange, flushMemoryExtraction, buildSystemPrefix, appendSessionLog } = memoryLib;
+const { buildMcpConfig, writeMcpConfigFile, invalidateMcpCache, buildClaudeArgs } = mcpLib;
+
+// Safe env whitelist for remote Claude sessions — no secrets leaked
+const SAFE_ENV_KEYS = ["PATH", "HOME", "USER", "SHELL", "LANG", "LC_ALL", "TERM", "TMPDIR", "NODE_ENV"];
+function buildSafeEnv() {
+  const env = {};
+  for (const key of SAFE_ENV_KEYS) {
+    if (process.env[key] !== undefined) env[key] = process.env[key];
   }
-
-  return { mcpServers };
-}
-
-// Write MCP config — cached, only rewrites when integrations change
-const mcpConfigDir = path.join(os.homedir(), ".delt", "mcp");
-if (!fs.existsSync(mcpConfigDir)) fs.mkdirSync(mcpConfigDir, { recursive: true, mode: 0o700 });
-
-let _mcpConfigCache = null;
-let _mcpConfigPath = null;
-
-function invalidateMcpCache() {
-  _mcpConfigCache = null;
-}
-
-function writeMcpConfigFile() {
-  const mcpConfig = buildMcpConfig();
-  const serverCount = Object.keys(mcpConfig.mcpServers).length;
-  if (serverCount === 0) { _mcpConfigPath = null; return null; }
-
-  // Only rewrite if config changed
-  const json = JSON.stringify(mcpConfig, null, 2);
-  if (json === _mcpConfigCache) return _mcpConfigPath;
-
-  _mcpConfigCache = json;
-  _mcpConfigPath = path.join(mcpConfigDir, `mcp-${process.pid}.json`);
-  fs.writeFileSync(_mcpConfigPath, json, { mode: 0o600 });
-  return _mcpConfigPath;
-}
-
-// Build Claude args with MCP config injected
-function buildClaudeArgs(fullMessage) {
-  const args = [
-    "-p", fullMessage,
-    "--output-format", "stream-json",
-    "--verbose",
-    "--include-partial-messages",
-  ];
-
-  const mcpFile = writeMcpConfigFile();
-  if (mcpFile) {
-    args.push("--mcp-config", mcpFile);
-    // Auto-allow all MCP tools — user already authorized via Delt's integrations UI
-    const mcpConfig = buildMcpConfig();
-    const allowedTools = Object.keys(mcpConfig.mcpServers)
-      .map(name => `mcp__${name}__*`)
-      .join(",");
-    if (allowedTools) {
-      args.push("--allowedTools", allowedTools);
-    }
-  }
-
-  return args;
+  return env;
 }
 
 // ============================================
@@ -409,315 +266,60 @@ function attachStreamHandlers(proc, ws, { streamType, errorType, onText, onCost,
 // Pending OAuth states (CSRF protection)
 const pendingOAuthStates = new Map();
 
-// ============================================
-// Mobile QR Handoff — Cloudflare Tunnel
-// ============================================
-let tunnelProcess = null;
-let tunnelUrl = null;
-let tunnelStarting = false;
-
-// One-time tokens for mobile auth: token -> { createdAt, consumed }
-const mobileTokens = new Map();
-
-// Authenticated mobile sessions: cookieValue -> { createdAt }
-const mobileSessions = new Map();
-
-const MOBILE_TOKEN_TTL = 5 * 60 * 1000; // 5 minutes
-const MOBILE_SESSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
-
-function generateMobileToken(activeSessionId) {
-  const token = uuidv4();
-  mobileTokens.set(token, { createdAt: Date.now(), consumed: false, sessionId: activeSessionId || null });
-  setTimeout(() => mobileTokens.delete(token), MOBILE_TOKEN_TTL);
-  return token;
-}
-
-function validateMobileToken(token) {
-  const entry = mobileTokens.get(token);
-  if (!entry) return false;
-  if (entry.consumed) return false;
-  if (Date.now() - entry.createdAt > MOBILE_TOKEN_TTL) {
-    mobileTokens.delete(token);
-    return false;
-  }
-  entry.consumed = true;
-  mobileTokens.delete(token);
-  return { valid: true, sessionId: entry.sessionId };
-}
-
-function createMobileSession() {
-  const sessionValue = uuidv4();
-  mobileSessions.set(sessionValue, { createdAt: Date.now() });
-  // Expire session after TTL
-  setTimeout(() => mobileSessions.delete(sessionValue), MOBILE_SESSION_TTL);
-  return sessionValue;
-}
-
-function validateMobileSession(cookieValue) {
-  const session = mobileSessions.get(cookieValue);
-  if (!session) return false;
-  if (Date.now() - session.createdAt > MOBILE_SESSION_TTL) {
-    mobileSessions.delete(cookieValue);
-    return false;
-  }
-  return true;
-}
-
-function parseCookies(req) {
-  const cookies = {};
-  const header = req.headers.cookie;
-  if (!header) return cookies;
-  header.split(";").forEach((c) => {
-    const [name, ...rest] = c.trim().split("=");
-    cookies[name] = rest.join("=");
-  });
-  return cookies;
-}
-
-function isLocalRequest(req) {
-  const ip = req.ip || req.connection?.remoteAddress || "";
-  return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1" || ip === "localhost";
-}
-
-function startTunnel() {
-  return new Promise((resolve, reject) => {
-    if (tunnelProcess && tunnelUrl) {
-      return resolve(tunnelUrl);
-    }
-    if (tunnelStarting) {
-      return reject(new Error("Tunnel is already starting"));
-    }
-
-    tunnelStarting = true;
-    let resolved = false;
-
-    const proc = spawn("cloudflared", ["tunnel", "--url", `http://localhost:${PORT}`], {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    proc.on("error", (err) => {
-      tunnelStarting = false;
-      if (!resolved) {
-        resolved = true;
-        if (err.code === "ENOENT") {
-          reject(new Error("cloudflared not installed. Install it with: brew install cloudflared"));
-        } else {
-          reject(err);
-        }
-      }
-    });
-
-    // cloudflared prints the URL to stderr
-    let stderrBuffer = "";
-    proc.stderr.on("data", (chunk) => {
-      stderrBuffer += chunk.toString();
-      // Look for the trycloudflare.com URL
-      const match = stderrBuffer.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
-      if (match && !resolved) {
-        resolved = true;
-        tunnelUrl = match[0];
-        tunnelProcess = proc;
-        tunnelStarting = false;
-        console.log("[Mobile] Tunnel ready:", tunnelUrl);
-        resolve(tunnelUrl);
-      }
-    });
-
-    proc.on("close", (code) => {
-      tunnelStarting = false;
-      tunnelProcess = null;
-      tunnelUrl = null;
-      if (!resolved) {
-        resolved = true;
-        reject(new Error(`cloudflared exited with code ${code}`));
-      }
-    });
-
-    // Timeout after 30 seconds
-    setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        tunnelStarting = false;
-        if (proc && !proc.killed) proc.kill("SIGTERM");
-        reject(new Error("Tunnel startup timed out after 30 seconds"));
-      }
-    }, 30000);
-  });
-}
-
-function stopTunnel() {
-  if (tunnelProcess) {
-    tunnelProcess.kill("SIGTERM");
-    tunnelProcess = null;
-    tunnelUrl = null;
-    console.log("[Mobile] Tunnel stopped");
-  }
-}
-
-// Cleanup tunnel on shutdown
-function cleanupTunnel() {
-  stopTunnel();
-}
-
+// Register tunnel cleanup on shutdown
 process.on("SIGTERM", cleanupTunnel);
 process.on("SIGINT", () => {
   cleanupTunnel();
   process.exit(0);
 });
 
-// ============================================
-// Logging infrastructure
-// ============================================
-const logsDir = path.join(__dirname, "logs");
-const dailyDir = path.join(logsDir, "daily");
-const weeklyDir = path.join(logsDir, "weekly");
-const userDir = path.join(logsDir, "users");
+const { dailyDir, weeklyDir, userDir } = logging.getDirs();
 
-for (const d of [logsDir, dailyDir, weeklyDir, userDir]) {
-  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
-}
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-}
-
-function weekStr(date) {
-  const d = new Date(date);
-  const jan1 = new Date(d.getFullYear(), 0, 1);
-  const week = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
-  return `${d.getFullYear()}-W${String(week).padStart(2, "0")}`;
-}
-
-// Serialize writes per file path to prevent race conditions losing entries
-const logWriteQueues = new Map();
-
-function appendLog(filePath, entry) {
-  const prev = logWriteQueues.get(filePath) || Promise.resolve();
-  const next = prev.then(() => {
-    let existing = [];
-    try {
-      existing = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-    } catch (e) {
-      if (e.code !== "ENOENT") console.error("Log read error:", filePath, e.message);
-    }
-    existing.push(entry);
-    const tmpFile = filePath + ".tmp." + process.pid;
-    try {
-      fs.writeFileSync(tmpFile, JSON.stringify(existing, null, 2));
-      fs.renameSync(tmpFile, filePath);
-    } catch (e) {
-      console.error("Log write error:", filePath, e.message);
-      try { fs.unlinkSync(tmpFile); } catch {}
-    }
-  }).catch((e) => console.error("Log queue error:", filePath, e.message));
-  logWriteQueues.set(filePath, next);
-}
-
-function logConversation({ sessionId, user, userMessage, assistantMessage, toolsUsed, costUsd, durationMs }) {
-  const now = new Date();
-  const entry = {
-    id: uuidv4(),
-    sessionId,
-    timestamp: now.toISOString(),
-    user: user || config.business?.owner || "User",
-    userMessage: userMessage || "",
-    assistantMessage: (assistantMessage || "").slice(0, 500),
-    toolsUsed: toolsUsed || [],
-    costUsd: costUsd || 0,
-    durationMs: durationMs || 0,
-  };
-
-  // Daily log
-  const dailyFile = path.join(dailyDir, `${todayStr()}.json`);
-  appendLog(dailyFile, entry);
-
-  // Weekly log
-  const weeklyFile = path.join(weeklyDir, `${weekStr(now)}.json`);
-  appendLog(weeklyFile, entry);
-
-  // User log
-  const userName = (entry.user || "unknown").toLowerCase().replace(/[^a-z0-9]/g, "-");
-  const userFile = path.join(userDir, `${userName}.json`);
-  appendLog(userFile, entry);
-
-  return entry;
-}
-
-function readLogFile(filePath) {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  } catch {
-    return [];
-  }
-}
-
-// Sanitize path params to prevent directory traversal
-function safeName(param) {
-  return String(param || "").replace(/[^a-zA-Z0-9._-]/g, "");
-}
-
-// Escape HTML to prevent reflected XSS
-function escapeHtml(str) {
-  return String(str || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function listLogFiles(dir) {
-  try {
-    return fs.readdirSync(dir)
-      .filter((f) => f.endsWith(".json"))
-      .sort()
-      .reverse();
-  } catch {
-    return [];
-  }
-}
-
-// ============================================
-// Rate limiting — per-IP, in-memory
-// ============================================
-const rateLimitBuckets = new Map(); // ip -> { count, resetAt }
-
-function rateLimit(windowMs, maxHits) {
-  return (req, res, next) => {
-    // Local requests get a much higher limit
-    if (isLocalRequest(req)) return next();
-
-    const ip = req.ip || req.connection?.remoteAddress || "unknown";
-    const now = Date.now();
-    let bucket = rateLimitBuckets.get(ip);
-
-    if (!bucket || now > bucket.resetAt) {
-      bucket = { count: 0, resetAt: now + windowMs };
-      rateLimitBuckets.set(ip, bucket);
-    }
-
-    bucket.count++;
-    if (bucket.count > maxHits) {
-      return res.status(429).json({ error: "Too many requests. Try again later." });
-    }
-    next();
-  };
-}
-
-// Prune stale buckets every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, bucket] of rateLimitBuckets) {
-    if (now > bucket.resetAt) rateLimitBuckets.delete(ip);
-  }
-}, 300000);
+const PORT = process.env.PORT || 3939;
 
 const app = express();
+app.disable("x-powered-by");
 const server = tlsCerts
   ? https.createServer({ cert: tlsCerts.cert, key: tlsCerts.key }, app)
   : http.createServer(app);
 const useHttps = !!tlsCerts;
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ noServer: true });
+
+// WebSocket auth — reject unauthenticated remote connections
+server.on("upgrade", (req, socket, head) => {
+  const ip = req.socket.remoteAddress || "";
+  const isLocal = ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+
+  if (isLocal) {
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+    return;
+  }
+
+  // Remote: require valid mobile session cookie
+  const cookies = {};
+  const cookieHeader = req.headers.cookie;
+  if (cookieHeader) {
+    cookieHeader.split(";").forEach((c) => {
+      const [name, ...rest] = c.trim().split("=");
+      cookies[name] = rest.join("=");
+    });
+  }
+
+  if (cookies["delt-mobile-auth"] && validateMobileSession(cookies["delt-mobile-auth"])) {
+    // Origin check — block cross-site WebSocket hijacking
+    const origin = req.headers.origin;
+    const { tunnelUrl } = getTunnelState();
+    if (origin && tunnelUrl && !origin.startsWith(tunnelUrl)) {
+      socket.destroy();
+      return;
+    }
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+    return;
+  }
+
+  // Reject silently — no fingerprint
+  socket.destroy();
+});
 
 // File uploads — use ~/.delt/uploads instead of world-readable /tmp
 const uploadDir = path.join(os.homedir(), ".delt", "uploads");
@@ -747,11 +349,8 @@ app.use((req, res, next) => {
   // Local requests bypass auth entirely
   if (isLocalRequest(req)) return next();
 
-  // Allow the mobile auth endpoint itself
+  // Only allow the mobile auth entry point — everything else requires session
   if (req.path === "/mobile/auth") return next();
-
-  // Allow manifest/sw/icons for PWA install
-  if (req.path === "/manifest.json" || req.path === "/sw.js" || req.path.startsWith("/icon-")) return next();
 
   // Check for valid mobile session cookie
   const cookies = parseCookies(req);
@@ -774,12 +373,41 @@ app.use((req, res, next) => {
     return next();
   }
 
-  // No valid auth — block access
-  res.status(401).json({ error: "Unauthorized. Scan the QR code from Delt to access." });
+  // No valid auth — silent 404, no fingerprint
+  res.status(404).end();
+});
+
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader("Content-Security-Policy",
+    "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' ws: wss:; img-src 'self' data:;");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.removeHeader("Server");
+  next();
 });
 
 app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json());
+
+// CSRF protection — reject cross-origin mutating requests from remote clients
+app.use((req, res, next) => {
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return next();
+  if (isLocalRequest(req)) return next();
+  const origin = req.get("origin");
+  const host = req.get("host");
+  if (origin && host && new URL(origin).host !== host) {
+    return res.status(403).json({ error: "Cross-origin request blocked" });
+  }
+  next();
+});
+
+// Local-only guard — rejects remote requests silently
+function localOnly(req, res, next) {
+  if (!isLocalRequest(req)) return res.status(404).end();
+  next();
+}
 
 // Health check — detect if claude CLI is installed and authed
 const execSync = execSyncImport;
@@ -811,7 +439,7 @@ app.get("/config", (req, res) => {
 });
 
 // Open terminal with install command (cross-platform)
-app.post("/run-install", (req, res) => {
+app.post("/run-install", localOnly, (req, res) => {
   try {
     const platform = process.platform;
     if (platform === "darwin") {
@@ -842,7 +470,7 @@ app.post("/run-install", (req, res) => {
 });
 
 // Open terminal with claude auth (cross-platform)
-app.post("/run-auth", (req, res) => {
+app.post("/run-auth", localOnly, (req, res) => {
   try {
     const platform = process.platform;
     if (platform === "darwin") {
@@ -876,7 +504,7 @@ app.post("/run-auth", (req, res) => {
 // ============================================
 
 // Kick off background install of Claude Code CLI
-app.post("/install-silent", (req, res) => {
+app.post("/install-silent", localOnly, (req, res) => {
   // Already installed — skip
   if (installState.status === "installed") {
     return res.json({ ok: true, status: "installed" });
@@ -955,7 +583,7 @@ app.post("/install-silent", (req, res) => {
 });
 
 // Poll install progress
-app.get("/install-status", (req, res) => {
+app.get("/install-status", localOnly, (req, res) => {
   res.json({
     status: installState.status,
     error: installState.error,
@@ -964,7 +592,7 @@ app.get("/install-status", (req, res) => {
 });
 
 // Confirm CLI install and return auth URL for user to complete OAuth
-app.post("/auth-silent", (req, res) => {
+app.post("/auth-silent", localOnly, (req, res) => {
   try {
     const version = execSync("claude --version 2>/dev/null", { timeout: 5000 }).toString().trim();
     res.json({
@@ -982,7 +610,7 @@ app.post("/auth-silent", (req, res) => {
 });
 
 // Onboarding — save user name + bot name, mark setup complete
-app.post("/setup", (req, res) => {
+app.post("/setup", localOnly, (req, res) => {
   const { ownerName, botName } = req.body;
   if (!ownerName || !botName) {
     return res.status(400).json({ error: "ownerName and botName required" });
@@ -1042,7 +670,7 @@ app.get("/integrations", (req, res) => {
 
 // Auto-detect credentials from local CLI tools (gh, gcloud, etc.)
 // Tries to grab an existing token so the user doesn't have to create one manually
-app.post("/integrations/:id/auto-detect", async (req, res) => {
+app.post("/integrations/:id/auto-detect", localOnly, async (req, res) => {
   const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
   if (!integration) return res.status(404).json({ error: "Integration not found" });
 
@@ -1076,7 +704,7 @@ app.post("/integrations/:id/auto-detect", async (req, res) => {
 });
 
 // Connect an integration (token-based, multi-field, or enable)
-app.post("/integrations/:id/connect", (req, res) => {
+app.post("/integrations/:id/connect", localOnly, (req, res) => {
   const { token, baseUrl, fields } = req.body;
   const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
   if (!integration) return res.status(404).json({ error: "Integration not found" });
@@ -1111,7 +739,7 @@ app.post("/integrations/:id/connect", (req, res) => {
 });
 
 // Disconnect an integration
-app.post("/integrations/:id/disconnect", (req, res) => {
+app.post("/integrations/:id/disconnect", localOnly, (req, res) => {
   deleteCredential(req.params.id);
   res.json({ ok: true, connected: false });
 });
@@ -1136,7 +764,7 @@ app.get("/integrations/mcp-status", (req, res) => {
 });
 
 // Test an MCP server can spawn
-app.post("/integrations/:id/test", rateLimit(60000, 5), async (req, res) => {
+app.post("/integrations/:id/test", localOnly, rateLimit(60000, 5), async (req, res) => {
   const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
   if (!integration) return res.status(404).json({ error: "Not found" });
 
@@ -1378,10 +1006,10 @@ app.post("/upload", rateLimit(60000, 20), upload.array("files", 10), (req, res) 
 // ============================================
 
 // Start tunnel, generate token + QR
-app.post("/mobile/start", rateLimit(60000, 3), async (req, res) => {
+app.post("/mobile/start", localOnly, rateLimit(60000, 3), async (req, res) => {
   try {
     const activeSessionId = req.body?.sessionId || null;
-    const url = await startTunnel();
+    const url = await startTunnel(PORT);
     const token = generateMobileToken(activeSessionId);
     const authUrl = `${url}/mobile/auth?token=${token}`;
 
@@ -1406,16 +1034,16 @@ app.post("/mobile/start", rateLimit(60000, 3), async (req, res) => {
 });
 
 // Tunnel status
-app.get("/mobile/status", (req, res) => {
+app.get("/mobile/status", localOnly, (req, res) => {
   res.json({
-    running: !!tunnelProcess,
-    url: tunnelUrl || null,
-    starting: tunnelStarting,
+    running: !!getTunnelState().tunnelProcess,
+    url: getTunnelState().tunnelUrl || null,
+    starting: getTunnelState().tunnelStarting,
   });
 });
 
 // Stop tunnel
-app.post("/mobile/stop", (req, res) => {
+app.post("/mobile/stop", localOnly, (req, res) => {
   stopTunnel();
   res.json({ ok: true, status: "stopped" });
 });
@@ -1424,42 +1052,28 @@ app.post("/mobile/stop", (req, res) => {
 app.get("/mobile/auth", rateLimit(60000, 10), (req, res) => {
   const token = req.query.token;
   if (!token) {
-    return res.status(400).send(mobileAuthPage("Missing token", false));
+    return res.status(404).end();
   }
 
   const result = validateMobileToken(token);
   if (result && result.valid) {
     const sessionValue = createMobileSession();
+    const isSecure = req.protocol === "https" || req.get("x-forwarded-proto") === "https";
     res.cookie("delt-mobile-auth", sessionValue, {
       maxAge: MOBILE_SESSION_TTL,
       httpOnly: true,
-      sameSite: "none",
-      secure: true,
+      sameSite: isSecure ? "none" : "lax",
+      secure: isSecure,
       path: "/",
     });
     // Redirect to app with session ID so phone auto-resumes computer's conversation
     const redirectUrl = result.sessionId ? `/?resumeSession=${result.sessionId}` : "/";
-    return res.send(`<!DOCTYPE html><html><head>
-      <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-      <meta name="apple-mobile-web-app-capable" content="yes">
-      <style>body{display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:-apple-system,system-ui,sans-serif;background:#f7f7f8;}
-      .box{text-align:center;}.icon{font-size:48px;margin-bottom:12px;}.title{font-size:20px;font-weight:600;margin-bottom:6px;}.sub{color:#888;font-size:14px;}</style>
-      </head><body><div class="box"><div class="icon">&#10003;</div><div class="title">Connected to Delt</div><div class="sub">Opening...</div></div>
-      <script>setTimeout(function(){window.location.href="${redirectUrl}";},800);</script></body></html>`);
+    // Use HTTP 302 redirect — more reliable cookie propagation than JS redirect
+    return res.redirect(redirectUrl);
   }
 
-  return res.status(401).send(mobileAuthPage("Token expired or invalid. Get a new QR code from Delt.", false));
+  return res.status(404).end();
 });
-
-function mobileAuthPage(message, success) {
-  const color = success ? "#10B981" : "#EF4444";
-  const icon = success ? "&#10003;" : "&#10007;";
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>body{font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f7f7f8;}
-.card{text-align:center;padding:40px;}.icon{font-size:48px;color:${color};margin-bottom:16px;}
-h2{margin:0 0 8px;color:#18182B;font-size:20px;}p{color:#5C5C72;font-size:15px;}</style>
-</head><body><div class="card"><div class="icon">${icon}</div><h2>${success ? "Connected!" : "Access Denied"}</h2><p>${message}</p></div></body></html>`;
-}
 
 // ============================================
 // Log API endpoints
@@ -1692,181 +1306,16 @@ app.get("/history/:sessionId", (req, res) => {
 });
 
 // ============================================
-// Persistent Memory — all markdown, all local
+// Memory API (backed by lib/memory.js)
 // ============================================
-const memoryDir = path.join(__dirname, "memory");
-const memDailyDir = path.join(memoryDir, "daily");
-const memSessionsDir = path.join(memoryDir, "sessions");
+const { userMemFile, memSessionsDir, memDailyDir } = memoryLib.getPaths();
 
-for (const d of [memoryDir, memDailyDir, memSessionsDir]) {
-  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
-}
-
-const userMemFile = path.join(memoryDir, "user.md");
-const stateFile = path.join(memoryDir, "state.md");
-const memMetaFile = path.join(memoryDir, "meta.json");
-
-function safeRead(fp) {
-  try { return fs.readFileSync(fp, "utf-8"); } catch { return ""; }
-}
-
-function safeWrite(fp, content) {
-  const tmp = fp + ".tmp." + process.pid;
-  try {
-    fs.writeFileSync(tmp, content);
-    fs.renameSync(tmp, fp);
-  } catch (e) {
-    console.error("Write error:", fp, e.message);
-    try { fs.unlinkSync(tmp); } catch {}
-  }
-}
-
-function readMemMeta() {
-  try { return JSON.parse(fs.readFileSync(memMetaFile, "utf-8")); }
-  catch { return { lastExtraction: null, exchangeCount: 0 }; }
-}
-
-function writeMemMeta(meta) {
-  try { fs.writeFileSync(memMetaFile, JSON.stringify(meta, null, 2)); } catch {}
-}
-
-// --- Full session logs (not truncated) ---
-function appendSessionLog(sid, role, text) {
-  if (!sid || !text) return;
-  const fp = path.join(memSessionsDir, `${sid}.md`);
-  const ts = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  const label = role === "user" ? "**You**" : "**Assistant**";
-  const entry = `\n### ${label} — ${ts}\n${text}\n`;
-  try { fs.appendFileSync(fp, entry); } catch {}
-}
-
-// --- Daily log ---
-function appendDailyLog(userMsg, assistantMsg, tag) {
-  const fp = path.join(memDailyDir, `${todayStr()}.md`);
-  const ts = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-  const tagStr = tag && tag !== "chat" ? ` [${tag}]` : "";
-  let entry = `\n---\n#### ${ts}${tagStr}\n`;
-  if (userMsg) entry += `**You:** ${userMsg.slice(0, 500)}\n\n`;
-  if (assistantMsg) entry += `**Assistant:** ${assistantMsg.slice(0, 800)}\n`;
-  try { fs.appendFileSync(fp, entry); } catch {}
-}
-
-// --- State file — what's in progress ---
-function updateState(userMsg, assistantMsg) {
-  // Lightweight: just keep last 5 exchanges as "recent context"
-  let state;
-  try { state = JSON.parse(safeRead(stateFile) || "{}"); } catch { state = {}; }
-
-  if (!state.recentExchanges) state.recentExchanges = [];
-  state.recentExchanges.push({
-    ts: new Date().toISOString(),
-    user: (userMsg || "").slice(0, 400),
-    assistant: (assistantMsg || "").slice(0, 600),
-  });
-  // Keep last 5
-  if (state.recentExchanges.length > 5) {
-    state.recentExchanges = state.recentExchanges.slice(-5);
-  }
-  state.lastActive = new Date().toISOString();
-  safeWrite(stateFile, JSON.stringify(state, null, 2));
-}
-
-function getStateContext() {
-  let state;
-  try { state = JSON.parse(safeRead(stateFile) || "{}"); } catch { return ""; }
-  if (!state.recentExchanges || !state.recentExchanges.length) return "";
-
-  let ctx = "## Recent conversation (last session)\n";
-  for (const ex of state.recentExchanges) {
-    if (ex.user) ctx += `**You:** ${ex.user}\n`;
-    if (ex.assistant) ctx += `**Assistant:** ${ex.assistant}\n\n`;
-  }
-  return ctx;
-}
-
-// --- Background memory extraction (debounced — 30s cooldown) ---
-let memExtracting = false;
-let memLastExtractedAt = 0;
-const MEM_EXTRACT_COOLDOWN_MS = 30000;
-
-function extractMemories(userMsg, assistantMsg) {
-  if (memExtracting || (!userMsg && !assistantMsg)) return;
-
-  const now = Date.now();
-  const current = safeRead(userMemFile);
-  const meta = readMemMeta();
-  meta.exchangeCount = (meta.exchangeCount || 0) + 1;
-  writeMemMeta(meta);
-
-  // Cooldown: skip if extracted within last 30 seconds (unless first ever)
-  if (current.length > 0 && (now - memLastExtractedAt) < MEM_EXTRACT_COOLDOWN_MS) return;
-
-  memExtracting = true;
-  memLastExtractedAt = now;
-
-  const prompt = `You are a memory system. Update this user profile from the latest exchange.
-
-CURRENT:
-${current || "(empty — first session)"}
-
-EXCHANGE:
-User: ${(userMsg || "").slice(0, 1500)}
-Assistant: ${(assistantMsg || "").slice(0, 1500)}
-
-Rules: extract lasting facts (preferences, names, projects, decisions, style). One line per fact under ## headers. Replace stale facts. Skip code/temp details. Output ONLY the updated file:`;
-
-  const proc = spawn("claude", ["-p", prompt, "--output-format", "text"], {
-    cwd: os.homedir(), env: { ...process.env },
-  });
-
-  let output = "";
-  proc.stdout.on("data", (c) => { output += c.toString(); });
-  proc.on("close", () => {
-    memExtracting = false;
-    const t = output.trim();
-    if (t.length > 10) {
-      safeWrite(userMemFile, t);
-      const m = readMemMeta();
-      m.lastExtraction = new Date().toISOString();
-      writeMemMeta(m);
-    }
-  });
-  proc.on("error", () => { memExtracting = false; });
-}
-
-// --- Save everything after each exchange ---
-// Accumulate exchanges for end-of-session memory extraction
-let pendingMemoryExchanges = [];
-
-function persistExchange(sid, userMsg, assistantMsg, tag) {
-  appendSessionLog(sid, "user", userMsg);
-  appendSessionLog(sid, "assistant", assistantMsg);
-  appendDailyLog(userMsg, assistantMsg, tag);
-  updateState(userMsg, assistantMsg);
-  // Queue for batch extraction on session close instead of per-message
-  if (userMsg || assistantMsg) {
-    pendingMemoryExchanges.push({ user: userMsg, assistant: assistantMsg });
-  }
-}
-
-// Called when a WebSocket disconnects — extract memories from the full session
-function flushMemoryExtraction() {
-  if (!pendingMemoryExchanges.length) return;
-  // Combine all exchanges into one extraction call
-  const combined = pendingMemoryExchanges
-    .map((e) => `User: ${(e.user || "").slice(0, 500)}\nAssistant: ${(e.assistant || "").slice(0, 500)}`)
-    .join("\n---\n");
-  pendingMemoryExchanges = [];
-  extractMemories(combined, "");
-}
-
-// --- Memory API ---
 app.get("/memory", (req, res) => {
   res.json({
     user: safeRead(userMemFile),
     state: getStateContext(),
     daily: safeRead(path.join(memDailyDir, `${todayStr()}.md`)),
-    meta: readMemMeta(),
+    meta: memoryLib.readMemMeta(),
   });
 });
 
@@ -1952,36 +1401,10 @@ When the user asks you to do something with a connected service (send email, che
 `;
 }
 
-function buildSystemPrefix() {
-  const ctx = config.business?.context || "";
-  const userMem = safeRead(userMemFile);
-  const stateMem = getStateContext();
-  const dailyMem = safeRead(path.join(memDailyDir, `${todayStr()}.md`));
-  const integrationsCtx = buildIntegrationsContext();
+wss.on("connection", (ws, req) => {
+  const _remoteAddr = req?.socket?.remoteAddress || "";
+  const isRemote = !(_remoteAddr === "127.0.0.1" || _remoteAddr === "::1" || _remoteAddr === "::ffff:127.0.0.1");
 
-  let prefix = "";
-  if (ctx) prefix += `[CONTEXT: ${ctx}]\n\n`;
-
-  if (integrationsCtx) prefix += integrationsCtx;
-
-  if (userMem) {
-    prefix += `[WHO THIS USER IS — persistent memory from all prior sessions]\n${userMem}\n[END USER MEMORY]\n\n`;
-  }
-
-  if (stateMem) {
-    prefix += `[WHERE WE LEFT OFF — last few exchanges from the previous session]\n${stateMem}\n[END STATE]\n\n`;
-  }
-
-  if (dailyMem) {
-    // Only inject last ~2000 chars of today's log to keep context manageable
-    const tail = dailyMem.length > 2000 ? "...\n" + dailyMem.slice(-2000) : dailyMem;
-    prefix += `[TODAY'S LOG — what's happened so far today]\n${tail}\n[END TODAY]\n\n`;
-  }
-
-  return prefix;
-}
-
-wss.on("connection", (ws) => {
   let sessionId = null;
 
   ws.on("close", () => unregisterClient(ws));
@@ -2013,6 +1436,9 @@ wss.on("connection", (ws) => {
     } catch {
       return;
     }
+
+    // Keep tunnel alive while remote clients are active
+    if (isRemote) touchTunnelActivity();
 
     if (msg.type === "chat") {
       if (currentProcess) {
@@ -2064,10 +1490,10 @@ wss.on("connection", (ws) => {
 
       // Prepend business context on first message
       const fullMessage = isFirst
-        ? buildSystemPrefix() + message
+        ? buildSystemPrefix(config, buildIntegrationsContext) + message
         : message;
 
-      const args = buildClaudeArgs(fullMessage);
+      const args = buildClaudeArgs(fullMessage, { isRemote });
 
       if (isFirst) {
         args.push("--session-id", sessionId);
@@ -2077,7 +1503,7 @@ wss.on("connection", (ws) => {
 
       const proc = spawn("claude", args, {
         cwd: os.homedir(),
-        env: { ...process.env },
+        env: isRemote ? buildSafeEnv() : { ...process.env },
       });
 
       currentProcess = proc;
@@ -2105,7 +1531,7 @@ wss.on("connection", (ws) => {
               toolsUsed: [...new Set(currentToolsUsed)],
               costUsd: currentCost,
               durationMs: Date.now() - exchangeStart,
-            });
+            }, config);
           } catch (e) { console.error("Log write failed:", e.message); }
           try {
             saveConversationMeta(sessionId, currentUserMessage, currentAssistantText);
@@ -2207,7 +1633,7 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
 
       const fullMessage = btwPrefix + message;
 
-      const args = buildClaudeArgs(fullMessage);
+      const args = buildClaudeArgs(fullMessage, { isRemote });
 
       if (isFirst) {
         args.push("--session-id", btwSessionId);
@@ -2217,7 +1643,7 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
 
       const proc = spawn("claude", args, {
         cwd: os.homedir(),
-        env: { ...process.env },
+        env: isRemote ? buildSafeEnv() : { ...process.env },
       });
 
       btwProcess = proc;
@@ -2276,17 +1702,17 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
       const isFirst = pane2MessageCount === 0;
       pane2MessageCount++;
 
-      const prefix = isFirst ? buildSystemPrefix() : "";
+      const prefix = isFirst ? buildSystemPrefix(config, buildIntegrationsContext) : "";
       const fullMessage = prefix + message;
 
-      const args = buildClaudeArgs(fullMessage);
+      const args = buildClaudeArgs(fullMessage, { isRemote });
       if (isFirst) {
         args.push("--session-id", pane2SessionId);
       } else {
         args.push("--resume", pane2SessionId);
       }
 
-      const proc = spawn("claude", args, { cwd: os.homedir(), env: { ...process.env } });
+      const proc = spawn("claude", args, { cwd: os.homedir(), env: isRemote ? buildSafeEnv() : { ...process.env } });
       pane2Process = proc;
       spawnWithTimeout(proc, ws, "pane2-error");
       safeSend(ws, { type: "pane2-session", sessionId: pane2SessionId });
@@ -2317,7 +1743,7 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
     if (pane2Process) { pane2Process.kill("SIGINT"); pane2Process = null; }
     if (sessionId) sessions.delete(sessionId);
     // Batch extract memories from the entire session
-    flushMemoryExtraction();
+    flushMemoryExtraction(config);
   });
 });
 
@@ -2568,8 +1994,6 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err);
 });
-
-const PORT = process.env.PORT || 3939;
 
 server.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
