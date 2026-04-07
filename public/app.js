@@ -93,6 +93,34 @@
   const welcomeSubtitle = document.getElementById("welcome-subtitle");
   const logoMark = document.getElementById("logo-mark");
   const logoText = document.getElementById("logo-text");
+  const integrationChipsEl = document.getElementById("integration-chips");
+
+  // --- Integration status chips (header bar) ---
+  // Short names for chips to save space
+  const CHIP_NAMES = {
+    "google-workspace": "Google",
+    "local-access": "Local",
+    "apple": "Apple",
+    "microsoft-365": "M365",
+    "custom-api": "API",
+  };
+
+  async function refreshIntegrationChips() {
+    if (!integrationChipsEl) return;
+    try {
+      const res = await fetch("/integrations");
+      const data = await res.json();
+      const connected = (data.integrations || []).filter(i => i.connected);
+      if (!connected.length) {
+        integrationChipsEl.innerHTML = "";
+        return;
+      }
+      integrationChipsEl.innerHTML = connected.map(i => {
+        const label = CHIP_NAMES[i.id] || i.name;
+        return `<span class="integration-chip" title="${i.name}: Connected"><span class="chip-dot"></span>${label}</span>`;
+      }).join("");
+    } catch {}
+  }
 
   // --- Load config ---
   async function loadConfig() {
@@ -1448,6 +1476,8 @@
     } catch {
       integrationsBody.innerHTML = '<div class="integrations-loading">Failed to load integrations.</div>';
     }
+    // Always refresh header chips after integration list changes
+    refreshIntegrationChips();
   }
 
   function renderIntegrations(integrations) {
@@ -1495,6 +1525,7 @@
           <div class="integration-info">
             <span class="integration-name">${escapeHtml(i.name)}</span>
             <span class="integration-desc">${escapeHtml(i.description)}</span>
+            ${i.tryIt ? `<span class="integration-tryit">Try: &ldquo;${escapeHtml(i.tryIt)}&rdquo;</span>` : ""}
           </div>
           <div class="integration-actions">
             <span class="integration-status"><span class="integration-status-dot"></span> ${i.authType === "local-access" ? (i.accessLevel === "full" ? "Full Access" : "Limited Access") : "Connected"}</span>
@@ -1513,7 +1544,8 @@
           <span class="integration-desc">${escapeHtml(i.description)}</span>
         </div>
         <div class="integration-actions">
-          <button class="integration-connect-btn" data-action="connect" data-id="${i.id}" data-auth="${i.authType}">${i.authType === "oauth2" ? "Sign in" : i.authType === "enable" ? "Enable" : i.authType === "local-access" ? "Configure" : "Connect"}</button>
+          ${i.setupTime ? `<span class="integration-setup-time">${escapeHtml(i.setupTime)}</span>` : ""}
+          <button class="integration-connect-btn" data-action="connect" data-id="${i.id}" data-auth="${i.authType}">${i.authType === "oauth2" ? (i.oauthConfigured ? "Sign in" : "Set up") : i.authType === "enable" ? "Enable" : i.authType === "local-access" ? "Configure" : "Connect"}</button>
         </div>
       </div>`;
   }
@@ -1540,12 +1572,20 @@
         btn.textContent = "Enabling...";
         btn.disabled = true;
         try {
-          await fetch(`/integrations/${id}/connect`, {
+          const enableRes = await fetch(`/integrations/${id}/connect`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({}),
           });
-          loadIntegrations();
+          const enableData = await enableRes.json();
+          if (enableData.warning) {
+            btn.textContent = "Enabled (check setup)";
+            btn.style.background = "#f59e0b";
+            btn.title = enableData.warning;
+            setTimeout(() => loadIntegrations(), 2000);
+          } else {
+            loadIntegrations();
+          }
         } catch { btn.textContent = "Failed"; btn.disabled = false; }
       } else if (authType === "local-access") {
         showLocalAccessWizard(id, btn.closest(".integration-card"));
@@ -1571,20 +1611,57 @@
     }
   }
 
-  // OAuth flow — open popup
+  // OAuth flow — open popup + poll fallback for PWA/desktop
   async function startOAuthFlow(integrationId) {
     try {
       const res = await fetch(`/integrations/${integrationId}/auth-url`);
       const data = await res.json();
       if (data.url) {
         const popup = window.open(data.url, "oauth", "width=500,height=700,left=200,top=100");
-        // Listen for completion message from popup
+
+        // If popup was blocked, open in current tab as fallback
+        if (!popup || popup.closed) {
+          window.location.href = data.url;
+          return;
+        }
+
+        let resolved = false;
+        function done() {
+          if (resolved) return;
+          resolved = true;
+          loadIntegrations();
+        }
+
+        // Method 1: postMessage from popup (works in regular browser)
         window.addEventListener("message", function handler(e) {
           if (e.data?.type === "oauth-complete" && e.data?.integrationId === integrationId) {
             window.removeEventListener("message", handler);
-            loadIntegrations();
+            done();
           }
         });
+
+        // Method 2: poll server for connection status (works in PWA/desktop where window.opener is null)
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          if (resolved) { clearInterval(poll); return; }
+          attempts++;
+          try {
+            const check = await fetch("/integrations");
+            const status = await check.json();
+            const integration = (status.integrations || []).find((i) => i.id === integrationId);
+            if (integration && integration.connected) {
+              clearInterval(poll);
+              done();
+            }
+          } catch {}
+          if (attempts > 120) { // 2 min timeout
+            clearInterval(poll);
+          }
+        }, 2000);
+      } else if (data.needsSetup) {
+        // OAuth not configured — show setup wizard on the card
+        const card = document.querySelector(`.integration-card[data-id="${integrationId}"]`);
+        if (card) showOAuthSetupWizard(integrationId, card);
       } else {
         alert(data.error || "OAuth not available for this service yet.");
       }
@@ -1593,47 +1670,72 @@
     }
   }
 
-  // Google OAuth — runs MCP auth in Terminal, then polls for completion
-  async function startGoogleAuth(integrationId, btn) {
-    btn.textContent = "Opening sign-in...";
-    btn.disabled = true;
-    try {
-      const res = await fetch(`/integrations/${integrationId}/google-auth`, { method: "POST" });
-      const data = await res.json();
-      if (data.needsKeys) {
-        btn.textContent = "Setup needed";
-        btn.disabled = false;
-        alert(data.error);
-        return;
-      }
-      if (!data.ok) {
-        btn.textContent = "Failed";
-        btn.disabled = false;
-        return;
-      }
-      // Poll for auth completion
-      btn.textContent = "Waiting for sign-in...";
-      let attempts = 0;
-      const poll = setInterval(async () => {
-        attempts++;
-        try {
-          const check = await fetch(`/integrations/${integrationId}/google-auth-status`);
-          const status = await check.json();
-          if (status.authed) {
-            clearInterval(poll);
-            loadIntegrations();
-          }
-        } catch {}
-        if (attempts > 120) { // 2 min timeout
-          clearInterval(poll);
-          btn.textContent = "Timed out. Try again.";
-          btn.disabled = false;
-        }
-      }, 1000);
-    } catch {
-      btn.textContent = "Failed";
-      btn.disabled = false;
+  // OAuth setup wizard — shown when OAuth client isn't configured yet
+  function showOAuthSetupWizard(integrationId, cardEl) {
+    const existing = cardEl.querySelector(".oauth-setup-wizard");
+    if (existing) { existing.remove(); return; }
+
+    const wizard = document.createElement("div");
+    wizard.className = "oauth-setup-wizard token-wizard";
+    wizard.innerHTML = `
+      <div class="token-wizard-header">
+        <div class="token-wizard-title">Set up Google sign-in</div>
+        <span class="token-wizard-time">~3 min</span>
+      </div>
+      <ol class="token-wizard-steps">
+        <li data-step="1">Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console &rarr; Credentials</a></li>
+        <li data-step="2">Click <strong>Create Credentials &rarr; OAuth client ID</strong></li>
+        <li data-step="3">Choose <strong>Desktop app</strong>, name it "Delt"</li>
+        <li data-step="4">Copy the Client ID and Client Secret below</li>
+      </ol>
+      <input class="token-wizard-input" data-key="clientId" type="text" placeholder="Client ID (xxxxx.apps.googleusercontent.com)" autocomplete="off">
+      <input class="token-wizard-input" data-key="clientSecret" type="password" placeholder="Client Secret" autocomplete="off">
+      <button class="token-wizard-submit" disabled>Save &amp; Sign in</button>
+      <div class="token-wizard-troubleshoot">Don't have a Google Cloud project? Create one first at console.cloud.google.com — it's free.</div>
+    `;
+
+    const inputs = wizard.querySelectorAll(".token-wizard-input");
+    const submit = wizard.querySelector(".token-wizard-submit");
+
+    function checkFilled() {
+      submit.disabled = ![...inputs].every((inp) => inp.value.trim());
     }
+    inputs.forEach((inp) => {
+      inp.addEventListener("input", checkFilled);
+      inp.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !submit.disabled) doSetup();
+      });
+    });
+
+    async function doSetup() {
+      submit.disabled = true;
+      submit.textContent = "Saving...";
+      try {
+        const setupRes = await fetch(`/integrations/${integrationId}/oauth-setup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clientId: inputs[0].value.trim(),
+            clientSecret: inputs[1].value.trim(),
+          }),
+        });
+        const result = await setupRes.json();
+        if (result.ok) {
+          wizard.remove();
+          startOAuthFlow(integrationId);
+        } else {
+          submit.textContent = result.error || "Failed";
+          submit.disabled = false;
+        }
+      } catch {
+        submit.textContent = "Failed — try again";
+        submit.disabled = false;
+      }
+    }
+
+    submit.addEventListener("click", doSetup);
+    cardEl.appendChild(wizard);
+    inputs[0].focus();
   }
 
   // Token wizard — show inline form
@@ -1660,11 +1762,15 @@
         : `<input class="token-wizard-input" type="password" placeholder="${escapeHtml(tc.placeholder || 'Paste your token here')}" autocomplete="off">`;
 
       wizard.innerHTML = `
-        <div class="token-wizard-title">How to get your ${escapeHtml(hasFields ? integration.name + " credentials" : tc.label || "API key")}</div>
+        <div class="token-wizard-header">
+          <div class="token-wizard-title">How to get your ${escapeHtml(hasFields ? integration.name + " credentials" : tc.label || "API key")}</div>
+          ${integration.setupTime ? `<span class="token-wizard-time">${escapeHtml(integration.setupTime)}</span>` : ""}
+        </div>
         ${steps ? `<ol class="token-wizard-steps">${steps}</ol>` : ""}
         ${tc.helpUrl ? `<a class="token-wizard-link" href="${tc.helpUrl}" target="_blank" rel="noopener">Open ${escapeHtml(integration.name)} settings &rarr;</a>` : ""}
         ${inputsHtml}
         <button class="token-wizard-submit" disabled>Connect ${escapeHtml(integration.name)}</button>
+        ${integration.troubleshooting ? `<div class="token-wizard-troubleshoot">${escapeHtml(integration.troubleshooting)}</div>` : ""}
       `;
 
       const inputs = wizard.querySelectorAll(".token-wizard-input");
@@ -1700,7 +1806,14 @@
           });
           const result = await res.json();
           if (result.ok) {
-            loadIntegrations();
+            if (result.warning) {
+              submit.textContent = "Connected (with warning)";
+              submit.style.background = "#f59e0b";
+              submit.title = result.warning;
+              setTimeout(() => loadIntegrations(), 1500);
+            } else {
+              loadIntegrations();
+            }
           } else {
             submit.textContent = result.error || "Failed. Try again.";
             submit.disabled = false;
@@ -2340,16 +2453,37 @@
   // Silent install — runs npm in background on server
   async function startSilentInstall() {
     try {
-      await fetch("/install-silent", { method: "POST" });
+      const res = await fetch("/install-silent", { method: "POST" });
+      const data = await res.json();
+      if (data.error === "node_required") {
+        if (obInstallLabel) obInstallLabel.innerHTML = 'Node.js required — <a href="https://nodejs.org" target="_blank" style="color:#6C5CE7">install it</a>, then refresh';
+        if (obInstallBar) obInstallBar.classList.add("error");
+        return;
+      }
       if (obInstallFill) obInstallFill.classList.add("indeterminate");
       pollInstallStatus();
     } catch {
-      if (obInstallLabel) obInstallLabel.textContent = "Install failed — try restarting Delt";
+      if (obInstallLabel) obInstallLabel.textContent = "Could not reach server — try refreshing";
       if (obInstallBar) obInstallBar.classList.add("error");
     }
   }
 
+  window.retryInstall = retryInstall;
+  function retryInstall() {
+    if (obInstallBar) obInstallBar.classList.remove("error");
+    if (obInstallFill) obInstallFill.classList.remove("indeterminate");
+    if (obInstallLabel) obInstallLabel.textContent = "Retrying...";
+    // Reset server state
+    fetch("/install-silent", { method: "POST" }).then(() => {
+      if (obInstallFill) obInstallFill.classList.add("indeterminate");
+      pollInstallStatus();
+    }).catch(() => {
+      if (obInstallLabel) obInstallLabel.textContent = "Could not reach server";
+    });
+  }
+
   function pollInstallStatus() {
+    if (installPollTimer) clearInterval(installPollTimer);
     installPollTimer = setInterval(async () => {
       try {
         const res = await fetch("/install-status");
@@ -2363,7 +2497,7 @@
           clearInterval(installPollTimer);
           if (obInstallFill) obInstallFill.classList.remove("indeterminate");
           if (obInstallBar) obInstallBar.classList.add("error");
-          if (obInstallLabel) obInstallLabel.textContent = "Install issue — restart Delt to retry";
+          if (obInstallLabel) obInstallLabel.innerHTML = 'Install failed — <button onclick="retryInstall()" style="background:none;border:none;color:#6C5CE7;cursor:pointer;text-decoration:underline;font:inherit">try again</button>';
         }
       } catch {}
     }, 2000);
@@ -2409,7 +2543,7 @@
         } else if (s.status === "failed") {
           clearInterval(waitTimer);
           if (obInstallBar) obInstallBar.classList.add("error");
-          if (obInstallLabel) obInstallLabel.textContent = "Install failed — restart Delt to retry";
+          if (obInstallLabel) obInstallLabel.innerHTML = 'Install failed — <button onclick="retryInstall()" style="background:none;border:none;color:#6C5CE7;cursor:pointer;text-decoration:underline;font:inherit">try again</button>';
         }
       } catch {}
     }, 1500);
@@ -2426,6 +2560,7 @@
     loadConfig().then(() => {
       checkOnboarding();
       wsConnect();
+      refreshIntegrationChips();
 
       if (restored && sessionId && ws) {
         const waitForOpen = () => {
@@ -2499,6 +2634,9 @@
       fetch("/run-auth", { method: "POST" }).catch(() => {});
       if (obAuthDot) obAuthDot.className = "ob-auth-dot checking";
       if (obAuthText) obAuthText.textContent = "Waiting for sign in...";
+      // Show the hint telling them to look at Terminal
+      const hint = document.getElementById("ob-auth-hint");
+      if (hint) hint.classList.remove("hidden");
       startAuthPoll();
     });
   }
@@ -2540,9 +2678,14 @@
       showApp();
     } else {
       if (installGate) installGate.classList.remove("hidden");
-      // If already installed but not authed, skip to sign-in
       if (health.installed && !health.authed) {
+        // Claude installed but not signed in — go straight to signin
         showObStep(obSignin);
+        startAuthPoll();
+      } else if (!health.installed) {
+        // Claude not installed — trigger silent install immediately, skip to account step
+        showObStep(obAccount);
+        startSilentInstall();
       }
     }
   })();

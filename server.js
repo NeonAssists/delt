@@ -8,6 +8,19 @@ const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 const os = require("os");
 const fs = require("fs");
+
+// Ensure PATH includes common Claude Code install locations
+// (launchd and pkg postinstall may not include user-local paths)
+const extraPaths = [
+  path.join(os.homedir(), ".local", "bin"),
+  "/opt/homebrew/bin",
+  "/usr/local/bin",
+];
+const currentPath = process.env.PATH || "";
+const missingPaths = extraPaths.filter(p => !currentPath.includes(p));
+if (missingPaths.length) {
+  process.env.PATH = missingPaths.join(":") + ":" + currentPath;
+}
 const crypto = require("crypto");
 const multer = require("multer");
 const nodemailer = require("nodemailer");
@@ -126,7 +139,7 @@ try {
   integrationsRegistry = JSON.parse(fs.readFileSync(integrationsPath, "utf-8"));
 } catch {}
 
-// OAuth clients — load from encrypted store, migrate from plaintext if needed
+// OAuth clients — load from encrypted store, migrate from plaintext, or env vars
 let oauthClients = {};
 try {
   // Try encrypted store first
@@ -146,6 +159,22 @@ try {
       try { fs.unlinkSync(oauthClientsPath); } catch {}
       console.log("[Security] Migrated oauth-clients.json to encrypted store at ~/.delt/");
     }
+  } catch {}
+}
+
+// Auto-provision Google OAuth from env vars (first-install support)
+if (!oauthClients["google-workspace"] && process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  oauthClients["google-workspace"] = {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  };
+  // Persist so it survives restarts without env vars
+  try {
+    const deltDir = path.join(os.homedir(), ".delt");
+    if (!fs.existsSync(deltDir)) fs.mkdirSync(deltDir, { recursive: true, mode: 0o700 });
+    const encrypted = cryptoLib.encryptData(oauthClients);
+    fs.writeFileSync(encryptedOauthPath, JSON.stringify(encrypted), { mode: 0o600 });
+    console.log("[Setup] Google OAuth provisioned from environment variables");
   } catch {}
 }
 
@@ -210,6 +239,10 @@ cryptoLib.init({
   invalidateMcpCache: () => mcpLib.invalidateMcpCache(),
   writeIntegrationsMd,
 });
+
+// Sync allowed tools to Claude settings on startup — ensures any
+// previously-connected integrations are pre-approved for all sessions.
+cryptoLib.syncClaudeSettingsAllowedTools();
 
 // Initialize logging module (needs project base dir)
 logging.initDirs(__dirname);
@@ -290,16 +323,25 @@ function attachStreamHandlers(proc, ws, { streamType, errorType, onText, onCost,
 // Pending OAuth states (CSRF protection)
 const pendingOAuthStates = new Map();
 
-// Register tunnel cleanup on shutdown
-process.on("SIGTERM", cleanupTunnel);
-process.on("SIGINT", () => {
-  cleanupTunnel();
-  process.exit(0);
-});
+// Tunnel cleanup is called from the main shutdown handlers below
 
 const { dailyDir, weeklyDir, userDir } = logging.getDirs();
 
-const PORT = process.env.PORT || 3939;
+// Each Delt install gets its own unique port — generated on first run, saved to ~/.delt/port
+function getOrCreatePort() {
+  if (process.env.PORT) return parseInt(process.env.PORT, 10);
+  const portFile = path.join(os.homedir(), ".delt", "port");
+  try {
+    const saved = parseInt(fs.readFileSync(portFile, "utf-8").trim(), 10);
+    if (saved >= 1024 && saved <= 65535) return saved;
+  } catch {}
+  // Generate random port in 10000–59999 range — hard to guess
+  const port = 10000 + crypto.randomInt(50000);
+  fs.mkdirSync(path.join(os.homedir(), ".delt"), { recursive: true });
+  fs.writeFileSync(portFile, String(port), { mode: 0o600 });
+  return port;
+}
+const PORT = getOrCreatePort();
 
 const app = express();
 app.disable("x-powered-by");
@@ -308,6 +350,20 @@ const server = tlsCerts
   : http.createServer(app);
 const useHttps = !!tlsCerts;
 const wss = new WebSocket.Server({ noServer: true });
+
+// WebSocket ping/pong keepalive — detect dead connections
+const WS_PING_INTERVAL = 30000; // 30 seconds
+setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (ws._deltAlive === false) {
+      // Missed last pong — connection is dead
+      ws.terminate();
+      return;
+    }
+    ws._deltAlive = false;
+    ws.ping();
+  });
+}, WS_PING_INTERVAL);
 
 // WebSocket auth — reject unauthenticated remote connections
 server.on("upgrade", (req, socket, head) => {
@@ -416,10 +472,20 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json());
 
+// CORS for signup endpoint — allows demo page to work from file:// or external hosts
+app.use("/api/signup", (req, res, next) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  next();
+});
+
 // CSRF protection — reject cross-origin mutating requests from remote clients
 app.use((req, res, next) => {
   if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return next();
   if (isLocalRequest(req)) return next();
+  if (req.path === "/api/signup") return next(); // signup is public
   const origin = req.get("origin");
   const host = req.get("host");
   if (origin && host && new URL(origin).host !== host) {
@@ -447,11 +513,14 @@ app.get("/health", (req, res) => {
     installed = true;
   } catch {}
 
-  // Check auth by looking for Claude config/credentials, not by making an API call
+  // Check auth by looking for actual credential files, not just the directory
   if (installed) {
     try {
       const claudeDir = path.join(os.homedir(), ".claude");
-      authed = fs.existsSync(claudeDir) && fs.readdirSync(claudeDir).length > 0;
+      // .claude/credentials.json or .claude/.credentials are the real auth artifacts
+      authed = fs.existsSync(path.join(claudeDir, "credentials.json")) ||
+               fs.existsSync(path.join(claudeDir, ".credentials")) ||
+               fs.existsSync(path.join(claudeDir, "statsig", "cache"));
     } catch {}
   }
 
@@ -495,22 +564,36 @@ app.post("/run-install", localOnly, (req, res) => {
 });
 
 // Open terminal with claude auth (cross-platform)
+// Resolve full path to claude so Terminal can find it even if ~/.local/bin isn't in shell PATH
+function findClaudePath() {
+  const candidates = [
+    path.join(os.homedir(), ".local", "bin", "claude"),
+    "/opt/homebrew/bin/claude",
+    "/usr/local/bin/claude",
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return "claude"; // fallback to bare name
+}
+
 app.post("/run-auth", localOnly, (req, res) => {
   try {
+    const claudePath = findClaudePath();
     const platform = process.platform;
     if (platform === "darwin") {
-      spawn("osascript", ["-e", `tell application "Terminal" to do script "claude"`], { detached: true, stdio: "ignore" }).unref();
+      spawn("osascript", ["-e", `tell application "Terminal" to do script "${claudePath}"`], { detached: true, stdio: "ignore" }).unref();
     } else if (platform === "win32") {
-      spawn("cmd", ["/c", "start", "cmd", "/k", "claude"], { detached: true, stdio: "ignore" }).unref();
+      spawn("cmd", ["/c", "start", "cmd", "/k", claudePath], { detached: true, stdio: "ignore" }).unref();
     } else {
       const terminals = ["gnome-terminal", "konsole", "xfce4-terminal", "xterm"];
       let launched = false;
       for (const term of terminals) {
         try {
           if (term === "gnome-terminal") {
-            spawn(term, ["--", "bash", "-c", "claude; read"], { detached: true, stdio: "ignore" }).unref();
+            spawn(term, ["--", "bash", "-c", `${claudePath}; read`], { detached: true, stdio: "ignore" }).unref();
           } else {
-            spawn(term, ["-e", "bash -c 'claude; read'"], { detached: true, stdio: "ignore" }).unref();
+            spawn(term, ["-e", `bash -c '${claudePath}; read'`], { detached: true, stdio: "ignore" }).unref();
           }
           launched = true;
           break;
@@ -539,29 +622,22 @@ app.post("/install-silent", localOnly, (req, res) => {
     return res.json({ ok: true, status: "installing" });
   }
 
+  // Check if claude is already on this machine (state resets on server restart)
+  try {
+    execSync("claude --version 2>/dev/null", { timeout: 5000 });
+    installState = { status: "installed", error: null, progress: "" };
+    return res.json({ ok: true, status: "installed" });
+  } catch {}
+
   // Detect platform
   const platform = process.platform; // "darwin", "linux", "win32"
 
   // Check for npm, then npx
-  let npmCmd = null;
-  try {
-    execSync("npm --version 2>/dev/null", { timeout: 5000 });
-    npmCmd = "npm";
-  } catch {
-    try {
-      execSync("npx --version 2>/dev/null", { timeout: 5000 });
-      npmCmd = "npx";
-    } catch {
-      return res.json({ ok: false, error: "node_required" });
-    }
-  }
-
   // Start the install
   installState = { status: "installing", error: null, progress: "" };
 
-  const installCmd = npmCmd === "npx"
-    ? "npx -y @anthropic-ai/claude-code"
-    : "npm install -g @anthropic-ai/claude-code";
+  // Use the official Claude Code installer (curl | sh) — works on any machine with curl
+  const installCmd = `curl -fsSL https://claude.ai/install.sh | sh`;
 
   const shell = platform === "win32" ? "cmd" : "/bin/sh";
   const shellFlag = platform === "win32" ? "/c" : "-c";
@@ -646,13 +722,19 @@ app.post("/verify-auth", localOnly, async (req, res) => {
       const proc = spawn("claude", ["-p", "say ok", "--output-format", "text"], {
         cwd: os.homedir(),
         env: { ...process.env },
-        timeout: 20000,
       });
       let stdout = "";
       let stderr = "";
+      let done = false;
+      const killTimer = setTimeout(() => {
+        if (!done) { done = true; proc.kill("SIGKILL"); resolve({ authed: false, reason: "timeout" }); }
+      }, 20000);
       proc.stdout.on("data", (d) => { stdout += d.toString(); });
       proc.stderr.on("data", (d) => { stderr += d.toString(); });
       proc.on("close", (code) => {
+        if (done) return;
+        done = true;
+        clearTimeout(killTimer);
         if (code === 0 && stdout.trim().length > 0) {
           resolve({ authed: true, version });
         } else {
@@ -660,6 +742,9 @@ app.post("/verify-auth", localOnly, async (req, res) => {
         }
       });
       proc.on("error", (err) => {
+        if (done) return;
+        done = true;
+        clearTimeout(killTimer);
         resolve({ authed: false, reason: err.message });
       });
     });
@@ -723,6 +808,9 @@ app.get("/integrations", (req, res) => {
       entry.accessLevel = cred.level || "none";
       entry.directories = cred.directories || [];
     }
+    if (i.authType === "oauth2") {
+      entry.oauthConfigured = !!(oauthClients[i.id]?.clientId);
+    }
     return entry;
   });
   res.json({ integrations: result });
@@ -764,14 +852,13 @@ app.post("/integrations/:id/auto-detect", localOnly, async (req, res) => {
 });
 
 // Connect an integration (token-based, multi-field, or enable)
-app.post("/integrations/:id/connect", localOnly, (req, res) => {
+app.post("/integrations/:id/connect", localOnly, async (req, res) => {
   const { token, baseUrl, fields } = req.body;
   const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
   if (!integration) return res.status(404).json({ error: "Integration not found" });
 
   if (integration.authType === "enable") {
     saveCredential(integration.id, { type: "enable" });
-    res.json({ ok: true, connected: true });
   } else if (integration.authType === "local-access") {
     const { level, directories } = req.body;
     if (!level || !["none", "limited", "full"].includes(level)) {
@@ -782,9 +869,7 @@ app.post("/integrations/:id/connect", localOnly, (req, res) => {
       return res.json({ ok: true, connected: false });
     }
     saveCredential(integration.id, { type: "local-access", level, directories: directories || [] });
-    res.json({ ok: true, connected: true });
   } else if (integration.authType === "token" || integration.authType === "custom") {
-    // Multi-field support: if tokenConfig has fields, expect fields object
     if (fields && typeof fields === "object") {
       saveCredential(integration.id, { ...fields, type: "token" });
     } else if (token) {
@@ -792,10 +877,21 @@ app.post("/integrations/:id/connect", localOnly, (req, res) => {
     } else {
       return res.status(400).json({ error: "Token required" });
     }
-    res.json({ ok: true, connected: true });
   } else {
-    res.status(400).json({ error: "Use OAuth flow for this integration" });
+    return res.status(400).json({ error: "Use OAuth flow for this integration" });
   }
+
+  // Auto-test: verify the MCP server actually starts
+  const skipTest = integration.authType === "local-access"; // filesystem server needs dirs, tested separately
+  if (!skipTest) {
+    const testResult = await testMcpServer(integration.id);
+    if (!testResult.ok) {
+      // Credentials saved but server won't start — keep connected but warn
+      return res.json({ ok: true, connected: true, warning: testResult.error || "MCP server failed to start — integration may not work in chat" });
+    }
+  }
+
+  res.json({ ok: true, connected: true, verified: true });
 });
 
 // Disconnect an integration
@@ -823,27 +919,31 @@ app.get("/integrations/mcp-status", (req, res) => {
   });
 });
 
-// Test an MCP server can spawn
-app.post("/integrations/:id/test", localOnly, rateLimit(60000, 5), async (req, res) => {
-  const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
-  if (!integration) return res.status(404).json({ error: "Not found" });
+// Test if an MCP server can spawn (reusable function)
+async function testMcpServer(integrationId) {
+  const integration = integrationsRegistry.integrations.find((i) => i.id === integrationId);
+  if (!integration) return { ok: false, error: "Not found" };
 
-  const cred = getCredential(integration.id);
-  if (!cred || !cred.enabled) return res.json({ ok: false, error: "Not connected" });
+  const cred = getCredential(integrationId);
+  if (!cred || !cred.enabled) return { ok: false, error: "Not connected" };
 
   // For OAuth integrations, try refreshing the token
   if (cred.type === "oauth2") {
-    const token = await refreshOAuthToken(integration.id);
-    return res.json({ ok: !!token, message: token ? "Token valid" : "Token refresh failed" });
+    const token = await refreshOAuthToken(integrationId);
+    return { ok: !!token, message: token ? "Token valid" : "Token refresh failed" };
   }
 
   // For MCP-based integrations, try spawning the server
   const [serverName, serverDef] = Object.entries(integration.mcpServers || {})[0] || [];
-  if (!serverName) return res.json({ ok: false, error: "No MCP server defined" });
+  if (!serverName) return { ok: false, error: "No MCP server defined" };
 
   const env = { ...process.env };
   for (const [envVar, credKey] of Object.entries(serverDef.envMapping || {})) {
-    if (cred[credKey]) env[envVar] = cred[credKey];
+    if (credKey.startsWith("_static:")) {
+      env[envVar] = credKey.slice(8);
+    } else if (cred[credKey]) {
+      env[envVar] = cred[credKey];
+    }
   }
 
   try {
@@ -852,28 +952,54 @@ app.post("/integrations/:id/test", localOnly, rateLimit(60000, 5), async (req, r
 
     testProc.stderr.on("data", (d) => { stderr += d.toString(); });
 
-    // Give it 3 seconds to see if it starts without crashing
     await new Promise((resolve) => {
       const timer = setTimeout(() => {
         testProc.kill("SIGTERM");
         resolve();
       }, 3000);
 
-      testProc.on("close", (code) => {
+      testProc.on("close", () => {
         clearTimeout(timer);
         resolve();
       });
     });
 
-    // If it ran for 3 seconds without dying, it's working
     if (testProc.killed || !testProc.exitCode) {
-      res.json({ ok: true, server: serverName, status: "running" });
+      return { ok: true, server: serverName, status: "running" };
     } else {
-      res.json({ ok: false, server: serverName, error: stderr.slice(0, 200) || `Exit code ${testProc.exitCode}` });
+      return { ok: false, server: serverName, error: stderr.slice(0, 200) || `Exit code ${testProc.exitCode}` };
     }
   } catch (err) {
-    res.json({ ok: false, error: err.message });
+    return { ok: false, error: err.message };
   }
+}
+
+// Test endpoint (manual trigger)
+app.post("/integrations/:id/test", localOnly, rateLimit(60000, 5), async (req, res) => {
+  res.json(await testMcpServer(req.params.id));
+});
+
+// Configure OAuth client credentials (first-install setup)
+app.post("/integrations/:id/oauth-setup", localOnly, rateLimit(60000, 5), (req, res) => {
+  const { clientId, clientSecret } = req.body;
+  if (!clientId || !clientSecret) return res.status(400).json({ error: "Client ID and Client Secret required" });
+
+  const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
+  if (!integration || integration.authType !== "oauth2") {
+    return res.status(400).json({ error: "Not an OAuth integration" });
+  }
+
+  oauthClients[integration.id] = { clientId: clientId.trim(), clientSecret: clientSecret.trim() };
+  saveOauthClients();
+  res.json({ ok: true });
+});
+
+// Check if OAuth is configured for an integration
+app.get("/integrations/:id/oauth-status", (req, res) => {
+  const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
+  if (!integration) return res.status(404).json({ error: "Not found" });
+  const configured = !!(oauthClients[integration.id]?.clientId);
+  res.json({ configured });
 });
 
 // Get OAuth authorization URL
@@ -883,6 +1009,11 @@ app.get("/integrations/:id/auth-url", rateLimit(60000, 5), (req, res) => {
     return res.status(400).json({ error: "Not an OAuth integration" });
   }
 
+  const clientId = oauthClients[integration.id]?.clientId;
+  if (!clientId) {
+    return res.status(400).json({ error: "needs_setup", needsSetup: true });
+  }
+
   const state = uuidv4();
   pendingOAuthStates.set(state, { integrationId: integration.id, createdAt: Date.now() });
 
@@ -890,9 +1021,6 @@ app.get("/integrations/:id/auth-url", rateLimit(60000, 5), (req, res) => {
   for (const [k, v] of pendingOAuthStates) {
     if (Date.now() - v.createdAt > 600000) pendingOAuthStates.delete(k);
   }
-
-  const clientId = oauthClients[integration.id]?.clientId;
-  if (!clientId) return res.status(500).json({ error: "OAuth not configured for this service. Contact your admin." });
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -1000,11 +1128,19 @@ app.get("/oauth/callback", async (req, res) => {
       <div style="text-align:center;">
         <div style="font-size:48px;margin-bottom:16px;">&#10003;</div>
         <h2 style="margin:0 0 8px;">Connected!</h2>
-        <p style="color:#666;">You can close this window.</p>
+        <p style="color:#666;" id="msg">You can close this window and return to Delt.</p>
       </div>
       <script>
-        if (window.opener) window.opener.postMessage({type:"oauth-complete",integrationId:${JSON.stringify(integration.id)}},window.location.origin);
-        setTimeout(()=>window.close(),2000);
+        // Try postMessage to opener (works in regular browser popups)
+        if (window.opener) {
+          try {
+            window.opener.postMessage({type:"oauth-complete",integrationId:${JSON.stringify(integration.id)}},window.location.origin);
+          } catch(e) {}
+        }
+        // Auto-close after a short delay
+        setTimeout(()=>{
+          try { window.close(); } catch(e) {}
+        }, 2500);
       </script>
     </body></html>`);
   } catch (err) {
@@ -1274,7 +1410,7 @@ function createConversationEntry(sessionId, userMessage, tag) {
       { role: "user", text: (userMessage || "").slice(0, 300), ts: new Date().toISOString() },
     ],
   };
-  fs.writeFileSync(metaFile, JSON.stringify(meta, null, 2));
+  try { fs.writeFileSync(metaFile, JSON.stringify(meta, null, 2)); } catch (e) { console.error("Failed to save conversation:", e.message); }
   return meta;
 }
 
@@ -1316,7 +1452,7 @@ function saveConversationMeta(sessionId, userMessage, assistantMessage, tag) {
     meta.messageCount++;
   }
 
-  fs.writeFileSync(metaFile, JSON.stringify(meta, null, 2));
+  try { fs.writeFileSync(metaFile, JSON.stringify(meta, null, 2)); } catch (e) { console.error("Failed to save conversation:", e.message); }
   return meta;
 }
 
@@ -1420,7 +1556,7 @@ function unregisterClient(ws) {
   }
 }
 
-// Generate integrations context for Claude
+// Generate integrations context for Claude — includes capabilities and creation routing
 function buildIntegrationsContext() {
   const creds = loadCredentials();
   const connected = [];
@@ -1433,10 +1569,28 @@ function buildIntegrationsContext() {
 
   if (!connected.length) return "";
 
+  // Build detailed capability lines for each integration
   const lines = connected.map((i) => {
     const tools = Object.keys(i.mcpServers || {}).map((s) => `mcp__${s}__*`).join(", ");
-    return `- **${i.name}**: ${i.description}. Use MCP tools (${tools}).`;
+    const caps = i.capabilities || {};
+    let line = `- **${i.name}** (${tools})`;
+    if (caps.can && caps.can.length) line += `\n  Can: ${caps.can.join("; ")}`;
+    if (caps.creates && caps.creates.length) line += `\n  Creates: ${caps.creates.join(", ")}`;
+    if (caps.limitations && caps.limitations.length) line += `\n  Limitations: ${caps.limitations.join("; ")}`;
+    return line;
   });
+
+  // Build creation routing map — what can be created and which integration handles it
+  const creationMap = [];
+  for (const i of connected) {
+    const caps = i.capabilities || {};
+    if (caps.creates && caps.creates.length) {
+      for (const item of caps.creates) {
+        const tools = Object.keys(i.mcpServers || {}).map((s) => `mcp__${s}__*`).join(", ");
+        creationMap.push(`  "${item}" → ${i.name} (${tools})`);
+      }
+    }
+  }
 
   // Local access context
   let localCtx = "";
@@ -1446,17 +1600,29 @@ function buildIntegrationsContext() {
       localCtx = "\n\n[LOCAL COMPUTER ACCESS: FULL — You have unrestricted filesystem access to this Mac via mcp__filesystem__* tools. You can read, write, search, and manage files anywhere in the user's home directory.]";
     } else if (localCred.level === "limited") {
       const dirs = (localCred.directories || []).join(", ");
-      localCtx = `\n\n[LOCAL COMPUTER ACCESS: LIMITED — You have filesystem access ONLY to these directories: ${dirs}. Use mcp__filesystem__* tools. Before accessing any file, confirm the path is within an allowed directory. If the user asks you to access something outside these directories, tell them it's outside your permitted access and ask them to update their Local Computer settings.]`;
+      localCtx = `\n\n[LOCAL COMPUTER ACCESS: LIMITED — You have filesystem access ONLY to these directories: ${dirs}. Use mcp__filesystem__* tools.]`;
     }
   } else {
-    localCtx = "\n\n[LOCAL COMPUTER ACCESS: NONE — You do NOT have filesystem access. Do not attempt to read, write, or search local files. If the user asks you to work with local files, tell them to enable Local Computer access in the Integrations panel.]";
+    localCtx = "\n\n[LOCAL COMPUTER ACCESS: NONE — You do NOT have filesystem access. If the user asks you to work with local files, tell them to enable Local Computer access in the Integrations panel.]";
   }
 
-  return `[CONNECTED INTEGRATIONS — the user has linked these services. ALWAYS use the MCP tools listed below to interact with them. NEVER use local apps (Mail.app, Calendar.app, etc.), AppleScript, or osascript. NEVER try to open Terminal or shell commands to interact with these services. The MCP tools handle everything directly.
+  return `[CONNECTED INTEGRATIONS — the user has linked these services. ALWAYS use the MCP tools listed below. NEVER use local apps (Mail.app, Calendar.app, etc.), AppleScript, or osascript.
 
 ${lines.join("\n")}
 
-When the user asks you to do something with a connected service (send email, check calendar, search files, etc.), use the corresponding mcp__* tools. If a tool call fails, tell the user — don't fall back to local apps.]${localCtx}
+CREATION ROUTING — When the user says "create", "make", "build", "set up", "draft", or "send" something, route to the right integration:
+${creationMap.join("\n")}
+  "Website / landing page / UI / design mockup" → Build as HTML/CSS file and serve or deploy it
+  "Document / report / analysis" → Build as markdown or HTML, then email or save to connected service
+
+INTUITIVE BEHAVIOR RULES:
+- When the user says "create a X", just do it. Don't ask which tool to use — pick the best connected integration and execute.
+- If no connected integration can create what they asked for, build it as a file (HTML, MD, PDF) and offer to send/deploy it.
+- If an integration is read-only for what they want (e.g. Figma for design creation), say so briefly and immediately offer the alternative (build as code).
+- Never say "I can't do that" without offering what you CAN do instead.
+- If a tool call fails, try once more, then tell the user what happened — don't loop.
+
+When the user asks you to do something with a connected service, use the corresponding MCP tools. If a tool call fails, tell the user — don't fall back to local apps.]${localCtx}
 
 `;
 }
@@ -1475,6 +1641,9 @@ wss.on("connection", (ws, req) => {
   }
 
   let sessionId = null;
+
+  ws._deltAlive = true;
+  ws.on("pong", () => { ws._deltAlive = true; });
 
   ws.on("close", () => unregisterClient(ws));
   let currentProcess = null;
@@ -1558,9 +1727,22 @@ wss.on("connection", (ws, req) => {
       } catch {}
 
       // Prepend business context on first message
-      const fullMessage = isFirst
-        ? buildSystemPrefix(config, buildIntegrationsContext) + message
-        : message;
+      let fullMessage;
+      if (isFirst) {
+        let prefix = buildSystemPrefix(config, buildIntegrationsContext);
+        // Inject remote access context so Claude uses tunnel URL instead of localhost
+        if (isRemote) {
+          const { tunnelUrl } = getTunnelState();
+          if (tunnelUrl) {
+            prefix += `[REMOTE ACCESS: The user is accessing Delt from a different device (phone/tablet) via ${tunnelUrl}. NEVER reference localhost or 127.0.0.1 — use ${tunnelUrl} for any URLs you share. If you create files that need to be viewed, serve them through Delt's public path (e.g. ${tunnelUrl}/filename.html) or offer to deploy them.]\n\n`;
+          } else {
+            prefix += `[REMOTE ACCESS: The user is accessing Delt from a different device. NEVER reference localhost — any local files or URLs won't be accessible. Offer to deploy, email, or use a connected service to share content instead.]\n\n`;
+          }
+        }
+        fullMessage = prefix + message;
+      } else {
+        fullMessage = message;
+      }
 
       const args = buildClaudeArgs(fullMessage);
 
@@ -1820,9 +2002,11 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
 // Signup API — email + Google Sheets
 // ============================================
 
-// Serve demo.html at /demo
+// Serve demo page — inject current port so signup works regardless of access method
 app.get("/demo", (req, res) => {
-  res.sendFile(path.join(__dirname, "demo.html"));
+  const html = fs.readFileSync(path.join(__dirname, "demo.html"), "utf-8");
+  const injected = html.replace("<html", `<html data-delt-port="${PORT}"`);
+  res.type("html").send(injected);
 });
 
 // Gmail transporter (lazy init)
@@ -1922,7 +2106,7 @@ function logSignupLocally(entry) {
   let signups = [];
   try { signups = JSON.parse(fs.readFileSync(signupsPath, "utf-8")); } catch {}
   signups.push(entry);
-  fs.writeFileSync(signupsPath, JSON.stringify(signups, null, 2));
+  try { fs.writeFileSync(signupsPath, JSON.stringify(signups, null, 2)); } catch (e) { console.error("Failed to log signup:", e.message); }
 }
 
 app.post("/api/signup", rateLimit(60000, 5), async (req, res) => {
@@ -2042,26 +2226,32 @@ function killAllChildren() {
   });
 }
 
-process.on("SIGTERM", () => {
-  console.log("SIGTERM received, shutting down...");
+function gracefulShutdown(signal) {
+  console.log(`\n  ${signal} received, shutting down...`);
+  cleanupTunnel();
   killAllChildren();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 5000);
-});
+}
 
-process.on("SIGINT", () => {
-  console.log("\nShutting down...");
-  killAllChildren();
-  server.close(() => process.exit(0));
-  setTimeout(() => process.exit(1), 5000);
-});
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 process.on("uncaughtException", (err) => {
-  console.error("Uncaught exception:", err);
+  console.error("Uncaught exception:", err.stack || err);
+  // Don't exit — server stays alive. Log to file for diagnostics.
+  try {
+    const errLog = path.join(os.homedir(), ".delt", "crash.log");
+    fs.appendFileSync(errLog, `[${new Date().toISOString()}] uncaughtException: ${err.stack || err}\n`);
+  } catch {}
 });
 
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err);
+  try {
+    const errLog = path.join(os.homedir(), ".delt", "crash.log");
+    fs.appendFileSync(errLog, `[${new Date().toISOString()}] unhandledRejection: ${err?.stack || err}\n`);
+  } catch {}
 });
 
 server.on("error", (err) => {
@@ -2076,8 +2266,33 @@ server.listen(PORT, "127.0.0.1", () => {
   const proto = useHttps ? "https" : "http";
   console.log(`\n  ${config.business?.name || "Delt"} is running!`);
   console.log(`  ${proto}://localhost:${PORT}`);
+
+  // Disk space check — warn if low
+  try {
+    const { execSync: exec } = require("child_process");
+    const dfOut = exec("df -k " + JSON.stringify(os.homedir()), { timeout: 3000 }).toString();
+    const lines = dfOut.trim().split("\n");
+    if (lines.length >= 2) {
+      const parts = lines[1].split(/\s+/);
+      const availKB = parseInt(parts[3], 10);
+      if (availKB < 100 * 1024) { // < 100MB
+        console.warn(`\n  ⚠ Low disk space: ${Math.round(availKB / 1024)}MB free. Logs and history may fail to save.\n`);
+      }
+    }
+  } catch {}
   if (useHttps) {
     console.log(`  HTTPS enabled (self-signed cert at ~/.delt/certs/)`);
   }
   console.log(`  Bound to localhost only — not accessible from other devices.\n`);
+
+  // Discovery beacon — fixed port so installer/demo pages can find the real server
+  const DISCOVERY_PORT = 45100;
+  const discoveryServer = http.createServer((req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ port: PORT, url: `${proto}://localhost:${PORT}` }));
+  });
+  discoveryServer.listen(DISCOVERY_PORT, "127.0.0.1", () => {}).on("error", () => {});
 });

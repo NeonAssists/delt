@@ -699,6 +699,41 @@ header {
   margin-left: 6px;
 }
 
+/* Integration status chips in header */
+.integration-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  overflow-x: auto;
+  max-width: 320px;
+  scrollbar-width: none;
+}
+.integration-chips::-webkit-scrollbar { display: none; }
+.integration-chip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px 2px 6px;
+  background: var(--bg-elevated);
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: default;
+  transition: background 0.15s;
+}
+.integration-chip:hover { background: var(--border); }
+.integration-chip .chip-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #00d26a;
+  flex-shrink: 0;
+}
+
 .status-dot-inner {
   width: 6px;
   height: 6px;
@@ -1307,6 +1342,52 @@ header {
 }
 .token-wizard-submit:hover { background: var(--accent-hover); transform: translateY(-1px); }
 .token-wizard-submit:disabled { opacity: 0.35; cursor: default; transform: none; }
+
+.token-wizard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.token-wizard-header .token-wizard-title { margin-bottom: 0; }
+
+.token-wizard-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 20px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.token-wizard-troubleshoot {
+  margin-top: 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  border-radius: 8px;
+}
+
+.integration-tryit {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-faint);
+}
+
+.integration-setup-time {
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
 
 .local-access-panel { padding: 14px 0 4px; }
 .local-access-options { display: flex; flex-direction: column; gap: 6px; }
@@ -2304,6 +2385,7 @@ header {
   .header-btn { padding: 0 10px; font-size: 0; gap: 0; }
   .header-btn svg { font-size: 16px; }
   .status-pill { display: none; }
+  .integration-chips { display: none; }
 
   .welcome-hero h1 { font-size: 30px; }
   .welcome-hero p { font-size: 16px; }

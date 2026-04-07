@@ -75,14 +75,36 @@
           </svg>
         </div>
         <h2 class="ob-title">Create your Claude account</h2>
-        <p class="ob-sub">Delt is powered by Claude AI. You need a free account to get started — it takes about a minute.</p>
+        <p class="ob-sub">Delt uses Claude AI to work. You need an account at <strong>claude.ai</strong> &mdash; there's a free plan, or use your existing subscription.</p>
+
+        <div style="text-align:left;margin:0 0 16px;display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;gap:8px;font-size:13px;line-height:1.5;align-items:flex-start;">
+            <span style="color:var(--success);flex-shrink:0;margin-top:2px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </span>
+            <span><strong>Free plan</strong> &mdash; works great, has usage limits</span>
+          </div>
+          <div style="display:flex;gap:8px;font-size:13px;line-height:1.5;align-items:flex-start;">
+            <span style="color:var(--success);flex-shrink:0;margin-top:2px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </span>
+            <span><strong>Pro plan ($20/mo)</strong> &mdash; more usage, faster responses</span>
+          </div>
+          <div style="display:flex;gap:8px;font-size:13px;line-height:1.5;align-items:flex-start;">
+            <span style="color:var(--success);flex-shrink:0;margin-top:2px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </span>
+            <span><strong>Max plan ($100-200/mo)</strong> &mdash; unlimited, best for heavy use</span>
+          </div>
+        </div>
+
         <a class="ob-btn primary" href="https://claude.ai/login" target="_blank" rel="noopener" id="ob-create-link">
-          Create free account
+          Go to claude.ai to sign up
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
           </svg>
         </a>
-        <button class="ob-link" id="ob-have-account">I already have an account</button>
+        <button class="ob-link" id="ob-have-account">I already have a Claude account &mdash; skip this</button>
         <div class="ob-install-bar" id="ob-install-bar">
           <div class="ob-install-track">
             <div class="ob-install-fill" id="ob-install-fill"></div>
@@ -99,18 +121,38 @@
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
           </svg>
         </div>
-        <h2 class="ob-title">Connect your account</h2>
-        <p class="ob-sub">Open a terminal and run the command below. It will open a browser window to sign in — then come back here.</p>
-        <div class="ob-auth-cmd">
-          <code>claude</code>
-          <button class="ob-auth-copy" id="ob-auth-copy">Copy</button>
+        <h2 class="ob-title">One-time sign in</h2>
+        <p class="ob-sub">Delt needs to connect to your Claude account once. After this, you're signed in forever &mdash; it saves your credentials on this computer.</p>
+
+        <p class="ob-sub" style="margin-bottom:16px;">Click the button. Here's exactly what happens:</p>
+
+        <div style="text-align:left;margin:0 0 20px;display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;gap:8px;font-size:14px;line-height:1.5;align-items:flex-start;">
+            <span style="background:var(--accent-soft);color:var(--accent);width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">1</span>
+            <span>A <strong>Terminal window</strong> opens (black screen with text &mdash; that's normal)</span>
+          </div>
+          <div style="display:flex;gap:8px;font-size:14px;line-height:1.5;align-items:flex-start;">
+            <span style="background:var(--accent-soft);color:var(--accent);width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">2</span>
+            <span>Your <strong>browser</strong> opens to Claude's login page</span>
+          </div>
+          <div style="display:flex;gap:8px;font-size:14px;line-height:1.5;align-items:flex-start;">
+            <span style="background:var(--accent-soft);color:var(--accent);width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">3</span>
+            <span><strong>Sign in</strong> with your Claude account (free or paid &mdash; either works)</span>
+          </div>
+          <div style="display:flex;gap:8px;font-size:14px;line-height:1.5;align-items:flex-start;">
+            <span style="background:var(--accent-soft);color:var(--accent);width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">4</span>
+            <span><strong>Come back here</strong> &mdash; this page detects it automatically. You'll never do this again.</span>
+          </div>
         </div>
-        <button class="ob-btn primary" id="ob-signin-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
-          </svg>
-          Open Terminal for me
-        </button>
+
+        <button class="ob-btn primary" id="ob-signin-btn">Sign in to Claude</button>
+
+        <div class="ob-auth-hint hidden" id="ob-auth-hint" style="background:rgba(108,92,231,0.06);border-radius:10px;padding:12px 14px;margin-top:16px;text-align:left;">
+          <p style="font-size:13px;color:var(--text-secondary);line-height:1.5;margin:0;">
+            <strong>Look for the Terminal window</strong> that just opened (check your dock/taskbar). It will open your browser to sign in. Once done, come back here &mdash; this page updates on its own.
+          </p>
+        </div>
+
         <div class="ob-auth-status" id="ob-auth-status">
           <span class="ob-auth-dot checking" id="ob-auth-dot"></span>
           <span id="ob-auth-text">Waiting for sign in...</span>
@@ -150,6 +192,7 @@
           <span class="status-dot-inner" id="status-dot"></span>
           <span class="status-label" id="status-label">Ready</span>
         </div>
+        <div class="integration-chips" id="integration-chips"></div>
       </div>
       <div class="header-right">
         <button class="header-btn" id="integrations-btn">

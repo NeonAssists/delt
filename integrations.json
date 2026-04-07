@@ -7,14 +7,32 @@
       "icon": "computer",
       "category": "system",
       "authType": "local-access",
+      "capabilities": {
+        "can": [
+          "Read, write, search, and manage files and folders",
+          "Run shell commands",
+          "Open apps"
+        ],
+        "creates": [
+          "Files",
+          "Folders",
+          "Scripts"
+        ],
+        "limitations": []
+      },
       "mcpServers": {
         "filesystem": {
           "command": "npx",
-          "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+          "args": [
+            "-y",
+            "@modelcontextprotocol/server-filesystem"
+          ],
           "envMapping": {}
         }
       },
-      "setupSteps": []
+      "setupSteps": [],
+      "setupTime": "Instant",
+      "tryIt": "List my recent downloads"
     },
     {
       "id": "google-workspace",
@@ -23,6 +41,23 @@
       "icon": "google",
       "category": "productivity",
       "authType": "oauth2",
+      "capabilities": {
+        "can": [
+          "Send, read, draft, search, label, and archive emails",
+          "Create, read, and update calendar events",
+          "Create, read, and edit spreadsheets",
+          "Browse and read Drive files"
+        ],
+        "creates": [
+          "Emails",
+          "Calendar events",
+          "Spreadsheets",
+          "Drive files"
+        ],
+        "limitations": [
+          "Cannot create Google Docs (use Sheets or send content via email instead)"
+        ]
+      },
       "oauth": {
         "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth",
         "tokenUrl": "https://oauth2.googleapis.com/token",
@@ -41,25 +76,37 @@
       "mcpServers": {
         "gmail": {
           "command": "npx",
-          "args": ["-y", "@monsoft/mcp-gmail"],
+          "args": [
+            "-y",
+            "@monsoft/mcp-gmail"
+          ],
           "envMapping": {}
         },
         "google-calendar": {
           "command": "npx",
-          "args": ["-y", "mcp-google-calendar"],
+          "args": [
+            "-y",
+            "mcp-google-calendar"
+          ],
           "envMapping": {}
         },
         "google-sheets": {
           "command": "npx",
-          "args": ["-y", "mcp-google-sheets"],
+          "args": [
+            "-y",
+            "mcp-google-sheets"
+          ],
           "envMapping": {}
         }
       },
       "setupSteps": [
-        "Click 'Sign in with Google' below",
-        "Choose your Google account and grant access",
-        "Gmail, Calendar, Sheets, and Drive will all be available"
-      ]
+        "Click 'Sign in with Google' below and choose your account",
+        "You'll be asked to approve access — Delt will be able to read and send email, manage your calendar, edit spreadsheets, and browse Drive files",
+        "Once approved, all four services are ready to use"
+      ],
+      "setupTime": "~30 sec",
+      "troubleshooting": "Sign-in failing? Make sure pop-ups aren't blocked in your browser.",
+      "tryIt": "What's on my calendar today?"
     },
     {
       "id": "github",
@@ -68,6 +115,23 @@
       "icon": "github",
       "category": "development",
       "authType": "token",
+      "capabilities": {
+        "can": [
+          "Create and manage repos, issues, PRs, branches",
+          "Search code across repos",
+          "Read and write files in repos",
+          "Manage releases and actions"
+        ],
+        "creates": [
+          "Repos",
+          "Issues",
+          "Pull requests",
+          "Branches",
+          "Releases",
+          "Gists"
+        ],
+        "limitations": []
+      },
       "tokenConfig": {
         "label": "Personal Access Token",
         "placeholder": "ghp_xxxxxxxxxxxxxxxxxxxx",
@@ -77,16 +141,25 @@
       "mcpServers": {
         "github": {
           "command": "npx",
-          "args": ["-y", "@modelcontextprotocol/server-github"],
-          "envMapping": { "GITHUB_PERSONAL_ACCESS_TOKEN": "token" }
+          "args": [
+            "-y",
+            "@modelcontextprotocol/server-github"
+          ],
+          "envMapping": {
+            "GITHUB_PERSONAL_ACCESS_TOKEN": "token"
+          }
         }
       },
       "setupSteps": [
-        "If you have GitHub CLI (gh) installed, your token is detected automatically — just click Connect",
+        "If you have GitHub CLI installed, your token is detected automatically — just click Connect",
         "Otherwise: go to github.com → Settings → Developer Settings → Personal Access Tokens",
-        "Click 'Generate new token', name it 'Delt', select repo access",
+        "Click 'Generate new token (classic)' and name it 'Delt'",
+        "Check these scopes: repo (access your repositories), read:org (see your organizations), read:user (read your profile)",
         "Copy the token and paste it below"
-      ]
+      ],
+      "setupTime": "~1 min",
+      "troubleshooting": "Token rejected? Make sure you chose Classic token (not fine-grained) and checked all three scopes.",
+      "tryIt": "Show my open pull requests"
     },
     {
       "id": "slack",
@@ -95,6 +168,20 @@
       "icon": "slack",
       "category": "communication",
       "authType": "token",
+      "capabilities": {
+        "can": [
+          "Send messages to channels",
+          "Read channel history",
+          "Search workspace messages",
+          "List users and channels"
+        ],
+        "creates": [
+          "Messages"
+        ],
+        "limitations": [
+          "Cannot create channels or manage workspace settings"
+        ]
+      },
       "tokenConfig": {
         "label": "Bot User OAuth Token",
         "placeholder": "xoxb-xxxxxxxxxxxx-xxxxxxxxxxxx",
@@ -104,17 +191,24 @@
       "mcpServers": {
         "slack": {
           "command": "npx",
-          "args": ["-y", "@modelcontextprotocol/server-slack"],
-          "envMapping": { "SLACK_BOT_TOKEN": "token" }
+          "args": [
+            "-y",
+            "@modelcontextprotocol/server-slack"
+          ],
+          "envMapping": {
+            "SLACK_BOT_TOKEN": "token"
+          }
         }
       },
       "setupSteps": [
-        "Go to api.slack.com/apps and sign in",
-        "Click 'Create New App' → 'From scratch'",
+        "Go to api.slack.com/apps → 'Create New App' → 'From scratch'",
         "Name it 'Delt' and pick your workspace",
-        "Go to 'OAuth & Permissions', add scopes: channels:read, chat:write, users:read",
-        "Install to Workspace and copy the Bot User OAuth Token"
-      ]
+        "Go to 'OAuth & Permissions' and add these Bot Token scopes: channels:read (view channels), chat:write (send messages), users:read (see member names)",
+        "Click 'Install to Workspace' and copy the Bot User OAuth Token"
+      ],
+      "setupTime": "~3 min",
+      "troubleshooting": "Bot not posting? Invite it to the channel first with /invite @Delt",
+      "tryIt": "What's the latest in #general?"
     },
     {
       "id": "notion",
@@ -123,6 +217,22 @@
       "icon": "notion",
       "category": "productivity",
       "authType": "token",
+      "capabilities": {
+        "can": [
+          "Create and edit pages",
+          "Query and update databases",
+          "Search across workspace",
+          "Add blocks (text, lists, tables, etc.)"
+        ],
+        "creates": [
+          "Pages",
+          "Database entries",
+          "Content blocks"
+        ],
+        "limitations": [
+          "Can only access pages explicitly shared with the integration"
+        ]
+      },
       "tokenConfig": {
         "label": "Integration Token",
         "placeholder": "ntn_xxxxxxxxxxxxxxxxxxxx",
@@ -132,17 +242,24 @@
       "mcpServers": {
         "notion": {
           "command": "npx",
-          "args": ["-y", "@notionhq/notion-mcp-server"],
-          "envMapping": { "OPENAPI_MCP_HEADERS": "token" }
+          "args": [
+            "-y",
+            "@notionhq/notion-mcp-server"
+          ],
+          "envMapping": {
+            "OPENAPI_MCP_HEADERS": "token"
+          }
         }
       },
       "setupSteps": [
-        "Go to notion.so/profile/integrations",
-        "Click 'New integration' and name it 'Delt'",
-        "Select your workspace and click Submit",
-        "Copy the Internal Integration Token",
-        "Go to the Notion pages you want accessible, click ··· → Connections → Add Delt"
-      ]
+        "Go to notion.so/profile/integrations and click 'New integration'",
+        "Name it 'Delt', pick your workspace, and make sure these capabilities are checked: Read content, Update content, Insert content",
+        "Click Submit and copy the token",
+        "Important: open each Notion page you want Delt to access, click ··· → Connections → Add Delt"
+      ],
+      "setupTime": "~2 min",
+      "troubleshooting": "Can't find your pages? Each page must be shared with the integration individually via ··· → Connections.",
+      "tryIt": "Search my Notion for meeting notes"
     },
     {
       "id": "linear",
@@ -151,6 +268,20 @@
       "icon": "linear",
       "category": "development",
       "authType": "token",
+      "capabilities": {
+        "can": [
+          "Create and update issues",
+          "Manage project status and cycles",
+          "Search across workspace",
+          "View teams and roadmaps"
+        ],
+        "creates": [
+          "Issues",
+          "Projects",
+          "Comments"
+        ],
+        "limitations": []
+      },
       "tokenConfig": {
         "label": "Personal API Key",
         "placeholder": "lin_api_xxxxxxxxxxxxxxxxxxxx",
@@ -160,16 +291,24 @@
       "mcpServers": {
         "linear": {
           "command": "npx",
-          "args": ["-y", "mcp-linear"],
-          "envMapping": { "LINEAR_API_KEY": "token" }
+          "args": [
+            "-y",
+            "mcp-linear"
+          ],
+          "envMapping": {
+            "LINEAR_API_KEY": "token"
+          }
         }
       },
       "setupSteps": [
         "Go to Linear → Settings → Account → API",
-        "Click 'Create key' under Personal API Keys",
-        "Name it 'Delt' and click Create",
-        "Copy the key"
-      ]
+        "Click 'Create key', name it 'Delt'",
+        "This gives Delt full access to your issues, projects, and teams",
+        "Copy the key right away — it's only shown once"
+      ],
+      "setupTime": "~1 min",
+      "troubleshooting": "Key not working? Make sure you copied the full key — it starts with lin_api_",
+      "tryIt": "Show my assigned issues"
     },
     {
       "id": "stripe",
@@ -178,6 +317,22 @@
       "icon": "stripe",
       "category": "finance",
       "authType": "token",
+      "capabilities": {
+        "can": [
+          "Create and manage customers, invoices, and subscriptions",
+          "Process refunds",
+          "View payment history and analytics",
+          "Create payment links"
+        ],
+        "creates": [
+          "Customers",
+          "Invoices",
+          "Subscriptions",
+          "Payment links",
+          "Refunds"
+        ],
+        "limitations": []
+      },
       "tokenConfig": {
         "label": "Secret Key",
         "placeholder": "sk_test_xxxxxxxxxxxxxxxxxxxx",
@@ -187,15 +342,24 @@
       "mcpServers": {
         "stripe": {
           "command": "npx",
-          "args": ["-y", "@stripe/mcp"],
-          "envMapping": { "STRIPE_SECRET_KEY": "token" }
+          "args": [
+            "-y",
+            "@stripe/mcp"
+          ],
+          "envMapping": {
+            "STRIPE_SECRET_KEY": "token"
+          }
         }
       },
       "setupSteps": [
-        "Go to dashboard.stripe.com and sign in",
-        "Click Developers → API Keys",
-        "Copy your Secret key (starts with sk_test_ or sk_live_)"
-      ]
+        "Go to dashboard.stripe.com → Developers → API Keys",
+        "Copy your Secret key (starts with sk_test_ or sk_live_)",
+        "This gives Delt access to your payments, customers, invoices, and subscriptions",
+        "Want limited access? Create a Restricted key and enable only Customers, Charges, Invoices, and Subscriptions"
+      ],
+      "setupTime": "~1 min",
+      "troubleshooting": "Using test mode? Make sure the key starts with sk_test_, not sk_live_",
+      "tryIt": "Show my recent payments"
     },
     {
       "id": "shopify",
@@ -204,6 +368,22 @@
       "icon": "shopify",
       "category": "commerce",
       "authType": "token",
+      "capabilities": {
+        "can": [
+          "Create and edit products",
+          "View orders and customers",
+          "Manage inventory levels",
+          "Update product listings"
+        ],
+        "creates": [
+          "Products",
+          "Collections",
+          "Discount codes"
+        ],
+        "limitations": [
+          "Cannot process payments directly"
+        ]
+      },
       "tokenConfig": {
         "label": "Admin API Access Token",
         "placeholder": "shpat_xxxxxxxxxxxxxxxxxxxx",
@@ -213,16 +393,24 @@
       "mcpServers": {
         "shopify": {
           "command": "npx",
-          "args": ["-y", "shopify-mcp"],
-          "envMapping": { "SHOPIFY_ACCESS_TOKEN": "token" }
+          "args": [
+            "-y",
+            "shopify-mcp"
+          ],
+          "envMapping": {
+            "SHOPIFY_ACCESS_TOKEN": "token"
+          }
         }
       },
       "setupSteps": [
         "Go to your Shopify Admin → Settings → Apps → Develop apps",
         "Create an app named 'Delt'",
-        "Select API scopes and install",
-        "Copy the Admin API access token"
-      ]
+        "Under Admin API scopes, enable: Products (read and write) and Orders (read only)",
+        "Click Install app and copy the Admin API access token"
+      ],
+      "setupTime": "~3 min",
+      "troubleshooting": "Don't see Develop apps? Your store owner needs to enable custom app development in Settings first.",
+      "tryIt": "List my top-selling products"
     },
     {
       "id": "hubspot",
@@ -231,6 +419,21 @@
       "icon": "hubspot",
       "category": "crm",
       "authType": "token",
+      "capabilities": {
+        "can": [
+          "Create and manage contacts, deals, and tickets",
+          "Search CRM records",
+          "Update deal stages and pipelines",
+          "View activity history"
+        ],
+        "creates": [
+          "Contacts",
+          "Deals",
+          "Tickets",
+          "Notes"
+        ],
+        "limitations": []
+      },
       "tokenConfig": {
         "label": "Private App Access Token",
         "placeholder": "pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
@@ -240,16 +443,24 @@
       "mcpServers": {
         "hubspot": {
           "command": "npx",
-          "args": ["-y", "mcp-hubspot"],
-          "envMapping": { "HUBSPOT_ACCESS_TOKEN": "token" }
+          "args": [
+            "-y",
+            "mcp-hubspot"
+          ],
+          "envMapping": {
+            "HUBSPOT_ACCESS_TOKEN": "token"
+          }
         }
       },
       "setupSteps": [
         "Go to HubSpot → Settings → Integrations → Private Apps",
         "Create a private app named 'Delt'",
-        "Add scopes: Contacts, Deals, Tickets",
-        "Create and copy the access token"
-      ]
+        "Under Scopes, enable read and write access for Contacts and Deals",
+        "Click Create app and copy the access token"
+      ],
+      "setupTime": "~3 min",
+      "troubleshooting": "No Private Apps option? This feature requires a HubSpot Professional or Enterprise plan.",
+      "tryIt": "Show my recent deals"
     },
     {
       "id": "trello",
@@ -258,6 +469,21 @@
       "icon": "trello",
       "category": "productivity",
       "authType": "token",
+      "capabilities": {
+        "can": [
+          "Create and manage boards, lists, and cards",
+          "Add checklists and attachments",
+          "Move cards between lists",
+          "Search across boards"
+        ],
+        "creates": [
+          "Boards",
+          "Cards",
+          "Lists",
+          "Checklists"
+        ],
+        "limitations": []
+      },
       "tokenConfig": {
         "label": "API Token",
         "placeholder": "your-trello-api-token",
@@ -267,16 +493,24 @@
       "mcpServers": {
         "trello": {
           "command": "npx",
-          "args": ["-y", "mcp-trello"],
-          "envMapping": { "TRELLO_API_TOKEN": "token" }
+          "args": [
+            "-y",
+            "mcp-trello"
+          ],
+          "envMapping": {
+            "TRELLO_API_TOKEN": "token"
+          }
         }
       },
       "setupSteps": [
         "Go to trello.com/power-ups/admin and sign in",
-        "Create a Power-Up and generate an API Key",
-        "Click the Token link to generate a token",
-        "Copy the token"
-      ]
+        "Create a Power-Up and click 'Generate a new API Key'",
+        "Click the Token link next to the key — this lets Delt read and edit your boards, lists, and cards",
+        "Click Allow and copy the token"
+      ],
+      "setupTime": "~2 min",
+      "troubleshooting": "Can't find the Token link? It appears right below your API Key after you generate it.",
+      "tryIt": "Show my Trello boards"
     },
     {
       "id": "figma",
@@ -285,24 +519,46 @@
       "icon": "figma",
       "category": "design",
       "authType": "token",
+      "capabilities": {
+        "can": [
+          "Read and inspect design files, frames, and components",
+          "Read and post comments on designs",
+          "Pull design specs (colors, spacing, typography)"
+        ],
+        "creates": [
+          "Comments on designs"
+        ],
+        "limitations": [
+          "Cannot create or edit designs on the canvas — Figma has no write API. To create visual designs, build them as HTML/CSS and deploy or screenshot them."
+        ]
+      },
       "tokenConfig": {
         "label": "Personal Access Token",
         "placeholder": "figd_xxxxxxxxxxxxxxxxxxxx",
-        "helpUrl": "https://www.figma.com/developers/api#access-tokens",
+        "helpUrl": "https://www.figma.com/settings",
         "scopes": "file:read"
       },
       "mcpServers": {
         "figma": {
           "command": "npx",
-          "args": ["-y", "figma-mcp"],
-          "envMapping": { "FIGMA_ACCESS_TOKEN": "token" }
+          "args": [
+            "-y",
+            "figma-mcp"
+          ],
+          "envMapping": {
+            "FIGMA_ACCESS_TOKEN": "token"
+          }
         }
       },
       "setupSteps": [
         "Go to figma.com → Settings → Personal access tokens",
-        "Create a new token named 'Delt'",
-        "Copy the token immediately"
-      ]
+        "Click 'Generate new token' and name it 'Delt'",
+        "Set the File content scope to Read only — Delt can view your designs but won't modify them",
+        "Click Generate and copy the token right away — it's only shown once"
+      ],
+      "setupTime": "~1 min",
+      "troubleshooting": "Token not working? Make sure you set the File content scope — tokens with no scopes can't access anything.",
+      "tryIt": "List my recent Figma files"
     },
     {
       "id": "vscode",
@@ -311,19 +567,39 @@
       "icon": "vscode",
       "category": "development",
       "authType": "enable",
+      "capabilities": {
+        "can": [
+          "Read and edit workspace files",
+          "View diagnostics and errors",
+          "Run terminal commands",
+          "Control the editor"
+        ],
+        "creates": [
+          "Files",
+          "Terminal sessions"
+        ],
+        "limitations": [
+          "Requires VS Code to be running with the MCP extension"
+        ]
+      },
       "mcpServers": {
         "vscode": {
           "command": "npx",
-          "args": ["-y", "@vscode-mcp/vscode-mcp-server"],
+          "args": [
+            "-y",
+            "@vscode-mcp/vscode-mcp-server"
+          ],
           "envMapping": {}
         }
       },
       "setupSteps": [
-        "Install the 'VSCode MCP' extension in VS Code (search 'vscode-mcp' in the Extensions panel)",
+        "In VS Code, open Extensions and search for 'vscode-mcp' — install it",
         "Make sure VS Code is running with the extension active",
-        "Click Enable below — the MCP server connects to VS Code via Unix Socket",
-        "No API keys needed — it talks directly to your running VS Code instance"
-      ]
+        "Click Enable below — no API keys needed, Delt connects directly to your running VS Code"
+      ],
+      "setupTime": "~1 min",
+      "troubleshooting": "Not connecting? Make sure VS Code is running and the vscode-mcp extension shows as active.",
+      "tryIt": "Show errors in my current file"
     },
     {
       "id": "airtable",
@@ -332,6 +608,20 @@
       "icon": "airtable",
       "category": "productivity",
       "authType": "token",
+      "capabilities": {
+        "can": [
+          "Create, read, update, and delete records",
+          "Query views and tables",
+          "Search across bases"
+        ],
+        "creates": [
+          "Records",
+          "Table entries"
+        ],
+        "limitations": [
+          "Cannot create new bases or tables — only add records to existing ones"
+        ]
+      },
       "tokenConfig": {
         "label": "Personal Access Token",
         "placeholder": "pat_xxxxxxxxxxxxxxxxxxxx",
@@ -341,16 +631,24 @@
       "mcpServers": {
         "airtable": {
           "command": "npx",
-          "args": ["-y", "mcp-airtable"],
-          "envMapping": { "AIRTABLE_API_KEY": "token" }
+          "args": [
+            "-y",
+            "mcp-airtable"
+          ],
+          "envMapping": {
+            "AIRTABLE_API_KEY": "token"
+          }
         }
       },
       "setupSteps": [
-        "Go to airtable.com/create/tokens",
-        "Create a new token named 'Delt'",
-        "Add scopes and select bases",
-        "Copy the token"
-      ]
+        "Go to airtable.com/create/tokens and click 'Create new token'",
+        "Name it 'Delt' and add these scopes: Read records and Write records",
+        "Choose which bases Delt can access — you can limit it to specific ones",
+        "Click Create token and copy it"
+      ],
+      "setupTime": "~2 min",
+      "troubleshooting": "Token rejected? Make sure you added at least one base to the token's access list.",
+      "tryIt": "Show records from my first table"
     },
     {
       "id": "apple",
@@ -359,19 +657,40 @@
       "icon": "apple",
       "category": "productivity",
       "authType": "enable",
+      "capabilities": {
+        "can": [
+          "Create and manage reminders and notes",
+          "Read and create calendar events",
+          "Search contacts",
+          "Open apps on this Mac"
+        ],
+        "creates": [
+          "Reminders",
+          "Notes",
+          "Calendar events"
+        ],
+        "limitations": [
+          "macOS only — requires permission grants on first use"
+        ]
+      },
       "mcpServers": {
         "apple": {
           "command": "npx",
-          "args": ["-y", "apple-mcp"],
+          "args": [
+            "-y",
+            "apple-mcp"
+          ],
           "envMapping": {}
         }
       },
       "setupSteps": [
         "Click Enable below",
-        "Your Mac may ask for permission to access Reminders, Calendar, or Contacts",
-        "Click 'Allow' on any permission prompts that appear",
-        "Your Apple apps will be accessible — no sign-in needed since you're already logged in on your Mac"
-      ]
+        "Your Mac will ask for permission to access Reminders, Calendar, and Contacts — click Allow on each",
+        "No sign-in needed — Delt uses your existing Mac account"
+      ],
+      "setupTime": "Instant",
+      "troubleshooting": "Permission denied? Go to System Settings → Privacy & Security and grant access manually.",
+      "tryIt": "Show my reminders for today"
     },
     {
       "id": "microsoft-365",
@@ -380,20 +699,48 @@
       "icon": "microsoft",
       "category": "productivity",
       "authType": "token",
+      "capabilities": {
+        "can": [
+          "Send and read Outlook emails",
+          "Create and manage calendar events",
+          "Read and write OneDrive files",
+          "Access Planner tasks"
+        ],
+        "creates": [
+          "Emails",
+          "Calendar events",
+          "Files",
+          "Planner tasks"
+        ],
+        "limitations": [
+          "Cannot create Teams channels or manage Teams settings"
+        ]
+      },
       "tokenConfig": {
         "label": "Client ID",
         "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
         "helpUrl": "https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps",
         "scopes": "Mail.Read, Mail.Send, Calendars.ReadWrite, Files.ReadWrite",
         "fields": [
-          { "key": "clientId", "label": "Client ID", "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
-          { "key": "tenantId", "label": "Tenant ID", "placeholder": "common (or your tenant ID)" }
+          {
+            "key": "clientId",
+            "label": "Client ID",
+            "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+          },
+          {
+            "key": "tenantId",
+            "label": "Tenant ID",
+            "placeholder": "common (or your tenant ID)"
+          }
         ]
       },
       "mcpServers": {
         "microsoft365": {
           "command": "npx",
-          "args": ["-y", "microsoft365-mcp-server"],
+          "args": [
+            "-y",
+            "microsoft365-mcp-server"
+          ],
           "envMapping": {
             "MS365_AUTH_MODE": "_static:interactive",
             "MS365_CLIENT_ID": "clientId",
@@ -403,11 +750,14 @@
       },
       "setupSteps": [
         "Go to Azure Portal → App registrations → New registration",
-        "Name it 'Delt', set redirect URI to http://localhost",
-        "Under API permissions, add Microsoft Graph: Mail.Read, Mail.Send, Calendars.ReadWrite, Files.ReadWrite",
+        "Name it 'Delt' and set the redirect URI to http://localhost",
+        "Under API permissions, add Microsoft Graph access for: email (Mail.Read, Mail.Send), calendar (Calendars.ReadWrite), and files (Files.ReadWrite)",
         "Copy the Application (client) ID and Directory (tenant) ID",
-        "For personal accounts, use 'common' as the Tenant ID"
-      ]
+        "Using a personal Microsoft account? Enter 'common' as the Tenant ID"
+      ],
+      "setupTime": "~5 min",
+      "troubleshooting": "Getting unauthorized? Make sure you clicked Grant admin consent after adding API permissions.",
+      "tryIt": "Check my Outlook inbox"
     },
     {
       "id": "twilio",
@@ -416,21 +766,50 @@
       "icon": "twilio",
       "category": "communication",
       "authType": "token",
+      "capabilities": {
+        "can": [
+          "Send SMS and WhatsApp messages",
+          "Make and manage phone calls",
+          "Look up phone numbers",
+          "View message history"
+        ],
+        "creates": [
+          "SMS messages",
+          "WhatsApp messages",
+          "Phone calls"
+        ],
+        "limitations": []
+      },
       "tokenConfig": {
         "label": "Account SID",
         "placeholder": "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
         "helpUrl": "https://console.twilio.com",
         "scopes": "messaging, voice",
         "fields": [
-          { "key": "accountSid", "label": "Account SID", "placeholder": "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
-          { "key": "authToken", "label": "Auth Token", "placeholder": "Your auth token" },
-          { "key": "phoneNumber", "label": "Twilio Phone Number", "placeholder": "+1234567890" }
+          {
+            "key": "accountSid",
+            "label": "Account SID",
+            "placeholder": "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          },
+          {
+            "key": "authToken",
+            "label": "Auth Token",
+            "placeholder": "Your auth token"
+          },
+          {
+            "key": "phoneNumber",
+            "label": "Twilio Phone Number",
+            "placeholder": "+1234567890"
+          }
         ]
       },
       "mcpServers": {
         "twilio": {
           "command": "npx",
-          "args": ["-y", "twilio-mcp"],
+          "args": [
+            "-y",
+            "twilio-mcp"
+          ],
           "envMapping": {
             "TWILIO_ACCOUNT_SID": "accountSid",
             "TWILIO_AUTH_TOKEN": "authToken",
@@ -439,11 +818,14 @@
         }
       },
       "setupSteps": [
-        "Go to console.twilio.com and sign in",
-        "Your Account SID and Auth Token are on the dashboard",
+        "Go to console.twilio.com — your Account SID and Auth Token are right on the dashboard",
         "Click 'Show' next to Auth Token and copy it",
-        "Copy a phone number from Phone Numbers → Manage → Active numbers"
-      ]
+        "Go to Phone Numbers → Manage and copy a number that has SMS and Voice enabled",
+        "These credentials let Delt send texts and make calls from your Twilio account"
+      ],
+      "setupTime": "~2 min",
+      "troubleshooting": "Messages not sending? Trial accounts can only text verified numbers — verify the recipient first.",
+      "tryIt": "Send a test text to my phone"
     },
     {
       "id": "sendgrid",
@@ -452,6 +834,19 @@
       "icon": "sendgrid",
       "category": "communication",
       "authType": "token",
+      "capabilities": {
+        "can": [
+          "Send transactional and marketing emails",
+          "Use email templates",
+          "View delivery analytics"
+        ],
+        "creates": [
+          "Emails"
+        ],
+        "limitations": [
+          "Bulk campaigns require verified sender identity"
+        ]
+      },
       "tokenConfig": {
         "label": "API Key",
         "placeholder": "SG.xxxxxxxxxxxxxxxxxxxx",
@@ -461,18 +856,24 @@
       "mcpServers": {
         "sendgrid": {
           "command": "npx",
-          "args": ["-y", "sendgrid-mcp"],
+          "args": [
+            "-y",
+            "sendgrid-mcp"
+          ],
           "envMapping": {
             "SENDGRID_API_KEY": "token"
           }
         }
       },
       "setupSteps": [
-        "Go to app.sendgrid.com → Settings → API Keys",
-        "Click 'Create API Key'",
-        "Name it 'Delt', choose 'Full Access' or select specific permissions",
-        "Click 'Create & View' and copy the key immediately"
-      ]
+        "Go to app.sendgrid.com → Settings → API Keys → Create API Key",
+        "Name it 'Delt' and choose 'Restricted Access'",
+        "Enable: Mail Send (to send emails) and Template Engine (to use your templates)",
+        "Click 'Create & View' and copy the key right away — it's only shown once"
+      ],
+      "setupTime": "~2 min",
+      "troubleshooting": "Emails bouncing? You need to verify your sender identity in SendGrid before sending.",
+      "tryIt": "Send a test email to myself"
     },
     {
       "id": "salesforce",
@@ -481,19 +882,42 @@
       "icon": "salesforce",
       "category": "crm",
       "authType": "enable",
+      "capabilities": {
+        "can": [
+          "Create and manage leads, opportunities, accounts, and contacts",
+          "Run SOQL queries",
+          "View reports and dashboards"
+        ],
+        "creates": [
+          "Leads",
+          "Opportunities",
+          "Accounts",
+          "Contacts",
+          "Cases"
+        ],
+        "limitations": [
+          "Requires Salesforce CLI authentication first"
+        ]
+      },
       "mcpServers": {
         "salesforce": {
           "command": "npx",
-          "args": ["-y", "salesforce-mcp-server"],
+          "args": [
+            "-y",
+            "salesforce-mcp-server"
+          ],
           "envMapping": {}
         }
       },
       "setupSteps": [
-        "Install Salesforce CLI first: npm install -g @salesforce/cli",
-        "Run 'sf org login web' in Terminal to authenticate",
-        "Once logged in, click Enable below",
-        "Delt will use your existing Salesforce CLI session"
-      ]
+        "Install the Salesforce CLI first — run: npm install -g @salesforce/cli",
+        "Then run: sf org login web — a browser window will open to sign you in",
+        "This gives Delt access to your leads, opportunities, accounts, contacts, and reports",
+        "Once signed in, click Enable below"
+      ],
+      "setupTime": "~3 min",
+      "troubleshooting": "sf command not found? Close and reopen Terminal after installing the Salesforce CLI.",
+      "tryIt": "Show my open opportunities"
     },
     {
       "id": "zoom",
@@ -502,21 +926,48 @@
       "icon": "zoom",
       "category": "communication",
       "authType": "token",
+      "capabilities": {
+        "can": [
+          "Create and schedule meetings",
+          "View meeting recordings and participants",
+          "Update meeting settings"
+        ],
+        "creates": [
+          "Meetings",
+          "Webinars"
+        ],
+        "limitations": []
+      },
       "tokenConfig": {
         "label": "Account ID",
         "placeholder": "Your Zoom account ID",
         "helpUrl": "https://marketplace.zoom.us/develop/create",
         "scopes": "meeting:read, meeting:write",
         "fields": [
-          { "key": "accountId", "label": "Account ID", "placeholder": "Your Zoom account ID" },
-          { "key": "clientId", "label": "Client ID", "placeholder": "Your Zoom client ID" },
-          { "key": "clientSecret", "label": "Client Secret", "placeholder": "Your Zoom client secret" }
+          {
+            "key": "accountId",
+            "label": "Account ID",
+            "placeholder": "Your Zoom account ID"
+          },
+          {
+            "key": "clientId",
+            "label": "Client ID",
+            "placeholder": "Your Zoom client ID"
+          },
+          {
+            "key": "clientSecret",
+            "label": "Client Secret",
+            "placeholder": "Your Zoom client secret"
+          }
         ]
       },
       "mcpServers": {
         "zoom": {
           "command": "npx",
-          "args": ["-y", "zoom-mcp-server"],
+          "args": [
+            "-y",
+            "zoom-mcp-server"
+          ],
           "envMapping": {
             "ZOOM_ACCOUNT_ID": "accountId",
             "ZOOM_CLIENT_ID": "clientId",
@@ -525,12 +976,14 @@
         }
       },
       "setupSteps": [
-        "Go to marketplace.zoom.us and sign in",
-        "Click Develop → Build App → Server-to-Server OAuth",
+        "Go to marketplace.zoom.us → Develop → Build App → Server-to-Server OAuth",
         "Name it 'Delt' and create the app",
-        "Copy the Account ID, Client ID, and Client Secret",
-        "Add scopes: meeting:read, meeting:write, then activate the app"
-      ]
+        "Add scopes: meeting:read (view meetings) and meeting:write (create and update meetings)",
+        "Activate the app, then copy the Account ID, Client ID, and Client Secret"
+      ],
+      "setupTime": "~5 min",
+      "troubleshooting": "App stuck on inactive? Make sure you added both scopes and clicked Activate.",
+      "tryIt": "Schedule a meeting for tomorrow at 2pm"
     },
     {
       "id": "custom-api",
@@ -539,6 +992,18 @@
       "icon": "api",
       "category": "custom",
       "authType": "custom",
+      "capabilities": {
+        "can": [
+          "Fetch data from any HTTP API",
+          "Send requests with custom headers and auth"
+        ],
+        "creates": [
+          "API requests"
+        ],
+        "limitations": [
+          "Depends on the target API's capabilities"
+        ]
+      },
       "tokenConfig": {
         "label": "API Key",
         "placeholder": "Paste your API key here",
@@ -548,7 +1013,10 @@
       "mcpServers": {
         "fetch": {
           "command": "npx",
-          "args": ["-y", "mcp-fetch"],
+          "args": [
+            "-y",
+            "mcp-fetch"
+          ],
           "envMapping": {}
         }
       },
@@ -556,7 +1024,10 @@
         "Find the API docs for the service you want to connect",
         "Create a new API key in their settings",
         "Paste it below"
-      ]
+      ],
+      "setupTime": "Varies",
+      "troubleshooting": "Not working? Double-check the API key and make sure it has the right permissions.",
+      "tryIt": "Fetch data from my API"
     }
   ]
 }
