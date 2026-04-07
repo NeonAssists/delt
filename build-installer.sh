@@ -246,8 +246,14 @@ PYEOF
 
 echo "  HTML: $(wc -c < delt-installer.html | xargs) bytes"
 
-# ---- Step 4: Cleanup ----
-echo "[4/4] Cleanup..."
+# ---- Step 4: Package zip ----
+echo "[4/4] Packaging..."
+cp /tmp/Delt.pkg "$PROJECT_DIR/Delt.pkg"
+cd "$PROJECT_DIR"
+zip -j ~/Desktop/Delt-v2.0.0.zip Delt.pkg delt-installer.html install.html 2>/dev/null
+rm -f "$PROJECT_DIR/Delt.pkg"
+
+# Cleanup temp files
 rm -rf "$PKG_SCRIPTS" "$PKG_RESOURCES" /tmp/delt-bundle.tar.gz /tmp/delt-pkg.b64 \
   /tmp/delt-component.pkg /tmp/delt-distribution.xml /tmp/Delt.pkg /tmp/delt-stage
 
