@@ -16,11 +16,29 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 INSTALL_DIR="$HOME/Delt"
-PORT="${DELT_PORT:-3939}"
 DELT_DATA="$HOME/.delt"
+PORT_FILE="$DELT_DATA/port"
+
+# Each install gets a unique random port — saved to ~/.delt/port
+if [ -n "$DELT_PORT" ]; then
+  PORT="$DELT_PORT"
+elif [ -f "$PORT_FILE" ]; then
+  PORT=$(cat "$PORT_FILE")
+else
+  PORT=$((10000 + RANDOM % 50000))
+  mkdir -p "$DELT_DATA"
+  echo "$PORT" > "$PORT_FILE"
+  chmod 600 "$PORT_FILE"
+fi
 REPO_URL="https://github.com/neonotics/delt"
 PLIST_LABEL="com.neonotics.delt"
 PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
+
+# ---- Silent mode (--silent flag skips prompts, used by HTML installer) ----
+SILENT=false
+for arg in "$@"; do
+  [ "$arg" = "--silent" ] && SILENT=true
+done
 
 # ---- Header ----
 clear 2>/dev/null || true
@@ -87,7 +105,7 @@ else
       ok "Node.js $(node -v) installed via Homebrew"
     else
       echo -e "  Installing Homebrew first..."
-      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
       eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv 2>/dev/null)"
       brew install node
       ok "Node.js $(node -v) installed"
@@ -146,6 +164,20 @@ if [ ! -f "$INSTALL_DIR/config.json" ] && [ -f "$INSTALL_DIR/config.default.json
   cp "$INSTALL_DIR/config.default.json" "$INSTALL_DIR/config.json"
 fi
 
+# Write Google OAuth credentials to .env if provided
+if [ -n "$GOOGLE_CLIENT_ID" ] && [ -n "$GOOGLE_CLIENT_SECRET" ]; then
+  ENV_FILE="$INSTALL_DIR/.env"
+  # Append if .env exists, create if not — avoid duplicates
+  grep -q "GOOGLE_CLIENT_ID" "$ENV_FILE" 2>/dev/null || {
+    echo "" >> "$ENV_FILE"
+    echo "# Google OAuth (auto-provisioned by installer)" >> "$ENV_FILE"
+    echo "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" >> "$ENV_FILE"
+    echo "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" >> "$ENV_FILE"
+  }
+  chmod 600 "$ENV_FILE"
+  ok "Google OAuth configured"
+fi
+
 # ---- Step 3: Dependencies ----
 progress "Installing dependencies..."
 cd "$INSTALL_DIR"
@@ -177,7 +209,15 @@ progress "Setting up launcher..."
 cat > "$INSTALL_DIR/start.sh" << 'LAUNCHER'
 #!/bin/bash
 cd "$(dirname "$0")"
-PORT=${PORT:-3939}
+PORT_FILE="$HOME/.delt/port"
+if [ -f "$PORT_FILE" ]; then
+  PORT=$(cat "$PORT_FILE")
+else
+  PORT=$((10000 + RANDOM % 50000))
+  mkdir -p "$HOME/.delt"
+  echo "$PORT" > "$PORT_FILE"
+  chmod 600 "$PORT_FILE"
+fi
 
 # Kill any existing instance on the port
 lsof -ti:$PORT 2>/dev/null | xargs kill -9 2>/dev/null || true
@@ -246,18 +286,13 @@ if [ "$OS" = "macos" ]; then
   <string>${INSTALL_DIR}</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>PORT</key>
-    <string>${PORT}</string>
     <key>PATH</key>
     <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
-  <dict>
-    <key>SuccessfulExit</key>
-    <false/>
-  </dict>
+  <true/>
   <key>StandardOutPath</key>
   <string>${DELT_DATA}/delt.log</string>
   <key>StandardErrorPath</key>
@@ -284,9 +319,10 @@ After=network.target
 Type=simple
 WorkingDirectory=${INSTALL_DIR}
 ExecStart=$(which node) ${INSTALL_DIR}/server.js
-Environment=PORT=${PORT}
-Restart=on-failure
+Restart=always
 RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Install]
 WantedBy=default.target

@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neonotics — Design System</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #09090b;
+    --surface: #111113;
+    --surface-2: #19191d;
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.12);
+    --text: #fafafa;
+    --text-2: #a1a1aa;
+    --text-3: #52525b;
+    --accent: #818cf8;
+    --accent-2: #6366f1;
+    --accent-glow: rgba(129,140,248,0.15);
+    --green: #34d399;
+    --orange: #fb923c;
+    --pink: #f472b6;
+    --cyan: #22d3ee;
+    --radius: 12px;
+    --radius-lg: 20px;
+  }
+
+  html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  /* ═══════════════ CANVAS BACKGROUND ═══════════════ */
+  #bg-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .page { position: relative; z-index: 1; }
+
+  /* ═══════════════ HERO ═══════════════ */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 2rem;
+    position: relative;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border-radius: 999px;
+    background: var(--accent-glow);
+    border: 1px solid rgba(129,140,248,0.2);
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--accent);
+    margin-bottom: 2rem;
+    animation: fadeUp 0.8s ease both;
+  }
+
+  .hero-badge .dot {
+    width: 6px; height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse-dot 2s ease infinite;
+  }
+
+  .hero h1 {
+    font-size: clamp(3rem, 8vw, 7rem);
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    margin-bottom: 1.5rem;
+    animation: fadeUp 0.8s ease 0.1s both;
+  }
+
+  .hero h1 .gradient {
+    background: linear-gradient(135deg, var(--accent), var(--cyan), var(--pink));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 200% 200%;
+    animation: gradientShift 6s ease infinite;
+  }
+
+  .hero p {
+    font-size: clamp(1rem, 2vw, 1.25rem);
+    color: var(--text-2);
+    max-width: 540px;
+    margin-bottom: 3rem;
+    animation: fadeUp 0.8s ease 0.2s both;
+  }
+
+  .hero-cta {
+    display: flex;
+    gap: 12px;
+    animation: fadeUp 0.8s ease 0.3s both;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 28px;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    transition: all 0.25s ease;
+    font-family: inherit;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 24px var(--accent-glow);
+  }
+  .btn-primary:hover {
+    background: var(--accent-2);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(99,102,241,0.3);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-2);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover {
+    color: var(--text);
+    border-color: var(--border-hover);
+    background: var(--surface);
+  }
+
+  .scroll-indicator {
+    position: absolute;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-3);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    animation: fadeUp 0.8s ease 0.6s both;
+  }
+
+  .scroll-line {
+    width: 1px;
+    height: 40px;
+    background: linear-gradient(to bottom, var(--accent), transparent);
+    animation: scrollPulse 2s ease infinite;
+  }
+
+  /* ═══════════════ SECTIONS ═══════════════ */
+  section {
+    padding: 6rem 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .section-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 1rem;
+  }
+
+  .section-title {
+    font-size: clamp(1.75rem, 4vw, 2.75rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin-bottom: 1rem;
+  }
+
+  .section-desc {
+    font-size: 1.05rem;
+    color: var(--text-2);
+    max-width: 560px;
+    margin-bottom: 3.5rem;
+  }
+
+  /* ═══════════════ BENTO GRID ═══════════════ */
+  .bento {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-auto-rows: minmax(220px, auto);
+    gap: 16px;
+  }
+
+  .bento-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.35s ease;
+    cursor: default;
+  }
+
+  .bento-card:hover {
+    border-color: var(--border-hover);
+    transform: translateY(-4px);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  }
+
+  .bento-card.span-2 { grid-column: span 2; }
+  .bento-card.tall { grid-row: span 2; }
+
+  .bento-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .bento-card h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+
+  .bento-card p {
+    font-size: 0.875rem;
+    color: var(--text-2);
+    line-height: 1.6;
+  }
+
+  .bento-visual {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-top: 1.5rem;
+  }
+
+  /* Mini chart inside bento */
+  .mini-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 80px;
+    width: 100%;
+  }
+
+  .mini-chart .bar {
+    flex: 1;
+    background: linear-gradient(to top, var(--accent), var(--cyan));
+    border-radius: 4px 4px 0 0;
+    transition: height 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    opacity: 0.7;
+  }
+
+  .mini-chart .bar:hover { opacity: 1; }
+
+  /* Stat ring */
+  .stat-ring {
+    width: 120px;
+    height: 120px;
+    position: relative;
+  }
+
+  .stat-ring svg { transform: rotate(-90deg); }
+
+  .stat-ring .value {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: 800;
+  }
+
+  /* ═══════════════ COLOR PALETTE ═══════════════ */
+  .palette-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+  }
+
+  .color-swatch {
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    transition: transform 0.2s ease;
+    cursor: pointer;
+  }
+
+  .color-swatch:hover { transform: scale(1.03); }
+
+  .color-swatch .preview {
+    height: 100px;
+    transition: height 0.3s ease;
+  }
+
+  .color-swatch .info {
+    padding: 12px 14px;
+    background: var(--surface);
+  }
+
+  .color-swatch .info .name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  .color-swatch .info .hex {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-3);
+  }
+
+  /* ═══════════════ TYPOGRAPHY SHOWCASE ═══════════════ */
+  .type-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .type-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 1.5rem 2rem;
+    background: var(--surface);
+    transition: background 0.2s ease;
+  }
+
+  .type-row:hover { background: var(--surface-2); }
+
+  .type-row .sample { flex: 1; }
+  .type-row .meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-3);
+    text-align: right;
+    white-space: nowrap;
+    margin-left: 2rem;
+  }
+
+  /* ═══════════════ COMPONENT SHOWCASE ═══════════════ */
+  .components-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+  }
+
+  .comp-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    transition: all 0.25s ease;
+  }
+
+  .comp-card:hover {
+    border-color: var(--border-hover);
+  }
+
+  .comp-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-3);
+    margin-bottom: 1.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* Buttons showcase */
+  .btn-row { display: flex; flex-wrap: wrap; gap: 10px; }
+
+  .btn-sm {
+    padding: 8px 18px;
+    font-size: 0.8rem;
+    border-radius: 8px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s ease;
+  }
+
+  .btn-sm.fill { background: var(--accent); color: #fff; }
+  .btn-sm.fill:hover { background: var(--accent-2); }
+  .btn-sm.outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-sm.outline:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm.danger { background: rgba(239,68,68,0.1); color: #ef4444; }
+  .btn-sm.danger:hover { background: rgba(239,68,68,0.2); }
+  .btn-sm.success { background: rgba(52,211,153,0.1); color: var(--green); }
+  .btn-sm.success:hover { background: rgba(52,211,153,0.2); }
+
+  /* Input showcase */
+  .input-demo { display: flex; flex-direction: column; gap: 10px; }
+
+  .input-demo input, .input-demo select {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.2s ease;
+  }
+
+  .input-demo input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+
+  .input-demo input::placeholder { color: var(--text-3); }
+
+  /* Avatar stack */
+  .avatar-stack { display: flex; align-items: center; }
+
+  .avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #fff;
+    margin-left: -8px;
+    transition: transform 0.2s ease;
+  }
+
+  .avatar:first-child { margin-left: 0; }
+  .avatar:hover { transform: translateY(-4px); z-index: 10; }
+
+  /* Toggle */
+  .toggle-row { display: flex; align-items: center; gap: 12px; }
+
+  .toggle {
+    width: 44px; height: 24px;
+    border-radius: 12px;
+    background: var(--text-3);
+    position: relative;
+    cursor: pointer;
+    transition: background 0.25s ease;
+  }
+
+  .toggle.on { background: var(--accent); }
+
+  .toggle::after {
+    content: '';
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    position: absolute;
+    top: 3px; left: 3px;
+    transition: transform 0.25s ease;
+  }
+
+  .toggle.on::after { transform: translateX(20px); }
+
+  .toggle-label { font-size: 0.85rem; color: var(--text-2); }
+
+  /* Tags */
+  .tag-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .tag {
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  /* Notification */
+  .notif {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+  }
+
+  .notif:hover { border-color: var(--border-hover); }
+
+  .notif-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .notif-text { font-size: 0.8rem; flex: 1; }
+  .notif-time { font-size: 0.7rem; color: var(--text-3); white-space: nowrap; }
+
+  /* ═══════════════ LIVE METRICS ═══════════════ */
+  .metrics-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 3rem;
+  }
+
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    text-align: center;
+  }
+
+  .metric-number {
+    font-size: 2.25rem;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .metric-label {
+    font-size: 0.75rem;
+    color: var(--text-3);
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .metric-change {
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 6px;
+  }
+
+  .up { color: var(--green); }
+  .down { color: #ef4444; }
+
+  /* ═══════════════ FOOTER ═══════════════ */
+  .footer {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-3);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border);
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .footer .brand {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+  }
+
+  /* ═══════════════ ANIMATIONS ═══════════════ */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes gradientShift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  @keyframes scrollPulse {
+    0%, 100% { opacity: 0.3; transform: scaleY(1); }
+    50% { opacity: 1; transform: scaleY(1.2); }
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ═══════════════ RESPONSIVE ═══════════════ */
+  @media (max-width: 768px) {
+    .bento { grid-template-columns: 1fr; }
+    .bento-card.span-2 { grid-column: span 1; }
+    .metrics-row { grid-template-columns: repeat(2, 1fr); }
+    .components-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<div class="page">
+
+  <!-- ════════════ HERO ════════════ -->
+  <section class="hero">
+    <div class="hero-badge"><span class="dot"></span> Design System v1.0</div>
+    <h1><span class="gradient">Neonotics</span></h1>
+    <p>A complete design language for building AI-powered business tools. Every pixel intentional.</p>
+    <div class="hero-cta">
+      <button class="btn btn-primary">Explore Components</button>
+      <button class="btn btn-ghost">View Source</button>
+    </div>
+    <div class="scroll-indicator">
+      <div class="scroll-line"></div>
+      Scroll
+    </div>
+  </section>
+
+  <!-- ════════════ LIVE METRICS ════════════ -->
+  <section>
+    <div class="section-label reveal">Dashboard</div>
+    <div class="section-title reveal">Live Metrics</div>
+    <div class="section-desc reveal">Real-time counters with spring physics. Numbers that feel alive.</div>
+
+    <div class="metrics-row reveal">
+      <div class="metric-card">
+        <div class="metric-number" data-count="2847">0</div>
+        <div class="metric-label">Active Users</div>
+        <div class="metric-change up">+12.4%</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-number" data-count="94">0</div>
+        <div class="metric-label">Uptime %</div>
+        <div class="metric-change up">+0.3%</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-number" data-count="156">0</div>
+        <div class="metric-label">Deployments</div>
+        <div class="metric-change up">+8 this week</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-number" data-count="23">0</div>
+        <div class="metric-label">Open Issues</div>
+        <div class="metric-change down">-3 resolved</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════ BENTO ════════════ -->
+  <section>
+    <div class="section-label reveal">Capabilities</div>
+    <div class="section-title reveal">Built Different</div>
+    <div class="section-desc reveal">Every feature designed for operators who move fast and ship daily.</div>
+
+    <div class="bento reveal">
+      <div class="bento-card span-2">
+        <div>
+          <div class="bento-icon" style="background:rgba(129,140,248,0.1);color:var(--accent);">&#9889;</div>
+          <h3>Instant Integrations</h3>
+          <p>Connect 20+ services in one click. Gmail, Slack, GitHub, Figma, Stripe — all through MCP.</p>
+        </div>
+        <div class="bento-visual">
+          <div class="mini-chart" id="chart1"></div>
+        </div>
+      </div>
+
+      <div class="bento-card tall">
+        <div>
+          <div class="bento-icon" style="background:rgba(52,211,153,0.1);color:var(--green);">&#128274;</div>
+          <h3>Zero-Trust Security</h3>
+          <p>Local-first. Your data never leaves your machine. Encrypted credentials, sandboxed MCP servers.</p>
+        </div>
+        <div class="bento-visual" style="justify-content:center;align-items:center;">
+          <div class="stat-ring">
+            <svg width="120" height="120" viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="50" fill="none" stroke="var(--surface-2)" stroke-width="8"/>
+              <circle cx="60" cy="60" r="50" fill="none" stroke="var(--green)" stroke-width="8"
+                stroke-dasharray="314" stroke-dashoffset="314" stroke-linecap="round"
+                id="ring-progress"/>
+            </svg>
+            <div class="value" style="color:var(--green);" id="ring-value">0%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bento-card">
+        <div class="bento-icon" style="background:rgba(244,114,182,0.1);color:var(--pink);">&#127912;</div>
+        <h3>Design-First</h3>
+        <p>Not another gray dashboard. Every surface crafted to look like it belongs on Awwwards.</p>
+      </div>
+
+      <div class="bento-card">
+        <div class="bento-icon" style="background:rgba(34,211,238,0.1);color:var(--cyan);">&#128640;</div>
+        <h3>Ship in Minutes</h3>
+        <p>One-line install. PWA-ready. Works on desktop and mobile from day one.</p>
+      </div>
+
+      <div class="bento-card span-2">
+        <div>
+          <div class="bento-icon" style="background:rgba(251,146,60,0.1);color:var(--orange);">&#129302;</div>
+          <h3>AI-Native Architecture</h3>
+          <p>Built around Claude, not bolted on. Every interaction flows through intelligent context — your assistant remembers, learns, and adapts.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════ COLOR PALETTE ════════════ -->
+  <section>
+    <div class="section-label reveal">Brand</div>
+    <div class="section-title reveal">Color System</div>
+    <div class="section-desc reveal">A palette that balances dark-mode elegance with high-contrast accessibility.</div>
+
+    <div class="palette-grid reveal">
+      <div class="color-swatch" onclick="copyHex(this)">
+        <div class="preview" style="background:#818cf8;"></div>
+        <div class="info"><div class="name">Indigo</div><div class="hex">#818CF8</div></div>
+      </div>
+      <div class="color-swatch" onclick="copyHex(this)">
+        <div class="preview" style="background:#6366f1;"></div>
+        <div class="info"><div class="name">Indigo Deep</div><div class="hex">#6366F1</div></div>
+      </div>
+      <div class="color-swatch" onclick="copyHex(this)">
+        <div class="preview" style="background:#22d3ee;"></div>
+        <div class="info"><div class="name">Cyan</div><div class="hex">#22D3EE</div></div>
+      </div>
+      <div class="color-swatch" onclick="copyHex(this)">
+        <div class="preview" style="background:#34d399;"></div>
+        <div class="info"><div class="name">Emerald</div><div class="hex">#34D399</div></div>
+      </div>
+      <div class="color-swatch" onclick="copyHex(this)">
+        <div class="preview" style="background:#f472b6;"></div>
+        <div class="info"><div class="name">Pink</div><div class="hex">#F472B6</div></div>
+      </div>
+      <div class="color-swatch" onclick="copyHex(this)">
+        <div class="preview" style="background:#fb923c;"></div>
+        <div class="info"><div class="name">Amber</div><div class="hex">#FB923C</div></div>
+      </div>
+      <div class="color-swatch" onclick="copyHex(this)">
+        <div class="preview" style="background:#fafafa;"></div>
+        <div class="info"><div class="name">White</div><div class="hex">#FAFAFA</div></div>
+      </div>
+      <div class="color-swatch" onclick="copyHex(this)">
+        <div class="preview" style="background:#09090b;border-bottom:1px solid var(--border);"></div>
+        <div class="info"><div class="name">Void</div><div class="hex">#09090B</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════ TYPOGRAPHY ════════════ -->
+  <section>
+    <div class="section-label reveal">Typography</div>
+    <div class="section-title reveal">Type Scale</div>
+    <div class="section-desc reveal">Inter for UI. JetBrains Mono for code. Nothing else needed.</div>
+
+    <div class="type-stack reveal">
+      <div class="type-row">
+        <div class="sample" style="font-size:3rem;font-weight:900;letter-spacing:-0.04em;line-height:1.1;">Display</div>
+        <div class="meta">48px / 900 / -0.04em</div>
+      </div>
+      <div class="type-row">
+        <div class="sample" style="font-size:2rem;font-weight:800;letter-spacing:-0.03em;">Heading 1</div>
+        <div class="meta">32px / 800 / -0.03em</div>
+      </div>
+      <div class="type-row">
+        <div class="sample" style="font-size:1.5rem;font-weight:700;letter-spacing:-0.02em;">Heading 2</div>
+        <div class="meta">24px / 700 / -0.02em</div>
+      </div>
+      <div class="type-row">
+        <div class="sample" style="font-size:1.125rem;font-weight:600;">Heading 3</div>
+        <div class="meta">18px / 600</div>
+      </div>
+      <div class="type-row">
+        <div class="sample" style="font-size:1rem;font-weight:400;color:var(--text-2);">Body text — the quick brown fox jumps over the lazy dog.</div>
+        <div class="meta">16px / 400</div>
+      </div>
+      <div class="type-row">
+        <div class="sample" style="font-size:0.875rem;font-weight:400;color:var(--text-3);">Caption — secondary information and metadata</div>
+        <div class="meta">14px / 400</div>
+      </div>
+      <div class="type-row">
+        <div class="sample" style="font-family:'JetBrains Mono',monospace;font-size:0.875rem;color:var(--accent);">const deploy = await ship({ fast: true })</div>
+        <div class="meta">JetBrains Mono / 14px</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════ COMPONENTS ════════════ -->
+  <section>
+    <div class="section-label reveal">Library</div>
+    <div class="section-title reveal">Components</div>
+    <div class="section-desc reveal">Production-ready UI primitives. Copy, paste, ship.</div>
+
+    <div class="components-grid reveal">
+      <!-- Buttons -->
+      <div class="comp-card">
+        <div class="comp-label">Buttons</div>
+        <div class="btn-row">
+          <button class="btn-sm fill">Primary</button>
+          <button class="btn-sm outline">Secondary</button>
+          <button class="btn-sm danger">Delete</button>
+          <button class="btn-sm success">Confirm</button>
+        </div>
+      </div>
+
+      <!-- Inputs -->
+      <div class="comp-card">
+        <div class="comp-label">Inputs</div>
+        <div class="input-demo">
+          <input type="text" placeholder="Search integrations..." />
+          <input type="email" placeholder="nate@neonotics.com" />
+        </div>
+      </div>
+
+      <!-- Avatars -->
+      <div class="comp-card">
+        <div class="comp-label">Avatar Stack</div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div class="avatar-stack">
+            <div class="avatar" style="background:var(--accent);">NR</div>
+            <div class="avatar" style="background:var(--pink);">AI</div>
+            <div class="avatar" style="background:var(--cyan);">DL</div>
+            <div class="avatar" style="background:var(--orange);">KM</div>
+            <div class="avatar" style="background:var(--surface-2);color:var(--text-3);font-size:0.65rem;">+5</div>
+          </div>
+          <span style="font-size:0.8rem;color:var(--text-3);">9 members online</span>
+        </div>
+      </div>
+
+      <!-- Toggles -->
+      <div class="comp-card">
+        <div class="comp-label">Toggles</div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div class="toggle-row">
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+            <span class="toggle-label">Dark mode</span>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle" onclick="this.classList.toggle('on')"></div>
+            <span class="toggle-label">Notifications</span>
+          </div>
+          <div class="toggle-row">
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+            <span class="toggle-label">Auto-deploy</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tags -->
+      <div class="comp-card">
+        <div class="comp-label">Tags</div>
+        <div class="tag-row">
+          <span class="tag" style="background:rgba(129,140,248,0.15);color:var(--accent);">AI</span>
+          <span class="tag" style="background:rgba(52,211,153,0.15);color:var(--green);">Shipped</span>
+          <span class="tag" style="background:rgba(251,146,60,0.15);color:var(--orange);">In Progress</span>
+          <span class="tag" style="background:rgba(239,68,68,0.15);color:#ef4444;">Blocked</span>
+          <span class="tag" style="background:rgba(34,211,238,0.15);color:var(--cyan);">Design</span>
+          <span class="tag" style="background:rgba(244,114,182,0.15);color:var(--pink);">Urgent</span>
+        </div>
+      </div>
+
+      <!-- Notifications -->
+      <div class="comp-card">
+        <div class="comp-label">Notifications</div>
+        <div class="notif">
+          <div class="notif-dot" style="background:var(--accent);"></div>
+          <div class="notif-text">New deployment to <strong>production</strong></div>
+          <div class="notif-time">2m ago</div>
+        </div>
+        <div class="notif">
+          <div class="notif-dot" style="background:var(--green);"></div>
+          <div class="notif-text">All tests passing on <strong>main</strong></div>
+          <div class="notif-time">14m ago</div>
+        </div>
+        <div class="notif">
+          <div class="notif-dot" style="background:var(--orange);"></div>
+          <div class="notif-text">Stripe webhook retry failed</div>
+          <div class="notif-time">1h ago</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════ FOOTER ════════════ -->
+  <div class="footer">
+    <div class="brand">Neonotics</div>
+    <p>Design system crafted by Delt. Every pixel intentional.</p>
+  </div>
+
+</div>
+
+<script>
+  // ═══════════ PARTICLE BACKGROUND ═══════════
+  const canvas = document.getElementById('bg-canvas');
+  const ctx = canvas.getContext('2d');
+  let particles = [];
+  let mouse = { x: -1000, y: -1000 };
+  let W, H;
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  document.addEventListener('mousemove', e => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+  });
+
+  class Particle {
+    constructor() {
+      this.reset();
+    }
+    reset() {
+      this.x = Math.random() * W;
+      this.y = Math.random() * H;
+      this.vx = (Math.random() - 0.5) * 0.3;
+      this.vy = (Math.random() - 0.5) * 0.3;
+      this.r = Math.random() * 1.5 + 0.5;
+      this.alpha = Math.random() * 0.3 + 0.05;
+    }
+    update() {
+      this.x += this.vx;
+      this.y += this.vy;
+
+      const dx = mouse.x - this.x;
+      const dy = mouse.y - this.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 200) {
+        const force = (200 - dist) / 200 * 0.02;
+        this.vx += dx * force * 0.01;
+        this.vy += dy * force * 0.01;
+      }
+
+      this.vx *= 0.99;
+      this.vy *= 0.99;
+
+      if (this.x < 0 || this.x > W || this.y < 0 || this.y > H) this.reset();
+    }
+    draw() {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(129,140,248,${this.alpha})`;
+      ctx.fill();
+    }
+  }
+
+  for (let i = 0; i < 80; i++) particles.push(new Particle());
+
+  function drawLines() {
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 150) {
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = `rgba(129,140,248,${0.06 * (1 - dist / 150)})`;
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  function animate() {
+    ctx.clearRect(0, 0, W, H);
+    particles.forEach(p => { p.update(); p.draw(); });
+    drawLines();
+    requestAnimationFrame(animate);
+  }
+  animate();
+
+  // ═══════════ SCROLL REVEAL ═══════════
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) e.target.classList.add('visible');
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  // ═══════════ COUNT UP ═══════════
+  const countObserver = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting && !e.target.dataset.counted) {
+        e.target.dataset.counted = '1';
+        const target = parseInt(e.target.dataset.count);
+        const duration = 1500;
+        const start = performance.now();
+
+        function tick(now) {
+          const elapsed = now - start;
+          const progress = Math.min(elapsed / duration, 1);
+          const eased = 1 - Math.pow(1 - progress, 3);
+          e.target.textContent = Math.round(target * eased).toLocaleString();
+          if (progress < 1) requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      }
+    });
+  }, { threshold: 0.5 });
+
+  document.querySelectorAll('[data-count]').forEach(el => countObserver.observe(el));
+
+  // ═══════════ BENTO CHART ═══════════
+  const chartEl = document.getElementById('chart1');
+  const heights = [35, 52, 45, 68, 42, 78, 55, 90, 62, 85, 72, 95];
+  heights.forEach((h, i) => {
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.style.height = '0%';
+    chartEl.appendChild(bar);
+    setTimeout(() => { bar.style.height = h + '%'; }, 200 + i * 80);
+  });
+
+  // ═══════════ STAT RING ═══════════
+  const ringObserver = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const circle = document.getElementById('ring-progress');
+        const value = document.getElementById('ring-value');
+        const target = 97;
+        const circumference = 314;
+        const offset = circumference - (target / 100) * circumference;
+
+        circle.style.transition = 'stroke-dashoffset 1.5s cubic-bezier(0.34, 1.56, 0.64, 1)';
+        circle.style.strokeDashoffset = offset;
+
+        let current = 0;
+        const interval = setInterval(() => {
+          current += 1;
+          value.textContent = current + '%';
+          if (current >= target) clearInterval(interval);
+        }, 15);
+      }
+    });
+  }, { threshold: 0.5 });
+
+  ringObserver.observe(document.querySelector('.stat-ring'));
+
+  // ═══════════ COPY HEX ═══════════
+  function copyHex(swatch) {
+    const hex = swatch.querySelector('.hex').textContent;
+    navigator.clipboard.writeText(hex).then(() => {
+      const og = swatch.querySelector('.name').textContent;
+      swatch.querySelector('.name').textContent = 'Copied!';
+      setTimeout(() => { swatch.querySelector('.name').textContent = og; }, 1200);
+    });
+  }
+</script>
+
+</body>
+</html>

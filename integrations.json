@@ -546,7 +546,7 @@
             "figma-mcp"
           ],
           "envMapping": {
-            "FIGMA_ACCESS_TOKEN": "token"
+            "FIGMA_API_KEY": "token"
           }
         }
       },

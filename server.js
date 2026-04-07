@@ -130,9 +130,24 @@ let installState = { status: "idle", error: null, progress: "" };
 // Integration & Credential Management
 // ============================================
 const integrationsPath = path.join(__dirname, "integrations.json");
-const credentialsPath = path.join(__dirname, "credentials.json");
+const deltDataDir = path.join(os.homedir(), ".delt");
+if (!fs.existsSync(deltDataDir)) fs.mkdirSync(deltDataDir, { recursive: true, mode: 0o700 });
+const credentialsPath = path.join(deltDataDir, "credentials.json");
+const legacyCredentialsPath = path.join(__dirname, "credentials.json");
 const oauthClientsPath = path.join(__dirname, "oauth-clients.json");
-const encryptedOauthPath = path.join(os.homedir(), ".delt", "oauth-clients.enc.json");
+const encryptedOauthPath = path.join(deltDataDir, "oauth-clients.enc.json");
+
+// Migrate credentials from project dir to ~/.delt/ (one-time)
+if (!fs.existsSync(credentialsPath) && fs.existsSync(legacyCredentialsPath)) {
+  try {
+    fs.copyFileSync(legacyCredentialsPath, credentialsPath);
+    fs.chmodSync(credentialsPath, 0o600);
+    fs.unlinkSync(legacyCredentialsPath);
+    console.log("[Migration] Moved credentials.json to ~/.delt/");
+  } catch (e) {
+    console.error("[Migration] Failed to move credentials:", e.message);
+  }
+}
 
 let integrationsRegistry = { integrations: [] };
 try {
@@ -936,6 +951,26 @@ async function testMcpServer(integrationId) {
   // For MCP-based integrations, try spawning the server
   const [serverName, serverDef] = Object.entries(integration.mcpServers || {})[0] || [];
   if (!serverName) return { ok: false, error: "No MCP server defined" };
+
+  // Skip spawn test for npx commands on first run — they need to download the package
+  // which takes longer than the 3s test window. Trust the credential format instead.
+  if (serverDef.command === "npx") {
+    try {
+      const whichResult = require("child_process").execSync(
+        `npm ls -g ${(serverDef.args || []).filter(a => a !== "-y")[0] || ""} 2>/dev/null`,
+        { timeout: 3000 }
+      ).toString();
+      if (!whichResult.includes("(empty)")) {
+        // Package is installed globally — safe to spawn test
+      } else {
+        // Not cached yet — skip spawn test, trust credentials
+        return { ok: true, server: serverName, status: "credentials saved (MCP package will install on first use)" };
+      }
+    } catch {
+      // npx package not cached — skip test, it'll download on first chat
+      return { ok: true, server: serverName, status: "credentials saved (MCP package will install on first use)" };
+    }
+  }
 
   const env = { ...process.env };
   for (const [envVar, credKey] of Object.entries(serverDef.envMapping || {})) {

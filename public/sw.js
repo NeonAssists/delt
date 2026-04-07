@@ -1,5 +1,5 @@
 // Delt — Service Worker (PWA shell cache + offline fallback)
-const CACHE_NAME = "delt-v2";
+const CACHE_NAME = "delt-v3";
 const OFFLINE_URL = "/offline.html";
 const SHELL_URLS = [
   "/",
