@@ -4,6 +4,7 @@
 # ============================================
 set -e
 cd "$(dirname "$0")"
+PROJECT_DIR="$(pwd)"
 
 echo "=== Building Delt Installer ==="
 echo ""
@@ -18,13 +19,15 @@ rm -rf "$STAGE"
 mkdir -p "$STAGE"
 cp package.json package-lock.json "$STAGE/"
 cd "$STAGE" && npm install --production --silent 2>/dev/null
-cd /Users/neonotics/Projects/claude-code-ui
+cd "$PROJECT_DIR"
 
 tar czf /tmp/delt-bundle.tar.gz \
   server.js \
   package.json \
   package-lock.json \
   config.default.json \
+  integrations.json \
+  INTEGRATIONS.md \
   install.sh \
   uninstall.sh \
   lib/crypto.js \
@@ -33,6 +36,7 @@ tar czf /tmp/delt-bundle.tar.gz \
   lib/memory.js \
   lib/rate-limit.js \
   lib/tunnel.js \
+  test/critical.test.js \
   public/index.html \
   public/style.css \
   public/app.js \
@@ -137,7 +141,7 @@ cat > "$PLIST_PATH" << PLIST
     <key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
   </dict>
   <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>${DELT_DATA}/delt.log</string>
   <key>StandardErrorPath</key><string>${DELT_DATA}/delt.err</string>
   <key>ThrottleInterval</key><integer>10</integer>
@@ -184,7 +188,7 @@ CONCLUSION
 pkgbuild \
   --nopayload \
   --identifier com.neonotics.delt \
-  --version 1.0 \
+  --version 2.0 \
   --scripts "$PKG_SCRIPTS" \
   /tmp/delt-component.pkg >/dev/null 2>&1
 
