@@ -108,7 +108,7 @@
     }
     .btn-g:hover { border-color: var(--purple); color: var(--purple); }
 
-    /* Product mockup — right side, edge-to-edge, slight tilt */
+    /* === HERO PRODUCT — app mockup with integrations drawer === */
     .hero-product {
       position: relative; z-index: 1;
       border-radius: 16px; overflow: hidden;
@@ -116,76 +116,8 @@
       box-shadow: 0 8px 40px rgba(12,10,20,.08), 0 1px 3px rgba(12,10,20,.04);
       transform: perspective(1200px) rotateY(-3deg) rotateX(1deg);
       transition: transform .5s cubic-bezier(.16,1,.3,1);
-      display: none; /* hidden — replaced by hero-visual hub */
     }
     .hero-product:hover { transform: perspective(1200px) rotateY(0) rotateX(0); }
-
-    /* === HERO VISUAL — hub-and-spoke === */
-    .hero-visual {
-      position: relative; z-index: 1;
-      width: 100%; aspect-ratio: 1; max-width: 480px; margin: 0 auto;
-    }
-    .hv-lines { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
-    .hv-line {
-      stroke: rgba(124,58,237,.18); stroke-width: 1.2; fill: none;
-      stroke-dasharray: 6 5; animation: hv-flow 1.8s linear infinite;
-    }
-    .hv-line:nth-child(2) { animation-delay: -.3s; }
-    .hv-line:nth-child(3) { animation-delay: -.6s; }
-    .hv-line:nth-child(4) { animation-delay: -.9s; }
-    .hv-line:nth-child(5) { animation-delay: -1.2s; }
-    @keyframes hv-flow { to { stroke-dashoffset: -22; } }
-
-    .hv-center {
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%); z-index: 2;
-    }
-    .hv-glow {
-      position: absolute; inset: -40px; border-radius: 50%;
-      background: radial-gradient(circle, rgba(124,58,237,.12) 0%, rgba(99,102,241,.06) 40%, transparent 70%);
-      animation: hv-pulse 3.5s ease-in-out infinite;
-    }
-    @keyframes hv-pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.2);opacity:.6} }
-    .hv-logo {
-      width: 72px; height: 72px; border-radius: 20px;
-      background: linear-gradient(135deg, var(--purple), var(--indigo));
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 900; font-size: 28px; color: #fff;
-      position: relative; z-index: 1;
-      box-shadow: 0 8px 40px rgba(124,58,237,.28), 0 0 0 1px rgba(124,58,237,.1);
-    }
-
-    .hv-node {
-      position: absolute; display: flex; align-items: center; gap: 10px;
-      padding: 10px 18px 10px 12px;
-      background: rgba(255,255,255,.92); backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid var(--border); border-radius: 14px;
-      box-shadow: 0 4px 20px rgba(12,10,20,.06), 0 1px 3px rgba(12,10,20,.03);
-      transform: translate(-50%, -50%); z-index: 3;
-      transition: transform .3s cubic-bezier(.16,1,.3,1), box-shadow .3s;
-    }
-    .hv-node:hover {
-      transform: translate(-50%, -50%) translateY(-3px);
-      box-shadow: 0 8px 32px rgba(12,10,20,.1), 0 1px 3px rgba(12,10,20,.04);
-    }
-    .hv-icon {
-      width: 32px; height: 32px; border-radius: 9px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 15px; flex-shrink: 0;
-    }
-    .hv-label { font-size: 14px; font-weight: 650; letter-spacing: -.02em; color: var(--text); }
-
-    /* Pentagon positions */
-    .hv-n1 { top: 6%;  left: 50%;  animation: hv-float 5s ease-in-out infinite; }
-    .hv-n2 { top: 34%; left: 94%;  animation: hv-float 5s ease-in-out .9s infinite; }
-    .hv-n3 { top: 84%; left: 78%;  animation: hv-float 5s ease-in-out 1.8s infinite; }
-    .hv-n4 { top: 84%; left: 22%;  animation: hv-float 5s ease-in-out 2.7s infinite; }
-    .hv-n5 { top: 34%; left: 6%;   animation: hv-float 5s ease-in-out 3.6s infinite; }
-    @keyframes hv-float {
-      0%,100%{ transform: translate(-50%,-50%) translateY(0); }
-      50%{ transform: translate(-50%,-50%) translateY(-8px); }
-    }
 
     .delt-ui { background: var(--wash); }
     .d-hdr { height: 44px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
@@ -196,9 +128,6 @@
     .d-status i { width: 5px; height: 5px; border-radius: 50%; background: var(--mint); display: block; }
     .d-hdr-r { display: flex; gap: 4px; }
     .d-hdr-btn { height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); font-size: 11px; font-weight: 500; color: var(--text-2); display: inline-flex; align-items: center; gap: 4px; font-family: var(--font); }
-    .d-integrations { display: flex; align-items: center; gap: 3px; padding: 0 8px; }
-    .d-int-dot { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; border: 1px solid var(--border); background: var(--surface); position: relative; }
-    .d-int-dot .d-int-pulse { position: absolute; bottom: -1px; right: -1px; width: 6px; height: 6px; border-radius: 50%; background: var(--mint); border: 1.5px solid var(--surface); }
     .d-body { display: flex; min-height: 340px; }
     .d-side { width: 160px; border-right: 1px solid var(--border); background: var(--surface); padding: 10px 6px; flex-shrink: 0; }
     .d-sh { font-size: 9px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; padding: 4px 8px; }
@@ -228,6 +157,35 @@
     .d-input-bar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
     .d-input-bar span { flex: 1; font-size: 12px; color: var(--text-3); }
     .d-send { width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(135deg,var(--purple),var(--indigo)); border: none; display: flex; align-items: center; justify-content: center; }
+
+    /* Integrations drawer — right panel inside mockup */
+    .d-integ { width: 200px; border-left: 1px solid var(--border); background: var(--surface); padding: 12px 10px; flex-shrink: 0; overflow-y: auto; }
+    .d-integ-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding: 0 2px; }
+    .d-integ-hdr h3 { font-size: 12px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+    .d-integ-hdr span { font-size: 9px; color: var(--text-3); }
+    .d-integ-label { font-size: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); padding: 0 2px; margin: 10px 0 5px; }
+    .d-integ-label:first-of-type { margin-top: 0; }
+    .d-integ-card {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 8px; border-radius: 8px;
+      border: 1px solid var(--border); margin-bottom: 4px;
+      transition: border-color .15s;
+    }
+    .d-integ-card.connected { border-color: rgba(16,185,129,.3); background: rgba(16,185,129,.03); }
+    .d-integ-icon {
+      width: 26px; height: 26px; border-radius: 7px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .d-integ-info { flex: 1; min-width: 0; }
+    .d-integ-name { font-size: 11px; font-weight: 600; display: block; color: var(--text); }
+    .d-integ-desc { font-size: 9px; color: var(--text-3); display: block; }
+    .d-integ-status { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); flex-shrink: 0; }
+    .d-integ-connect {
+      padding: 3px 8px; border-radius: 6px; border: none;
+      background: linear-gradient(135deg,var(--purple),var(--indigo));
+      color: #fff; font-size: 9px; font-weight: 600; font-family: var(--font);
+      flex-shrink: 0;
+    }
 
     /* === MARQUEE — infinite integration ticker === */
     .marquee-section {
@@ -450,11 +408,7 @@
       .hero-product:hover { transform: none; }
       .d-side { display: none; }
       .d-body { min-height: 280px; }
-      .hero-visual { max-width: 340px; }
-      .hv-node { padding: 8px 14px 8px 10px; }
-      .hv-icon { width: 26px; height: 26px; font-size: 13px; }
-      .hv-label { font-size: 12px; }
-      .hv-logo { width: 56px; height: 56px; font-size: 22px; border-radius: 16px; }
+      .d-integ { display: none; }
       .hero-actions { flex-direction: column; }
       .bold-section { grid-template-columns: 1fr; padding: 80px 20px; gap: 40px; }
       .demo-section { padding: 60px 20px; }
@@ -496,53 +450,137 @@
     </div>
   </div>
 
-  <!-- Hub visual — "One AI, Every tool" at a glance -->
-  <div class="hero-visual reveal d4">
-    <!-- Connection lines (node → center, animated dashes flow inward) -->
-    <svg class="hv-lines" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
-      <line x1="50" y1="6"  x2="50" y2="50" class="hv-line"/>
-      <line x1="94" y1="34" x2="50" y2="50" class="hv-line"/>
-      <line x1="78" y1="84" x2="50" y2="50" class="hv-line"/>
-      <line x1="22" y1="84" x2="50" y2="50" class="hv-line"/>
-      <line x1="6"  y1="34" x2="50" y2="50" class="hv-line"/>
-    </svg>
+  <!-- Delt app mockup — chat + integrations drawer open -->
+  <div class="hero-product reveal d4">
+    <div class="delt-ui">
+      <div class="d-hdr">
+        <div class="d-hdr-l"><div class="d-mark">D</div><span>delt</span><div class="d-status"><i></i> Ready</div></div>
+        <div class="d-hdr-r">
+          <div class="d-hdr-btn" style="border-color:var(--purple);color:var(--purple);background:rgba(124,58,237,.04)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/></svg>
+            Integrations
+          </div>
+          <div class="d-hdr-btn">+ New</div>
+        </div>
+      </div>
+      <div class="d-body">
+        <div class="d-side">
+          <div class="d-sh">Today</div>
+          <div class="d-si on"><i></i> Morning brief</div>
+          <div class="d-si"><i></i> Merge PR #847</div>
+          <div class="d-si"><i></i> Refund customer</div>
+          <div class="d-sh" style="margin-top:6px">Yesterday</div>
+          <div class="d-si"><i></i> Pipeline review</div>
+          <div class="d-si"><i></i> Deploy v2.4</div>
+        </div>
+        <div class="d-chat">
+          <div class="d-msgs" id="hero-msgs">
+            <div class="dm user" data-delay="400">
+              <div class="dm-av u">N</div>
+              <div class="dm-b"><div class="dm-who">You</div><div class="dm-c">Morning brief — what needs my attention?</div></div>
+            </div>
+            <div class="dm" data-delay="1200">
+              <div class="dm-av a">D</div>
+              <div class="dm-b">
+                <div class="dm-who">Delt</div>
+                <div class="dm-c"><strong>3 emails</strong> need reply &middot; 1 from your VP<br><strong>PR #847</strong> has 2 approvals, ready to merge<br><strong style="color:var(--mint)">Acme Corp</strong> closed &mdash; $42K won<br><strong style="color:var(--red)">3 failed charges</strong> need retry &middot; $340</div>
+                <div class="dm-badges"><span class="dm-badge">Gmail</span><span class="dm-badge">GitHub</span><span class="dm-badge">Salesforce</span><span class="dm-badge">Stripe</span></div>
+              </div>
+            </div>
+            <div class="dm user" data-delay="2200">
+              <div class="dm-av u">N</div>
+              <div class="dm-b"><div class="dm-who">You</div><div class="dm-c">Merge the PR, retry the charges, and post a win to #sales</div></div>
+            </div>
+            <div class="dm" data-delay="3000">
+              <div class="dm-av a">D</div>
+              <div class="dm-b">
+                <div class="dm-who">Delt</div>
+                <div class="dm-c">Done. PR merged, 2 of 3 charges recovered (<strong>$280</strong>). Posted Acme win to <strong>#sales</strong>.</div>
+                <div class="dm-tools"><span class="dm-tool">&#10003; GitHub merge</span><span class="dm-tool">&#10003; Stripe retry</span><span class="dm-tool">&#10003; Slack #sales</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="d-input">
+            <div class="d-input-bar">
+              <span>Ask anything...</span>
+              <div class="d-send"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></div>
+            </div>
+          </div>
+        </div>
 
-    <!-- Center: Delt -->
-    <div class="hv-center">
-      <div class="hv-glow"></div>
-      <div class="hv-logo">D</div>
-    </div>
+        <!-- Integrations drawer — open, showing all connected tools -->
+        <div class="d-integ">
+          <div class="d-integ-hdr"><h3>Integrations</h3><span>5 connected</span></div>
 
-    <!-- Service nodes — match the 5 named in the hero copy -->
-    <div class="hv-node hv-n1">
-      <div class="hv-icon" style="background:rgba(234,67,53,.08)">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#EA4335" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          <div class="d-integ-label">Connected</div>
+
+          <div class="d-integ-card connected">
+            <div class="d-integ-icon" style="background:rgba(66,133,244,.06)">
+              <svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            </div>
+            <div class="d-integ-info"><span class="d-integ-name">Gmail</span><span class="d-integ-desc">Read &amp; send emails</span></div>
+            <div class="d-integ-status"></div>
+          </div>
+
+          <div class="d-integ-card connected">
+            <div class="d-integ-icon" style="background:rgba(74,21,75,.06)">
+              <svg width="16" height="16" viewBox="0 0 24 24"><path d="M5.04 15.16a2.53 2.53 0 0 1-2.52 2.53A2.53 2.53 0 0 1 0 15.16a2.53 2.53 0 0 1 2.52-2.52h2.52v2.52zm1.27 0a2.53 2.53 0 0 1 2.52-2.52 2.53 2.53 0 0 1 2.52 2.52v6.32A2.53 2.53 0 0 1 8.83 24a2.53 2.53 0 0 1-2.52-2.52v-6.32z" fill="#E01E5A"/><path d="M8.83 5.04a2.53 2.53 0 0 1-2.52-2.52A2.53 2.53 0 0 1 8.83 0a2.53 2.53 0 0 1 2.52 2.52v2.52H8.83zm0 1.27a2.53 2.53 0 0 1 2.52 2.52 2.53 2.53 0 0 1-2.52 2.52H2.52A2.53 2.53 0 0 1 0 8.83a2.53 2.53 0 0 1 2.52-2.52h6.31z" fill="#36C5F0"/><path d="M18.96 8.83a2.53 2.53 0 0 1 2.52-2.52A2.53 2.53 0 0 1 24 8.83a2.53 2.53 0 0 1-2.52 2.52h-2.52V8.83zm-1.27 0a2.53 2.53 0 0 1-2.52 2.52 2.53 2.53 0 0 1-2.52-2.52V2.52A2.53 2.53 0 0 1 15.17 0a2.53 2.53 0 0 1 2.52 2.52v6.31z" fill="#2EB67D"/><path d="M15.17 18.96a2.53 2.53 0 0 1 2.52 2.52A2.53 2.53 0 0 1 15.17 24a2.53 2.53 0 0 1-2.52-2.52v-2.52h2.52zm0-1.27a2.53 2.53 0 0 1-2.52-2.52 2.53 2.53 0 0 1 2.52-2.52h6.31A2.53 2.53 0 0 1 24 15.17a2.53 2.53 0 0 1-2.52 2.52h-6.31z" fill="#ECB22E"/></svg>
+            </div>
+            <div class="d-integ-info"><span class="d-integ-name">Slack</span><span class="d-integ-desc">Messages &amp; channels</span></div>
+            <div class="d-integ-status"></div>
+          </div>
+
+          <div class="d-integ-card connected">
+            <div class="d-integ-icon" style="background:rgba(36,41,47,.05)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#181717"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6.1-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.3 2.8.2 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.2.9 2.4v3.5c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/></svg>
+            </div>
+            <div class="d-integ-info"><span class="d-integ-name">GitHub</span><span class="d-integ-desc">Repos, PRs &amp; issues</span></div>
+            <div class="d-integ-status"></div>
+          </div>
+
+          <div class="d-integ-card connected">
+            <div class="d-integ-icon" style="background:rgba(0,161,224,.06)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#00A1E0"><path d="M10 4.5a4.5 4.5 0 0 1 7.6-2 5 5 0 0 1 5.4 6 4.5 4.5 0 0 1-2 8.5H5a4 4 0 0 1-1-7.9A5.5 5.5 0 0 1 10 4.5z"/></svg>
+            </div>
+            <div class="d-integ-info"><span class="d-integ-name">Salesforce</span><span class="d-integ-desc">CRM &amp; pipeline</span></div>
+            <div class="d-integ-status"></div>
+          </div>
+
+          <div class="d-integ-card connected">
+            <div class="d-integ-icon" style="background:rgba(99,91,255,.06)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#635BFF"><path d="M13.98 11.01c0-1.47-.68-2.04-1.78-2.04-.75 0-1.58.28-2.2.74v5.58H7.5V7.54h2.5v.86c.8-.67 1.85-1.06 2.97-1.06 2.36 0 3.51 1.37 3.51 3.74v5.21h-2.5v-5.28zM4.5 7.34c.85 0 1.54-.7 1.54-1.56A1.55 1.55 0 0 0 4.5 4.22c-.86 0-1.55.7-1.55 1.56 0 .86.7 1.56 1.55 1.56zm1.25.2H3.24v8.75h2.5V7.54z"/></svg>
+            </div>
+            <div class="d-integ-info"><span class="d-integ-name">Stripe</span><span class="d-integ-desc">Payments &amp; billing</span></div>
+            <div class="d-integ-status"></div>
+          </div>
+
+          <div class="d-integ-label">Available</div>
+
+          <div class="d-integ-card">
+            <div class="d-integ-icon" style="background:rgba(55,53,47,.04)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#000"><path d="M4.46 4.63l10.08-.73c.25-.02.3-.01.46.12l2.1 1.47c.17.12.22.15.22.28v12.65c0 .37-.14.58-.57.61l-12.1.7c-.32.02-.48-.03-.64-.24L2.16 17.1c-.18-.24-.25-.42-.25-.63V5.33c0-.27.14-.54.55-.58l2-.12zm10.3 1.75c.05.24 0 .47 0 .72l-8.5.5v8.85c0 .37.2.53.46.51l7.74-.45c.27-.02.37-.16.37-.42V7.7c0-.24.25-.36.47-.34l1.16.08c.22.02.25.15.25.36v9c0 .68-.34 1.07-1.05 1.11l-9.6.55c-.7.04-1.06-.13-1.42-.58l-1.8-2.37c-.22-.3-.36-.52-.36-.86V6.83c0-.55.22-.9.73-.94l11.55-.67v1.16z"/></svg>
+            </div>
+            <div class="d-integ-info"><span class="d-integ-name">Notion</span><span class="d-integ-desc">Docs &amp; wikis</span></div>
+            <div class="d-integ-connect">Connect</div>
+          </div>
+
+          <div class="d-integ-card">
+            <div class="d-integ-icon" style="background:rgba(94,107,228,.05)">
+              <svg width="16" height="16" viewBox="0 0 24 24"><path d="M2.77 17.72a11.94 11.94 0 0 1-.72-2.26L11.52 24c.8-.14 1.56-.38 2.27-.72L2.77 17.72zm-1.5-4.5a12.08 12.08 0 0 1 .27-2.72L13.46 22.41c.93-.38 1.8-.88 2.59-1.48L1.78 8.66A12.04 12.04 0 0 0 .58 11.5l8.35 11.94a11.93 11.93 0 0 1-2.38-.44L1.27 13.22zm2.02-6.2L19 22.73a12.05 12.05 0 0 0 2.1-2.1L5.38 4.92A12.02 12.02 0 0 0 3.3 7.02zm4.1-3.58l15.17 11.55c.15-.63.26-1.28.32-1.94L9.35 1.98a12 12 0 0 0-1.96.46zM12 0C9.97 0 8.07.52 6.4 1.42L22.58 17.6A12 12 0 0 0 24 12c0-6.63-5.37-12-12-12z" fill="#5E6AD2"/></svg>
+            </div>
+            <div class="d-integ-info"><span class="d-integ-name">Linear</span><span class="d-integ-desc">Issue tracking</span></div>
+            <div class="d-integ-connect">Connect</div>
+          </div>
+
+          <div class="d-integ-card">
+            <div class="d-integ-icon" style="background:rgba(255,122,69,.05)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#FF7A59"><path d="M18.16 7.58V4.95a2.24 2.24 0 0 0 1.3-2.02 2.26 2.26 0 1 0-4.51 0c0 .87.5 1.62 1.22 2v2.65a5.76 5.76 0 0 0-2.8 1.34L6.42 3.9a2.6 2.6 0 0 0 .09-.64 2.54 2.54 0 1 0-2.55 2.54c.5 0 .97-.15 1.37-.42l6.82 4.92a5.72 5.72 0 0 0-.03 7.24l-2.1 2.1a2.13 2.13 0 0 0-.63-.1 2.15 2.15 0 1 0 2.15 2.15c0-.22-.04-.43-.1-.63l2.07-2.07A5.76 5.76 0 1 0 18.16 7.58zm-1 9.87a3.42 3.42 0 1 1 0-6.84 3.42 3.42 0 0 1 0 6.84z"/></svg>
+            </div>
+            <div class="d-integ-info"><span class="d-integ-name">HubSpot</span><span class="d-integ-desc">Marketing &amp; CRM</span></div>
+            <div class="d-integ-connect">Connect</div>
+          </div>
+        </div>
       </div>
-      <span class="hv-label">Gmail</span>
-    </div>
-    <div class="hv-node hv-n2">
-      <div class="hv-icon" style="background:rgba(74,21,75,.08)">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#611f69" stroke-width="2"><path d="M14.5 2a2.5 2.5 0 0 0 0 5H17V4.5A2.5 2.5 0 0 0 14.5 2z"/><path d="M7 7h10v10"/><path d="M9.5 22a2.5 2.5 0 0 0 0-5H7v2.5A2.5 2.5 0 0 0 9.5 22z"/><path d="M7 7H4.5A2.5 2.5 0 0 1 4.5 2h.5v5"/><path d="M22 14.5a2.5 2.5 0 0 0-5 0V17h2.5a2.5 2.5 0 0 0 2.5-2.5z"/></svg>
-      </div>
-      <span class="hv-label">Slack</span>
-    </div>
-    <div class="hv-node hv-n3">
-      <div class="hv-icon" style="background:rgba(36,41,47,.06)">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#24292f" stroke-width="2"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
-      </div>
-      <span class="hv-label">GitHub</span>
-    </div>
-    <div class="hv-node hv-n4">
-      <div class="hv-icon" style="background:rgba(0,161,224,.08)">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#00A1E0" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
-      </div>
-      <span class="hv-label">Salesforce</span>
-    </div>
-    <div class="hv-node hv-n5">
-      <div class="hv-icon" style="background:rgba(99,91,255,.08)">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#635BFF" stroke-width="2.2"><path d="M2 10h20"/><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 15h4"/></svg>
-      </div>
-      <span class="hv-label">Stripe</span>
     </div>
   </div>
 </section>
@@ -553,23 +591,23 @@
   <div class="marquee-wrap">
     <div class="marquee-track" id="marquee">
       <div class="m-chip"><div class="m-icon" style="background:rgba(234,67,53,.08)"><img src="https://cdn.simpleicons.org/google/4285F4" alt="Google"></div> Google Workspace</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(74,21,75,.08)"><img src="https://cdn.simpleicons.org/slack/4A154B" alt="Slack"></div> Slack</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(74,21,75,.08)"><svg width="14" height="14" viewBox="0 0 256 256"><path fill="#e01e5a" d="M53.841 161.32c0 14.832-11.987 26.82-26.819 26.82S.203 176.152.203 161.32c0-14.831 11.987-26.818 26.82-26.818H53.84zm13.41 0c0-14.831 11.987-26.818 26.819-26.818s26.819 11.987 26.819 26.819v67.047c0 14.832-11.987 26.82-26.82 26.82c-14.83 0-26.818-11.988-26.818-26.82z"/><path fill="#36c5f0" d="M94.07 53.638c-14.832 0-26.82-11.987-26.82-26.819S79.239 0 94.07 0s26.819 11.987 26.819 26.819v26.82zm0 13.613c14.832 0 26.819 11.987 26.819 26.819s-11.987 26.819-26.82 26.819H26.82C11.987 120.889 0 108.902 0 94.069c0-14.83 11.987-26.818 26.819-26.818z"/><path fill="#2eb67d" d="M201.55 94.07c0-14.832 11.987-26.82 26.818-26.82s26.82 11.988 26.82 26.82s-11.988 26.819-26.82 26.819H201.55zm-13.41 0c0 14.832-11.988 26.819-26.82 26.819c-14.831 0-26.818-11.987-26.818-26.82V26.82C134.502 11.987 146.489 0 161.32 0s26.819 11.987 26.819 26.819z"/><path fill="#ecb22e" d="M161.32 201.55c14.832 0 26.82 11.987 26.82 26.818s-11.988 26.82-26.82 26.82c-14.831 0-26.818-11.988-26.818-26.82V201.55zm0-13.41c-14.831 0-26.818-11.988-26.818-26.82c0-14.831 11.987-26.818 26.819-26.818h67.25c14.832 0 26.82 11.987 26.82 26.819s-11.988 26.819-26.82 26.819z"/></svg></div> Slack</div>
       <div class="m-chip"><div class="m-icon" style="background:rgba(36,41,47,.06)"><img src="https://cdn.simpleicons.org/github/181717" alt="GitHub"></div> GitHub</div>
       <div class="m-chip"><div class="m-icon" style="background:rgba(55,53,47,.06)"><img src="https://cdn.simpleicons.org/notion/000000" alt="Notion"></div> Notion</div>
       <div class="m-chip"><div class="m-icon" style="background:rgba(99,91,255,.06)"><img src="https://cdn.simpleicons.org/stripe/635BFF" alt="Stripe"></div> Stripe</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(0,161,224,.06)"><img src="https://cdn.simpleicons.org/salesforce/00A1E0" alt="Salesforce"></div> Salesforce</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(0,161,224,.06)"><svg width="14" height="14" viewBox="0 0 256 180"><path fill="#00a1e0" d="M106.553 19.651c8.248-8.594 19.731-13.924 32.43-13.924c16.883 0 31.612 9.414 39.455 23.389a54.5 54.5 0 0 1 22.3-4.74c30.449 0 55.134 24.9 55.134 55.615c0 30.719-24.685 55.62-55.134 55.62a54.7 54.7 0 0 1-10.86-1.083c-6.908 12.321-20.07 20.645-35.178 20.645a40.1 40.1 0 0 1-17.632-4.058c-7.002 16.47-23.316 28.019-42.33 28.019c-19.8 0-36.674-12.529-43.152-30.1c-2.83.602-5.763.915-8.772.915c-23.574 0-42.686-19.308-42.686-43.13a43.2 43.2 0 0 1 21.345-37.36a49.4 49.4 0 0 1-4.088-19.727C17.385 22.336 39.626.128 67.06.128c16.106 0 30.42 7.658 39.494 19.523"/></svg></div> Salesforce</div>
       <div class="m-chip"><div class="m-icon" style="background:rgba(255,122,69,.06)"><img src="https://cdn.simpleicons.org/hubspot/FF7A45" alt="HubSpot"></div> HubSpot</div>
       <div class="m-chip"><div class="m-icon" style="background:rgba(150,191,72,.06)"><img src="https://cdn.simpleicons.org/shopify/7AB55C" alt="Shopify"></div> Shopify</div>
       <div class="m-chip"><div class="m-icon" style="background:rgba(94,107,228,.06)"><img src="https://cdn.simpleicons.org/linear/5E6BE4" alt="Linear"></div> Linear</div>
       <div class="m-chip"><div class="m-icon" style="background:rgba(162,89,255,.06)"><img src="https://cdn.simpleicons.org/figma/F24E1E" alt="Figma"></div> Figma</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(0,120,212,.06)"><img src="https://cdn.simpleicons.org/microsoft/0078D4" alt="Microsoft"></div> Microsoft 365</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(0,120,212,.06)"><svg width="14" height="14" viewBox="0 0 256 256"><path fill="#f1511b" d="M121.666 121.666H0V0h121.666z"/><path fill="#80cc28" d="M256 121.666H134.335V0H256z"/><path fill="#00adef" d="M121.663 256.002H0V134.336h121.663z"/><path fill="#fbbc09" d="M256 256.002H134.335V134.336H256z"/></svg></div> Microsoft 365</div>
       <div class="m-chip"><div class="m-icon" style="background:rgba(45,140,255,.06)"><img src="https://cdn.simpleicons.org/zoom/0B5CFF" alt="Zoom"></div> Zoom</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(241,61,60,.06)"><img src="https://cdn.simpleicons.org/twilio/F22F46" alt="Twilio"></div> Twilio</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(0,126,229,.06)"><img src="https://cdn.simpleicons.org/sendgrid/1A82E2" alt="SendGrid"></div> SendGrid</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(241,61,60,.06)"><svg width="14" height="14" viewBox="0 0 24 24" fill="#F22F46"><path d="M12 0C5.381-.008.008 5.352 0 11.971V12c0 6.64 5.359 12 12 12 6.64 0 12-5.36 12-12 0-6.641-5.36-12-12-12zm0 20.801c-4.846.015-8.786-3.904-8.801-8.75V12c-.014-4.846 3.904-8.786 8.75-8.801H12c4.847-.014 8.786 3.904 8.801 8.75V12c.015 4.847-3.904 8.786-8.75 8.801H12zm5.44-11.76c0 1.359-1.12 2.479-2.481 2.479-1.366-.007-2.472-1.113-2.479-2.479 0-1.361 1.12-2.481 2.479-2.481 1.361 0 2.481 1.12 2.481 2.481zm0 5.919c0 1.36-1.12 2.48-2.481 2.48-1.367-.008-2.473-1.114-2.479-2.48 0-1.359 1.12-2.479 2.479-2.479 1.361-.001 2.481 1.12 2.481 2.479zm-5.919 0c0 1.36-1.12 2.48-2.479 2.48-1.368-.007-2.475-1.113-2.481-2.48 0-1.359 1.12-2.479 2.481-2.479 1.358-.001 2.479 1.12 2.479 2.479zm0-5.919c0 1.359-1.12 2.479-2.479 2.479-1.367-.007-2.475-1.112-2.481-2.479 0-1.361 1.12-2.481 2.481-2.481 1.358 0 2.479 1.12 2.479 2.481z"/></svg></div> Twilio</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(0,126,229,.06)"><svg width="14" height="14" viewBox="0 0 256 256"><path fill="#9dd6e3" d="M256 0v170.667h-85.333v85.33H.002v-85.331H0V85.332h85.333V0z"/><path fill="#3f72ab" d="M.002 255.996h85.333v-85.333H.002z"/><path fill="#00a9d1" d="M170.667 170.667H256V85.331h-85.333zM85.333 85.333h85.334V0H85.333z"/><path fill="#2191c4" d="M85.333 170.665h85.334V85.331H85.333z"/><path fill="#3f72ab" d="M170.667 85.333H256V0h-85.333z"/></svg></div> SendGrid</div>
       <div class="m-chip"><div class="m-icon" style="background:rgba(24,119,242,.06)"><img src="https://cdn.simpleicons.org/airtable/18BFFF" alt="Airtable"></div> Airtable</div>
       <div class="m-chip"><div class="m-icon" style="background:rgba(0,121,191,.06)"><img src="https://cdn.simpleicons.org/trello/0052CC" alt="Trello"></div> Trello</div>
       <div class="m-chip"><div class="m-icon" style="background:rgba(55,53,47,.06)"><img src="https://cdn.simpleicons.org/apple/000000" alt="Apple"></div> Apple Apps</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(0,122,204,.06)"><img src="https://cdn.simpleicons.org/visualstudiocode/007ACC" alt="VS Code"></div> VS Code</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(0,122,204,.06)"><svg width="14" height="14" viewBox="0 0 256 254"><defs><linearGradient id="vscGrad" x1="50%" x2="50%" y1="0%" y2="100%"><stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/></linearGradient><path id="vscMask" d="M180.828 252.605a15.87 15.87 0 0 0 12.65-.486l52.501-25.262a15.94 15.94 0 0 0 9.025-14.364V41.197a15.94 15.94 0 0 0-9.025-14.363l-52.5-25.263a15.88 15.88 0 0 0-18.115 3.084L74.857 96.35l-43.78-33.232a10.614 10.614 0 0 0-13.56.603L3.476 76.494c-4.63 4.211-4.635 11.495-.012 15.713l37.967 34.638l-37.967 34.637c-4.623 4.219-4.618 11.502.012 15.714l14.041 12.772a10.614 10.614 0 0 0 13.56.604l43.78-33.233l100.507 91.695a15.85 15.85 0 0 0 5.464 3.571m10.464-183.649l-76.262 57.889l76.262 57.888z"/></defs><mask id="vscClip" fill="#fff"><use href="#vscMask"/></mask><path fill="#0065a9" d="M246.135 26.873L193.593 1.575a15.885 15.885 0 0 0-18.123 3.08L3.466 161.482c-4.626 4.219-4.62 11.502.012 15.714l14.05 12.772a10.625 10.625 0 0 0 13.569.604L238.229 33.436c6.949-5.271 16.93-.315 16.93 8.407v-.61a15.94 15.94 0 0 0-9.024-14.36" mask="url(#vscClip)"/><path fill="#007acc" d="m246.135 226.816l-52.542 25.298a15.89 15.89 0 0 1-18.123-3.08L3.466 92.207c-4.626-4.218-4.62-11.502.012-15.713l14.05-12.773a10.625 10.625 0 0 1 13.569-.603l207.132 157.135c6.949 5.271 16.93.315 16.93-8.408v.611a15.94 15.94 0 0 1-9.024 14.36" mask="url(#vscClip)"/><path fill="#1f9cf0" d="M193.428 252.134a15.89 15.89 0 0 1-18.125-3.083c5.881 5.88 15.938 1.715 15.938-6.603V11.273c0-8.318-10.057-12.483-15.938-6.602a15.89 15.89 0 0 1 18.125-3.084l52.533 25.263a15.94 15.94 0 0 1 9.03 14.363V212.51c0 6.125-3.51 11.709-9.03 14.363z" mask="url(#vscClip)"/><path fill="url(#vscGrad)" fill-opacity=".25" d="M180.828 252.605a15.87 15.87 0 0 0 12.65-.486l52.5-25.263a15.94 15.94 0 0 0 9.026-14.363V41.197a15.94 15.94 0 0 0-9.025-14.363L193.477 1.57a15.88 15.88 0 0 0-18.114 3.084L74.857 96.35l-43.78-33.232a10.614 10.614 0 0 0-13.56.603L3.476 76.494c-4.63 4.211-4.635 11.495-.012 15.713l37.967 34.638l-37.967 34.637c-4.623 4.219-4.618 11.502.012 15.714l14.041 12.772a10.614 10.614 0 0 0 13.56.604l43.78-33.233l100.506 91.695a15.9 15.9 0 0 0 5.465 3.571m10.464-183.65l-76.262 57.89l76.262 57.888z" mask="url(#vscClip)"/></svg></div> VS Code</div>
       <div class="m-chip"><div class="m-icon" style="background:rgba(124,58,237,.06)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div> Local Files</div>
       <div class="m-chip"><div class="m-icon" style="background:rgba(124,58,237,.06)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 8v6m-6-6h6m2 0h6"/><circle cx="12" cy="12" r="3"/></svg></div> Custom API</div>
     </div>
@@ -736,19 +774,17 @@
     document.querySelector(a.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth' });
   }));
 
-  // Hero message cascade — messages appear sequentially when in view (if chat mockup exists)
+  // Hero message cascade — messages appear sequentially when in view
   const heroMsgs = document.getElementById('hero-msgs');
-  if (heroMsgs) {
-    let heroPlayed = false;
-    new IntersectionObserver(([e]) => {
-      if (e.isIntersecting && !heroPlayed) {
-        heroPlayed = true;
-        heroMsgs.querySelectorAll('.dm').forEach(m => {
-          setTimeout(() => m.classList.add('show'), +m.dataset.delay);
-        });
-      }
-    }, { threshold: .3 }).observe(heroMsgs);
-  }
+  let heroPlayed = false;
+  new IntersectionObserver(([e]) => {
+    if (e.isIntersecting && !heroPlayed) {
+      heroPlayed = true;
+      heroMsgs.querySelectorAll('.dm').forEach(m => {
+        setTimeout(() => m.classList.add('show'), +m.dataset.delay);
+      });
+    }
+  }, { threshold: .3 }).observe(heroMsgs);
 
   // Marquee duplication for infinite scroll
   const track = document.getElementById('marquee');
