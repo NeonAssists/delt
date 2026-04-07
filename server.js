@@ -199,16 +199,6 @@ const { todayStr, weekStr, logConversation, readLogFile, safeName, escapeHtml, l
 const { safeRead, safeWrite, getStateContext, persistExchange, flushMemoryExtraction, buildSystemPrefix, appendSessionLog } = memoryLib;
 const { buildMcpConfig, writeMcpConfigFile, invalidateMcpCache, buildClaudeArgs } = mcpLib;
 
-// Safe env whitelist for remote Claude sessions — no secrets leaked
-const SAFE_ENV_KEYS = ["PATH", "HOME", "USER", "SHELL", "LANG", "LC_ALL", "TERM", "TMPDIR", "NODE_ENV"];
-function buildSafeEnv() {
-  const env = {};
-  for (const key of SAFE_ENV_KEYS) {
-    if (process.env[key] !== undefined) env[key] = process.env[key];
-  }
-  return env;
-}
-
 // ============================================
 // Shared Claude stream handler
 // Eliminates ~120 lines of duplicate stdout/stderr/close logic
@@ -241,7 +231,10 @@ function attachStreamHandlers(proc, ws, { streamType, errorType, onText, onCost,
 
   proc.stderr.on("data", (chunk) => {
     const text = chunk.toString();
-    if (text.includes("Error") || text.includes("ENOENT")) {
+    // Detect auth failures and send a specific type so client can show re-auth UI
+    if (text.includes("401") || text.includes("auth") || text.includes("token expired") || text.includes("not logged in") || text.includes("unauthorized")) {
+      safeSend(ws, { type: "auth-expired", message: "Your Claude session has expired. Please sign in again." });
+    } else if (text.includes("Error") || text.includes("ENOENT")) {
       safeSend(ws, { type: errorType, message: text.trim() });
     }
   });
@@ -606,6 +599,41 @@ app.post("/auth-silent", localOnly, (req, res) => {
       error: "claude_not_installed",
       authUrl: null,
     });
+  }
+});
+
+// Deep auth check — actually runs Claude to verify auth is valid
+// Only used during onboarding sign-in step, NOT on every health poll
+app.post("/verify-auth", localOnly, async (req, res) => {
+  try {
+    const version = execSync("claude --version 2>/dev/null", { timeout: 5000 }).toString().trim();
+    if (!version) return res.json({ authed: false, reason: "not_installed" });
+
+    // Actually run Claude to test auth — this is the only reliable way
+    const result = await new Promise((resolve) => {
+      const proc = spawn("claude", ["-p", "say ok", "--output-format", "text"], {
+        cwd: os.homedir(),
+        env: { ...process.env },
+        timeout: 20000,
+      });
+      let stdout = "";
+      let stderr = "";
+      proc.stdout.on("data", (d) => { stdout += d.toString(); });
+      proc.stderr.on("data", (d) => { stderr += d.toString(); });
+      proc.on("close", (code) => {
+        if (code === 0 && stdout.trim().length > 0) {
+          resolve({ authed: true, version });
+        } else {
+          resolve({ authed: false, reason: stderr.trim() || "auth_failed" });
+        }
+      });
+      proc.on("error", (err) => {
+        resolve({ authed: false, reason: err.message });
+      });
+    });
+    res.json(result);
+  } catch (e) {
+    res.json({ authed: false, reason: e.message });
   }
 });
 
@@ -1493,7 +1521,7 @@ wss.on("connection", (ws, req) => {
         ? buildSystemPrefix(config, buildIntegrationsContext) + message
         : message;
 
-      const args = buildClaudeArgs(fullMessage, { isRemote });
+      const args = buildClaudeArgs(fullMessage);
 
       if (isFirst) {
         args.push("--session-id", sessionId);
@@ -1503,7 +1531,7 @@ wss.on("connection", (ws, req) => {
 
       const proc = spawn("claude", args, {
         cwd: os.homedir(),
-        env: isRemote ? buildSafeEnv() : { ...process.env },
+        env: { ...process.env },
       });
 
       currentProcess = proc;
@@ -1633,7 +1661,7 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
 
       const fullMessage = btwPrefix + message;
 
-      const args = buildClaudeArgs(fullMessage, { isRemote });
+      const args = buildClaudeArgs(fullMessage);
 
       if (isFirst) {
         args.push("--session-id", btwSessionId);
@@ -1643,7 +1671,7 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
 
       const proc = spawn("claude", args, {
         cwd: os.homedir(),
-        env: isRemote ? buildSafeEnv() : { ...process.env },
+        env: { ...process.env },
       });
 
       btwProcess = proc;
@@ -1705,14 +1733,14 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
       const prefix = isFirst ? buildSystemPrefix(config, buildIntegrationsContext) : "";
       const fullMessage = prefix + message;
 
-      const args = buildClaudeArgs(fullMessage, { isRemote });
+      const args = buildClaudeArgs(fullMessage);
       if (isFirst) {
         args.push("--session-id", pane2SessionId);
       } else {
         args.push("--resume", pane2SessionId);
       }
 
-      const proc = spawn("claude", args, { cwd: os.homedir(), env: isRemote ? buildSafeEnv() : { ...process.env } });
+      const proc = spawn("claude", args, { cwd: os.homedir(), env: { ...process.env } });
       pane2Process = proc;
       spawnWithTimeout(proc, ws, "pane2-error");
       safeSend(ws, { type: "pane2-session", sessionId: pane2SessionId });

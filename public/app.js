@@ -290,6 +290,11 @@
         hideTyping();
         showError(msg.message);
         break;
+      case "auth-expired":
+        hideTyping();
+        setBusy(false);
+        showAuthExpired();
+        break;
       case "sync-user":
         // Message sent from another device on this session
         addMessage("user", msg.message);
@@ -533,6 +538,41 @@
     messagesEl.appendChild(el);
     scrollDown();
     setBusy(false);
+  }
+
+  function showAuthExpired() {
+    const el = document.createElement("div");
+    el.className = "error-banner auth-expired";
+    el.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <strong>Session expired</strong>
+        <span>Your Claude authentication has expired. Sign in again to continue.</span>
+        <button class="auth-reauth-btn" style="align-self:flex-start;padding:6px 16px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;">Sign in to Claude</button>
+      </div>
+    `;
+    el.querySelector(".auth-reauth-btn").addEventListener("click", async () => {
+      try {
+        await fetch("/run-auth", { method: "POST" });
+        el.querySelector("span").textContent = "Terminal opened — sign in there, then come back.";
+        // Poll until auth is restored
+        const poll = setInterval(async () => {
+          try {
+            const res = await fetch("/verify-auth", { method: "POST" });
+            const data = await res.json();
+            if (data.authed) {
+              clearInterval(poll);
+              el.remove();
+              setStatus("connected", "Ready");
+            }
+          } catch {}
+        }, 3000);
+        // Stop polling after 2 minutes
+        setTimeout(() => clearInterval(poll), 120000);
+      } catch {}
+    });
+    messagesEl.appendChild(el);
+    scrollDown();
+    setStatus("error", "Auth expired");
   }
 
   // --- File upload ---
@@ -2332,14 +2372,18 @@
   function startAuthPoll() {
     if (authPollTimer) clearInterval(authPollTimer);
     authPollTimer = setInterval(async () => {
-      const health = await checkClaude();
-      if (health.authed) {
-        clearInterval(authPollTimer);
-        if (obAuthDot) obAuthDot.className = "ob-auth-dot ok";
-        if (obAuthText) obAuthText.textContent = "Connected!";
-        setTimeout(() => showObStep(obReady), 800);
-      }
-    }, 3000);
+      try {
+        // Use deep auth check — actually runs Claude to verify token is valid
+        const res = await fetch("/verify-auth", { method: "POST" });
+        const data = await res.json();
+        if (data.authed) {
+          clearInterval(authPollTimer);
+          if (obAuthDot) obAuthDot.className = "ob-auth-dot ok";
+          if (obAuthText) obAuthText.textContent = "Connected!";
+          setTimeout(() => showObStep(obReady), 800);
+        }
+      } catch {}
+    }, 5000); // 5s interval since this actually calls Claude
   }
 
   async function advanceToSignin() {
@@ -2459,18 +2503,26 @@
     });
   }
 
-  // Auth retry
+  // Auth retry — uses deep check
   const obAuthRetry = document.getElementById("ob-auth-retry");
   if (obAuthRetry) {
     obAuthRetry.addEventListener("click", async () => {
-      const health = await checkClaude();
-      if (health.authed) {
-        if (obAuthDot) obAuthDot.className = "ob-auth-dot ok";
-        if (obAuthText) obAuthText.textContent = "Connected!";
-        setTimeout(() => showObStep(obReady), 800);
-      } else {
+      if (obAuthDot) obAuthDot.className = "ob-auth-dot checking";
+      if (obAuthText) obAuthText.textContent = "Verifying...";
+      try {
+        const res = await fetch("/verify-auth", { method: "POST" });
+        const data = await res.json();
+        if (data.authed) {
+          if (obAuthDot) obAuthDot.className = "ob-auth-dot ok";
+          if (obAuthText) obAuthText.textContent = "Connected!";
+          setTimeout(() => showObStep(obReady), 800);
+        } else {
+          if (obAuthDot) obAuthDot.className = "ob-auth-dot checking";
+          if (obAuthText) obAuthText.textContent = "Not connected yet — try signing in again";
+        }
+      } catch {
         if (obAuthDot) obAuthDot.className = "ob-auth-dot checking";
-        if (obAuthText) obAuthText.textContent = "Not connected yet — try signing in again";
+        if (obAuthText) obAuthText.textContent = "Check failed — try again";
       }
     });
   }
