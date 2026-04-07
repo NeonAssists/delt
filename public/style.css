@@ -1375,6 +1375,17 @@ header {
   border-radius: 8px;
 }
 
+.integration-caps {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.integration-caps.limitation {
+  color: var(--warning);
+  font-style: italic;
+}
+
 .integration-tryit {
   display: block;
   margin-top: 3px;

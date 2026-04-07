@@ -795,6 +795,34 @@ app.post("/setup", localOnly, (req, res) => {
     return res.status(500).json({ error: "Failed to save config" });
   }
 
+  // Auto-enable zero-config integrations on first setup —
+  // users shouldn't have to manually turn on basic local functionality
+  try {
+    const creds = loadCredentials();
+
+    // Local Computer — full access (it's their own machine)
+    if (!creds["local-access"]?.enabled) {
+      saveCredential("local-access", { type: "local-access", level: "full", directories: [] });
+    }
+
+    // Apple Apps — zero config on macOS
+    if (process.platform === "darwin" && !creds["apple"]?.enabled) {
+      saveCredential("apple", { type: "enable" });
+    }
+
+    // Auto-detect GitHub token from gh CLI
+    if (!creds["github"]?.enabled) {
+      try {
+        const ghToken = execSyncImport("gh auth token 2>/dev/null", { encoding: "utf-8", timeout: 5000 }).trim();
+        if (ghToken && ghToken.startsWith("gh")) {
+          saveCredential("github", { token: ghToken, type: "auto-detected" });
+        }
+      } catch {}
+    }
+  } catch (e) {
+    console.error("Auto-enable failed (non-fatal):", e.message);
+  }
+
   res.json({ ok: true, config });
 });
 
@@ -816,6 +844,7 @@ app.get("/integrations", (req, res) => {
       authType: i.authType,
       setupSteps: i.setupSteps || [],
       tokenConfig: i.tokenConfig || null,
+      capabilities: i.capabilities || null,
       connected: !!(cred && cred.enabled),
       connectedAt: cred?.updatedAt || null,
     };
@@ -831,39 +860,113 @@ app.get("/integrations", (req, res) => {
   res.json({ integrations: result });
 });
 
+// Map of integration IDs → CLI detection commands
+const AUTO_DETECTORS = {
+  github: { cmd: "gh", args: ["auth", "token"], validate: (t) => t.startsWith("gh") || t.startsWith("github_pat_") },
+  // Slack CLI — newer workspaces may have it
+  slack: { cmd: "slack", args: ["auth", "token"], validate: (t) => t.startsWith("xoxb-") || t.startsWith("xoxp-") },
+};
+
+// File-based token detection — check known config files
+function detectFromFiles(integrationId) {
+  const home = os.homedir();
+  try {
+    switch (integrationId) {
+      case "github": {
+        // Also check ~/.config/gh/hosts.yml
+        const hostsPath = path.join(home, ".config", "gh", "hosts.yml");
+        if (fs.existsSync(hostsPath)) {
+          const content = fs.readFileSync(hostsPath, "utf-8");
+          const match = content.match(/oauth_token:\s*(.+)/);
+          if (match) return { token: match[1].trim(), source: "~/.config/gh/hosts.yml" };
+        }
+        break;
+      }
+      case "linear": {
+        // Linear CLI stores key in ~/.linear
+        const linearPath = path.join(home, ".linear", "config.json");
+        if (fs.existsSync(linearPath)) {
+          const cfg = JSON.parse(fs.readFileSync(linearPath, "utf-8"));
+          if (cfg.apiKey) return { token: cfg.apiKey, source: "~/.linear/config.json" };
+        }
+        break;
+      }
+      default:
+        return null;
+    }
+  } catch {}
+  return null;
+}
+
+async function runDetector(integrationId) {
+  // Try CLI detector first
+  const detector = AUTO_DETECTORS[integrationId];
+  if (detector) {
+    try {
+      const token = await new Promise((resolve, reject) => {
+        const proc = spawn(detector.cmd, detector.args, { timeout: 5000 });
+        let stdout = "";
+        proc.stdout.on("data", (d) => { stdout += d.toString(); });
+        proc.on("close", (code) => {
+          const t = stdout.trim();
+          if (code === 0 && t && (!detector.validate || detector.validate(t))) resolve(t);
+          else reject(new Error("not found"));
+        });
+        proc.on("error", () => reject(new Error("CLI not installed")));
+      });
+      return { token, source: `${detector.cmd} CLI` };
+    } catch {}
+  }
+
+  // Try file-based detection
+  const fileResult = detectFromFiles(integrationId);
+  if (fileResult) return fileResult;
+
+  return null;
+}
+
 // Auto-detect credentials from local CLI tools (gh, gcloud, etc.)
-// Tries to grab an existing token so the user doesn't have to create one manually
 app.post("/integrations/:id/auto-detect", localOnly, async (req, res) => {
   const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
   if (!integration) return res.status(404).json({ error: "Integration not found" });
 
-  // Map of integration IDs → CLI commands that return a token
-  const detectors = {
-    github: { cmd: "gh", args: ["auth", "token"] },
-  };
-
-  const detector = detectors[integration.id];
-  if (!detector) return res.json({ detected: false, reason: "No auto-detect for this service" });
-
-  try {
-    const token = await new Promise((resolve, reject) => {
-      const proc = spawn(detector.cmd, detector.args, { timeout: 5000 });
-      let stdout = "";
-      let stderr = "";
-      proc.stdout.on("data", (d) => { stdout += d.toString(); });
-      proc.stderr.on("data", (d) => { stderr += d.toString(); });
-      proc.on("close", (code) => {
-        if (code === 0 && stdout.trim()) resolve(stdout.trim());
-        else reject(new Error(stderr.trim() || `${detector.cmd} not authenticated`));
-      });
-      proc.on("error", () => reject(new Error(`${detector.cmd} CLI not installed`)));
-    });
-
-    saveCredential(integration.id, { token, type: "auto-detected" });
-    res.json({ detected: true, connected: true, source: `${detector.cmd} CLI` });
-  } catch (err) {
-    res.json({ detected: false, reason: err.message });
+  const result = await runDetector(integration.id);
+  if (result) {
+    saveCredential(integration.id, { token: result.token, type: "auto-detected" });
+    return res.json({ detected: true, connected: true, source: result.source });
   }
+  res.json({ detected: false, reason: "No credentials found locally" });
+});
+
+// Bulk auto-detect — try all detectable integrations at once
+// Called on first load to auto-connect everything possible
+app.post("/integrations/auto-detect-all", localOnly, async (req, res) => {
+  const creds = loadCredentials();
+  const detected = [];
+
+  // Token-based integrations that support auto-detect
+  const detectableIds = [...Object.keys(AUTO_DETECTORS), "linear"];
+
+  for (const id of detectableIds) {
+    if (creds[id]?.enabled) continue; // already connected
+    const result = await runDetector(id);
+    if (result) {
+      saveCredential(id, { token: result.token, type: "auto-detected" });
+      detected.push({ id, source: result.source });
+    }
+  }
+
+  // Auto-enable zero-config integrations
+  if (!creds["local-access"]?.enabled) {
+    saveCredential("local-access", { type: "local-access", level: "full", directories: [] });
+    detected.push({ id: "local-access", source: "auto" });
+  }
+  if (process.platform === "darwin" && !creds["apple"]?.enabled) {
+    saveCredential("apple", { type: "enable" });
+    detected.push({ id: "apple", source: "auto" });
+  }
+
+  res.json({ detected });
 });
 
 // Connect an integration (token-based, multi-field, or enable)

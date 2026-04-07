@@ -1519,16 +1519,27 @@
   function renderIntegrationCard(i) {
     const icon = INTEGRATION_ICONS[i.icon] || i.name.charAt(0);
     if (i.connected) {
+      // Build capabilities summary
+      const caps = i.capabilities || {};
+      let capsHtml = "";
+      if (caps.creates && caps.creates.length) {
+        capsHtml += `<span class="integration-caps">Can create: ${caps.creates.join(", ")}</span>`;
+      }
+      if (caps.limitations && caps.limitations.length) {
+        capsHtml += `<span class="integration-caps limitation">${caps.limitations[0]}</span>`;
+      }
       return `
         <div class="integration-card connected" data-id="${i.id}">
           <div class="integration-icon-box">${icon}</div>
           <div class="integration-info">
             <span class="integration-name">${escapeHtml(i.name)}</span>
             <span class="integration-desc">${escapeHtml(i.description)}</span>
+            ${capsHtml}
             ${i.tryIt ? `<span class="integration-tryit">Try: &ldquo;${escapeHtml(i.tryIt)}&rdquo;</span>` : ""}
           </div>
           <div class="integration-actions">
             <span class="integration-status"><span class="integration-status-dot"></span> ${i.authType === "local-access" ? (i.accessLevel === "full" ? "Full Access" : "Limited Access") : "Connected"}</span>
+            <button class="integration-verify-btn" data-action="verify" data-id="${i.id}" style="font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;">Verify</button>
             ${i.authType === "local-access"
               ? `<button class="integration-connect-btn" data-action="connect" data-id="${i.id}" data-auth="local-access" style="font-size:12px">Change</button>`
               : ""}
@@ -1556,6 +1567,30 @@
 
     const id = btn.dataset.id;
     const action = btn.dataset.action;
+
+    if (action === "verify") {
+      btn.textContent = "Testing...";
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/integrations/${id}/test`, { method: "POST" });
+        const data = await res.json();
+        if (data.ok) {
+          btn.textContent = "Working ✓";
+          btn.style.color = "var(--success)";
+          btn.style.borderColor = "var(--success)";
+        } else {
+          btn.textContent = "Failed ✗";
+          btn.style.color = "var(--error)";
+          btn.style.borderColor = "var(--error)";
+          btn.title = data.error || "MCP server failed to start";
+        }
+      } catch {
+        btn.textContent = "Error";
+        btn.style.color = "var(--error)";
+      }
+      setTimeout(() => { btn.textContent = "Verify"; btn.disabled = false; btn.style.color = ""; btn.style.borderColor = ""; btn.title = ""; }, 3000);
+      return;
+    }
 
     if (action === "disconnect") {
       btn.textContent = "Removing...";
@@ -1679,20 +1714,29 @@
     wizard.className = "oauth-setup-wizard token-wizard";
     wizard.innerHTML = `
       <div class="token-wizard-header">
-        <div class="token-wizard-title">Set up Google sign-in</div>
-        <span class="token-wizard-time">~3 min</span>
+        <div class="token-wizard-title">Connect Google Account</div>
+        <span class="token-wizard-time">One-time setup</span>
+      </div>
+      <div class="oauth-setup-explainer" style="font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.5;">
+        Delt needs a Google API key to access Gmail, Calendar, and Sheets on your behalf. This is a one-time setup — you won't need to do this again.
       </div>
       <ol class="token-wizard-steps">
-        <li data-step="1">Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console &rarr; Credentials</a></li>
-        <li data-step="2">Click <strong>Create Credentials &rarr; OAuth client ID</strong></li>
-        <li data-step="3">Choose <strong>Desktop app</strong>, name it "Delt"</li>
-        <li data-step="4">Copy the Client ID and Client Secret below</li>
+        <li data-step="1"><a href="https://console.cloud.google.com/apis/credentials/oauthclient?previousPage=%2Fapis%2Fcredentials" target="_blank" rel="noopener"><strong>Click here</strong></a> to open Google's credential page</li>
+        <li data-step="2">Select <strong>Desktop app</strong> as the type, name it <strong>Delt</strong>, then click Create</li>
+        <li data-step="3">Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> shown and paste them below</li>
       </ol>
       <input class="token-wizard-input" data-key="clientId" type="text" placeholder="Client ID (xxxxx.apps.googleusercontent.com)" autocomplete="off">
       <input class="token-wizard-input" data-key="clientSecret" type="password" placeholder="Client Secret" autocomplete="off">
-      <button class="token-wizard-submit" disabled>Save &amp; Sign in</button>
-      <div class="token-wizard-troubleshoot">Don't have a Google Cloud project? Create one first at console.cloud.google.com — it's free.</div>
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <button class="token-wizard-submit" disabled style="flex:1">Save & Sign in</button>
+        <button class="oauth-skip-btn" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;">Skip for now</button>
+      </div>
+      <div class="token-wizard-troubleshoot">First time? You may need to <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">create a Google Cloud project</a> first (free, takes 10 seconds), then enable the <a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noopener">Gmail</a>, <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noopener">Calendar</a>, and <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener">Sheets</a> APIs.</div>
     `;
+
+    // Skip button
+    const skipBtn = wizard.querySelector(".oauth-skip-btn");
+    if (skipBtn) skipBtn.addEventListener("click", () => wizard.remove());
 
     const inputs = wizard.querySelectorAll(".token-wizard-input");
     const submit = wizard.querySelector(".token-wizard-submit");
@@ -2560,7 +2604,17 @@
     loadConfig().then(() => {
       checkOnboarding();
       wsConnect();
-      refreshIntegrationChips();
+
+      // Auto-detect and connect integrations on first load
+      fetch("/integrations/auto-detect-all", { method: "POST" })
+        .then(r => r.json())
+        .then(data => {
+          if (data.detected && data.detected.length) {
+            console.log("[Delt] Auto-connected:", data.detected.map(d => d.id).join(", "));
+          }
+          refreshIntegrationChips();
+        })
+        .catch(() => refreshIntegrationChips());
 
       if (restored && sessionId && ws) {
         const waitForOpen = () => {
