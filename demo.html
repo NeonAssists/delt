@@ -116,8 +116,76 @@
       box-shadow: 0 8px 40px rgba(12,10,20,.08), 0 1px 3px rgba(12,10,20,.04);
       transform: perspective(1200px) rotateY(-3deg) rotateX(1deg);
       transition: transform .5s cubic-bezier(.16,1,.3,1);
+      display: none; /* hidden — replaced by hero-visual hub */
     }
     .hero-product:hover { transform: perspective(1200px) rotateY(0) rotateX(0); }
+
+    /* === HERO VISUAL — hub-and-spoke === */
+    .hero-visual {
+      position: relative; z-index: 1;
+      width: 100%; aspect-ratio: 1; max-width: 480px; margin: 0 auto;
+    }
+    .hv-lines { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
+    .hv-line {
+      stroke: rgba(124,58,237,.18); stroke-width: 1.2; fill: none;
+      stroke-dasharray: 6 5; animation: hv-flow 1.8s linear infinite;
+    }
+    .hv-line:nth-child(2) { animation-delay: -.3s; }
+    .hv-line:nth-child(3) { animation-delay: -.6s; }
+    .hv-line:nth-child(4) { animation-delay: -.9s; }
+    .hv-line:nth-child(5) { animation-delay: -1.2s; }
+    @keyframes hv-flow { to { stroke-dashoffset: -22; } }
+
+    .hv-center {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%); z-index: 2;
+    }
+    .hv-glow {
+      position: absolute; inset: -40px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(124,58,237,.12) 0%, rgba(99,102,241,.06) 40%, transparent 70%);
+      animation: hv-pulse 3.5s ease-in-out infinite;
+    }
+    @keyframes hv-pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.2);opacity:.6} }
+    .hv-logo {
+      width: 72px; height: 72px; border-radius: 20px;
+      background: linear-gradient(135deg, var(--purple), var(--indigo));
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 28px; color: #fff;
+      position: relative; z-index: 1;
+      box-shadow: 0 8px 40px rgba(124,58,237,.28), 0 0 0 1px rgba(124,58,237,.1);
+    }
+
+    .hv-node {
+      position: absolute; display: flex; align-items: center; gap: 10px;
+      padding: 10px 18px 10px 12px;
+      background: rgba(255,255,255,.92); backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border); border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(12,10,20,.06), 0 1px 3px rgba(12,10,20,.03);
+      transform: translate(-50%, -50%); z-index: 3;
+      transition: transform .3s cubic-bezier(.16,1,.3,1), box-shadow .3s;
+    }
+    .hv-node:hover {
+      transform: translate(-50%, -50%) translateY(-3px);
+      box-shadow: 0 8px 32px rgba(12,10,20,.1), 0 1px 3px rgba(12,10,20,.04);
+    }
+    .hv-icon {
+      width: 32px; height: 32px; border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; flex-shrink: 0;
+    }
+    .hv-label { font-size: 14px; font-weight: 650; letter-spacing: -.02em; color: var(--text); }
+
+    /* Pentagon positions */
+    .hv-n1 { top: 6%;  left: 50%;  animation: hv-float 5s ease-in-out infinite; }
+    .hv-n2 { top: 34%; left: 94%;  animation: hv-float 5s ease-in-out .9s infinite; }
+    .hv-n3 { top: 84%; left: 78%;  animation: hv-float 5s ease-in-out 1.8s infinite; }
+    .hv-n4 { top: 84%; left: 22%;  animation: hv-float 5s ease-in-out 2.7s infinite; }
+    .hv-n5 { top: 34%; left: 6%;   animation: hv-float 5s ease-in-out 3.6s infinite; }
+    @keyframes hv-float {
+      0%,100%{ transform: translate(-50%,-50%) translateY(0); }
+      50%{ transform: translate(-50%,-50%) translateY(-8px); }
+    }
 
     .delt-ui { background: var(--wash); }
     .d-hdr { height: 44px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
@@ -128,6 +196,9 @@
     .d-status i { width: 5px; height: 5px; border-radius: 50%; background: var(--mint); display: block; }
     .d-hdr-r { display: flex; gap: 4px; }
     .d-hdr-btn { height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); font-size: 11px; font-weight: 500; color: var(--text-2); display: inline-flex; align-items: center; gap: 4px; font-family: var(--font); }
+    .d-integrations { display: flex; align-items: center; gap: 3px; padding: 0 8px; }
+    .d-int-dot { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; border: 1px solid var(--border); background: var(--surface); position: relative; }
+    .d-int-dot .d-int-pulse { position: absolute; bottom: -1px; right: -1px; width: 6px; height: 6px; border-radius: 50%; background: var(--mint); border: 1.5px solid var(--surface); }
     .d-body { display: flex; min-height: 340px; }
     .d-side { width: 160px; border-right: 1px solid var(--border); background: var(--surface); padding: 10px 6px; flex-shrink: 0; }
     .d-sh { font-size: 9px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; padding: 4px 8px; }
@@ -191,6 +262,7 @@
     }
     .m-chip:hover { border-color: var(--purple); background: rgba(124,58,237,.05); transform: scale(1.04); }
     .m-icon { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+    .m-icon img, .m-icon svg { width: 14px; height: 14px; display: block; }
 
     /* === BOLD SPLIT — gradient bg section === */
     .bold-section {
@@ -378,6 +450,11 @@
       .hero-product:hover { transform: none; }
       .d-side { display: none; }
       .d-body { min-height: 280px; }
+      .hero-visual { max-width: 340px; }
+      .hv-node { padding: 8px 14px 8px 10px; }
+      .hv-icon { width: 26px; height: 26px; font-size: 13px; }
+      .hv-label { font-size: 12px; }
+      .hv-logo { width: 56px; height: 56px; font-size: 22px; border-radius: 16px; }
       .hero-actions { flex-direction: column; }
       .bold-section { grid-template-columns: 1fr; padding: 80px 20px; gap: 40px; }
       .demo-section { padding: 60px 20px; }
@@ -419,57 +496,53 @@
     </div>
   </div>
 
-  <div class="hero-product reveal d4">
-    <div class="delt-ui">
-      <div class="d-hdr">
-        <div class="d-hdr-l"><div class="d-mark">D</div><span>delt</span><div class="d-status"><i></i> Ready</div></div>
-        <div class="d-hdr-r"><div class="d-hdr-btn">Integrations</div><div class="d-hdr-btn">+ New</div></div>
+  <!-- Hub visual — "One AI, Every tool" at a glance -->
+  <div class="hero-visual reveal d4">
+    <!-- Connection lines (node → center, animated dashes flow inward) -->
+    <svg class="hv-lines" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+      <line x1="50" y1="6"  x2="50" y2="50" class="hv-line"/>
+      <line x1="94" y1="34" x2="50" y2="50" class="hv-line"/>
+      <line x1="78" y1="84" x2="50" y2="50" class="hv-line"/>
+      <line x1="22" y1="84" x2="50" y2="50" class="hv-line"/>
+      <line x1="6"  y1="34" x2="50" y2="50" class="hv-line"/>
+    </svg>
+
+    <!-- Center: Delt -->
+    <div class="hv-center">
+      <div class="hv-glow"></div>
+      <div class="hv-logo">D</div>
+    </div>
+
+    <!-- Service nodes — match the 5 named in the hero copy -->
+    <div class="hv-node hv-n1">
+      <div class="hv-icon" style="background:rgba(234,67,53,.08)">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#EA4335" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
       </div>
-      <div class="d-body">
-        <div class="d-side">
-          <div class="d-sh">Today</div>
-          <div class="d-si on"><i></i> Q3 pipeline review</div>
-          <div class="d-si"><i></i> Refund #4821</div>
-          <div class="d-si"><i></i> Standup prep</div>
-          <div class="d-sh" style="margin-top:6px">Yesterday</div>
-          <div class="d-si"><i></i> Deploy v2.4</div>
-          <div class="d-si"><i></i> Onboarding draft</div>
-        </div>
-        <div class="d-chat">
-          <div class="d-msgs" id="hero-msgs">
-            <div class="dm user" data-delay="400">
-              <div class="dm-av u">N</div>
-              <div class="dm-b"><div class="dm-who">You</div><div class="dm-c">Show me the Q3 pipeline from HubSpot and flag deals stuck 2+ weeks</div></div>
-            </div>
-            <div class="dm" data-delay="1200">
-              <div class="dm-av a">D</div>
-              <div class="dm-b">
-                <div class="dm-who">Delt</div>
-                <div class="dm-c"><strong>23 open deals</strong> &middot; $184K total. 4 stuck:<br><strong style="color:var(--amber)">Acme</strong> $42K &middot; 18d&emsp;<strong style="color:var(--red)">Meridian</strong> $65K &middot; 31d<br><strong style="color:var(--amber)">TechFlow</strong> $28K &middot; 21d<br><br>Draft follow-ups?</div>
-                <div class="dm-badges"><span class="dm-badge">HubSpot</span><span class="dm-badge">Gmail ready</span></div>
-              </div>
-            </div>
-            <div class="dm user" data-delay="2200">
-              <div class="dm-av u">N</div>
-              <div class="dm-b"><div class="dm-who">You</div><div class="dm-c">Yes, and post a summary to #sales on Slack</div></div>
-            </div>
-            <div class="dm" data-delay="3000">
-              <div class="dm-av a">D</div>
-              <div class="dm-b">
-                <div class="dm-who">Delt</div>
-                <div class="dm-c">Done. 3 follow-up emails drafted. Summary posted to <strong>#sales</strong>.</div>
-                <div class="dm-tools"><span class="dm-tool">&#10003; 3 Gmail drafts</span><span class="dm-tool">&#10003; Slack #sales</span></div>
-              </div>
-            </div>
-          </div>
-          <div class="d-input">
-            <div class="d-input-bar">
-              <span>Ask anything...</span>
-              <div class="d-send"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></div>
-            </div>
-          </div>
-        </div>
+      <span class="hv-label">Gmail</span>
+    </div>
+    <div class="hv-node hv-n2">
+      <div class="hv-icon" style="background:rgba(74,21,75,.08)">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#611f69" stroke-width="2"><path d="M14.5 2a2.5 2.5 0 0 0 0 5H17V4.5A2.5 2.5 0 0 0 14.5 2z"/><path d="M7 7h10v10"/><path d="M9.5 22a2.5 2.5 0 0 0 0-5H7v2.5A2.5 2.5 0 0 0 9.5 22z"/><path d="M7 7H4.5A2.5 2.5 0 0 1 4.5 2h.5v5"/><path d="M22 14.5a2.5 2.5 0 0 0-5 0V17h2.5a2.5 2.5 0 0 0 2.5-2.5z"/></svg>
       </div>
+      <span class="hv-label">Slack</span>
+    </div>
+    <div class="hv-node hv-n3">
+      <div class="hv-icon" style="background:rgba(36,41,47,.06)">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#24292f" stroke-width="2"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+      </div>
+      <span class="hv-label">GitHub</span>
+    </div>
+    <div class="hv-node hv-n4">
+      <div class="hv-icon" style="background:rgba(0,161,224,.08)">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#00A1E0" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+      </div>
+      <span class="hv-label">Salesforce</span>
+    </div>
+    <div class="hv-node hv-n5">
+      <div class="hv-icon" style="background:rgba(99,91,255,.08)">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#635BFF" stroke-width="2.2"><path d="M2 10h20"/><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 15h4"/></svg>
+      </div>
+      <span class="hv-label">Stripe</span>
     </div>
   </div>
 </section>
@@ -479,26 +552,26 @@
   <div class="marquee-label">20 integrations via Model Context Protocol</div>
   <div class="marquee-wrap">
     <div class="marquee-track" id="marquee">
-      <div class="m-chip"><div class="m-icon" style="background:rgba(234,67,53,.08)">&#9993;&#65039;</div> Google Workspace</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(74,21,75,.08)">&#128172;</div> Slack</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(36,41,47,.06)">&#128187;</div> GitHub</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(55,53,47,.06)">&#128221;</div> Notion</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(99,91,255,.06)">&#128179;</div> Stripe</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(0,161,224,.06)">&#9729;&#65039;</div> Salesforce</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(255,122,69,.06)">&#128200;</div> HubSpot</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(150,191,72,.06)">&#128722;</div> Shopify</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(94,107,228,.06)">&#9889;</div> Linear</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(162,89,255,.06)">&#127912;</div> Figma</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(0,120,212,.06)">&#128233;</div> Microsoft 365</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(45,140,255,.06)">&#127909;</div> Zoom</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(241,61,60,.06)">&#128222;</div> Twilio</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(0,126,229,.06)">&#128231;</div> SendGrid</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(24,119,242,.06)">&#128203;</div> Airtable</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(0,121,191,.06)">&#128203;</div> Trello</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(55,53,47,.06)">&#63743;</div> Apple Apps</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(0,122,204,.06)">&#128296;</div> VS Code</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(124,58,237,.06)">&#128187;</div> Local Files</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(124,58,237,.06)">&#128268;</div> Custom API</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(234,67,53,.08)"><img src="https://cdn.simpleicons.org/google/4285F4" alt="Google"></div> Google Workspace</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(74,21,75,.08)"><img src="https://cdn.simpleicons.org/slack/4A154B" alt="Slack"></div> Slack</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(36,41,47,.06)"><img src="https://cdn.simpleicons.org/github/181717" alt="GitHub"></div> GitHub</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(55,53,47,.06)"><img src="https://cdn.simpleicons.org/notion/000000" alt="Notion"></div> Notion</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(99,91,255,.06)"><img src="https://cdn.simpleicons.org/stripe/635BFF" alt="Stripe"></div> Stripe</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(0,161,224,.06)"><img src="https://cdn.simpleicons.org/salesforce/00A1E0" alt="Salesforce"></div> Salesforce</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(255,122,69,.06)"><img src="https://cdn.simpleicons.org/hubspot/FF7A45" alt="HubSpot"></div> HubSpot</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(150,191,72,.06)"><img src="https://cdn.simpleicons.org/shopify/7AB55C" alt="Shopify"></div> Shopify</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(94,107,228,.06)"><img src="https://cdn.simpleicons.org/linear/5E6BE4" alt="Linear"></div> Linear</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(162,89,255,.06)"><img src="https://cdn.simpleicons.org/figma/F24E1E" alt="Figma"></div> Figma</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(0,120,212,.06)"><img src="https://cdn.simpleicons.org/microsoft/0078D4" alt="Microsoft"></div> Microsoft 365</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(45,140,255,.06)"><img src="https://cdn.simpleicons.org/zoom/0B5CFF" alt="Zoom"></div> Zoom</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(241,61,60,.06)"><img src="https://cdn.simpleicons.org/twilio/F22F46" alt="Twilio"></div> Twilio</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(0,126,229,.06)"><img src="https://cdn.simpleicons.org/sendgrid/1A82E2" alt="SendGrid"></div> SendGrid</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(24,119,242,.06)"><img src="https://cdn.simpleicons.org/airtable/18BFFF" alt="Airtable"></div> Airtable</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(0,121,191,.06)"><img src="https://cdn.simpleicons.org/trello/0052CC" alt="Trello"></div> Trello</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(55,53,47,.06)"><img src="https://cdn.simpleicons.org/apple/000000" alt="Apple"></div> Apple Apps</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(0,122,204,.06)"><img src="https://cdn.simpleicons.org/visualstudiocode/007ACC" alt="VS Code"></div> VS Code</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(124,58,237,.06)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div> Local Files</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(124,58,237,.06)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 8v6m-6-6h6m2 0h6"/><circle cx="12" cy="12" r="3"/></svg></div> Custom API</div>
     </div>
   </div>
 </section>
@@ -663,17 +736,19 @@
     document.querySelector(a.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth' });
   }));
 
-  // Hero message cascade — messages appear sequentially when in view
+  // Hero message cascade — messages appear sequentially when in view (if chat mockup exists)
   const heroMsgs = document.getElementById('hero-msgs');
-  let heroPlayed = false;
-  new IntersectionObserver(([e]) => {
-    if (e.isIntersecting && !heroPlayed) {
-      heroPlayed = true;
-      heroMsgs.querySelectorAll('.dm').forEach(m => {
-        setTimeout(() => m.classList.add('show'), +m.dataset.delay);
-      });
-    }
-  }, { threshold: .3 }).observe(heroMsgs);
+  if (heroMsgs) {
+    let heroPlayed = false;
+    new IntersectionObserver(([e]) => {
+      if (e.isIntersecting && !heroPlayed) {
+        heroPlayed = true;
+        heroMsgs.querySelectorAll('.dm').forEach(m => {
+          setTimeout(() => m.classList.add('show'), +m.dataset.delay);
+        });
+      }
+    }, { threshold: .3 }).observe(heroMsgs);
+  }
 
   // Marquee duplication for infinite scroll
   const track = document.getElementById('marquee');

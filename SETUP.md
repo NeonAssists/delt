@@ -111,8 +111,8 @@ Make sure you're in the right folder. Try typing `ls` and pressing Enter. You sh
 **"Node.js not found"**
 The installer tries to install this for you. If it can't, go to **nodejs.org**, download the installer for Mac, and run it. Then try Step 3 again.
 
-**"Port 3939 is already in use"**
-Delt is probably already running. Check your browser — go to **localhost:3939**. If you need to restart, press Control + C in Terminal first, then double-click Delt.command again.
+**"Port #### is already in use"**
+Delt is probably already running. Check your browser — your Delt URL is shown in Terminal when it starts (it uses a random port). If you need to restart, press Control + C in Terminal first, then double-click Delt.command again.
 
 **The browser opened but the page is blank**
 Wait a few seconds and refresh the page. If it's still blank, go back to Terminal and check if there's an error message.
