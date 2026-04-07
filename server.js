@@ -255,9 +255,8 @@ cryptoLib.init({
   writeIntegrationsMd,
 });
 
-// Sync allowed tools to Claude settings on startup — ensures any
-// previously-connected integrations are pre-approved for all sessions.
-cryptoLib.syncClaudeSettingsAllowedTools();
+// MCP tools are auto-allowed per-session via --allowedTools in buildClaudeArgs().
+// No need to modify global ~/.claude/settings.json — that would affect non-Delt sessions.
 
 // Initialize logging module (needs project base dir)
 logging.initDirs(__dirname);
@@ -2444,22 +2443,44 @@ function logSignupLocally(entry) {
   try { fs.writeFileSync(signupsPath, JSON.stringify(signups, null, 2)); } catch (e) { console.error("Failed to log signup:", e.message); }
 }
 
+// Global daily email cap — hard ceiling prevents relay abuse regardless of IP rotation
+const DAILY_EMAIL_CAP = 100;
+let dailyEmailCount = 0;
+let dailyEmailResetDate = new Date().toISOString().slice(0, 10);
+function checkDailyEmailCap() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== dailyEmailResetDate) {
+    dailyEmailCount = 0;
+    dailyEmailResetDate = today;
+  }
+  return dailyEmailCount < DAILY_EMAIL_CAP;
+}
+
 app.post("/api/signup", rateLimit(60000, 5), async (req, res) => {
   const { email, name } = req.body;
   if (!email || !email.includes("@")) {
     return res.status(400).json({ error: "Valid email required" });
   }
 
-  const displayName = name || email.split("@")[0];
+  // Validate email format strictly — prevent use as open email relay
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  if (!emailRegex.test(email) || email.length > 254) {
+    return res.status(400).json({ error: "Invalid email format" });
+  }
+
+  // Sanitize name — strip control chars/newlines, limit length
+  const rawName = (name || email.split("@")[0]).replace(/[\r\n\t]/g, " ").trim().slice(0, 100);
+  const displayName = escapeHtml(rawName);
   const timestamp = new Date().toISOString();
   const results = { email: true, notification: false, sheet: false };
 
-  // Always log locally as backup
-  logSignupLocally({ email, name: displayName, timestamp });
+  // Always log locally as backup (use rawName, not HTML-escaped displayName)
+  logSignupLocally({ email, name: rawName, timestamp });
 
   // 1. Send thank-you email to the signup
   const transporter = getMailTransporter();
-  if (transporter) {
+  if (transporter && checkDailyEmailCap()) {
+    dailyEmailCount++;
     try {
       await transporter.sendMail({
         from: `"Neonotics" <${process.env.GMAIL_USER}>`,
@@ -2499,18 +2520,18 @@ app.post("/api/signup", rateLimit(60000, 5), async (req, res) => {
 
     // 2. Send notification + vCard to neonotics@gmail.com
     try {
-      const vcard = generateVCard(displayName, email);
+      const vcard = generateVCard(rawName, email);
       await transporter.sendMail({
         from: `"Delt Signups" <${process.env.GMAIL_USER}>`,
         to: process.env.GMAIL_USER,
-        subject: `Delt — New signup: ${displayName}`,
+        subject: `Delt — New signup: ${rawName}`,
         html: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; padding: 32px 24px; color: #18182B;">
             <h1 style="font-size: 22px; font-weight: 700; margin-bottom: 20px;">Delt</h1>
             <div style="background: #F7F7F8; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #E3E3E8;">
               <p style="margin: 0 0 8px 0; font-size: 18px; font-weight: 600;">${displayName}</p>
               <p style="margin: 0 0 4px 0; font-size: 14px; color: #5C5C72;">
-                <a href="mailto:${email}" style="color: #6C5CE7; text-decoration: none;">${email}</a>
+                <a href="mailto:${escapeHtml(email)}" style="color: #6C5CE7; text-decoration: none;">${escapeHtml(email)}</a>
               </p>
               <p style="margin: 8px 0 0 0; font-size: 12px; color: #9494A8;">Signed up: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
             </div>
@@ -2519,7 +2540,7 @@ app.post("/api/signup", rateLimit(60000, 5), async (req, res) => {
         `,
         attachments: [
           {
-            filename: `${displayName.replace(/[^a-zA-Z0-9]/g, "_")}.vcf`,
+            filename: `${rawName.replace(/[^a-zA-Z0-9]/g, "_")}.vcf`,
             content: vcard,
             contentType: "text/vcard",
           },
@@ -2529,15 +2550,17 @@ app.post("/api/signup", rateLimit(60000, 5), async (req, res) => {
     } catch (e) {
       console.error("Failed to send notification email:", e.message);
     }
-  } else {
+  } else if (!transporter) {
     console.warn("GMAIL_APP_PASSWORD not set — emails skipped. Signup logged locally.");
+  } else {
+    console.warn(`Daily email cap (${DAILY_EMAIL_CAP}) reached — emails skipped. Signup logged locally.`);
   }
 
   // 3. Append to Google Sheet
   try {
     const sheetId = process.env.GOOGLE_SHEETS_ID;
     if (sheetId) {
-      const ok = await appendToSheet(sheetId, "Sheet1!A:D", [[timestamp, displayName, email, "early-access"]]);
+      const ok = await appendToSheet(sheetId, "Sheet1!A:D", [[timestamp, rawName, email, "early-access"]]);
       results.sheet = ok;
       if (!ok) console.warn("Sheets append returned non-OK response.");
     } else {
@@ -2547,7 +2570,7 @@ app.post("/api/signup", rateLimit(60000, 5), async (req, res) => {
     console.error("Failed to append to Google Sheet:", e.message);
   }
 
-  console.log(`[signup] ${displayName} <${email}> — email:${results.email} notify:${results.notification} sheet:${results.sheet}`);
+  console.log(`[signup] ${rawName} <${email}> — email:${results.email} notify:${results.notification} sheet:${results.sheet}`);
   res.json({ ok: true, results });
 });
 
@@ -2621,10 +2644,21 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`  Bound to localhost only — not accessible from other devices.\n`);
 
   // Discovery beacon — fixed port so installer/demo pages can find the real server
+  // Only responds to local origins (file://, localhost, 127.0.0.1) — prevents
+  // external websites from discovering the Delt port via CORS probing.
   const DISCOVERY_PORT = 45100;
+  const ALLOWED_DISCOVERY_ORIGINS = new Set(["null", "file://"]); // "null" is sent by file:// pages
   const discoveryServer = http.createServer((req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    const origin = req.headers.origin || "";
+    const isLocalOrigin = ALLOWED_DISCOVERY_ORIGINS.has(origin)
+      || origin.startsWith("http://localhost")
+      || origin.startsWith("http://127.0.0.1")
+      || !origin; // no origin = same-origin or curl
+    if (!isLocalOrigin) { res.writeHead(403); res.end(); return; }
+    const corsOrigin = origin || "*"; // echo back origin for CORS, fallback for no-origin requests
+    res.setHeader("Access-Control-Allow-Origin", corsOrigin);
     res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.setHeader("Vary", "Origin");
     if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ port: PORT, url: `${proto}://localhost:${PORT}` }));

@@ -110,6 +110,16 @@ async function getGoogleJWT(sa) {
   return data.access_token;
 }
 
+// Escape HTML to prevent injection in email bodies
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function generateVCard(name, email) {
   return `BEGIN:VCARD\nVERSION:3.0\nFN:${name}\nEMAIL:${email}\nNOTE:Delt early access signup — ${new Date().toISOString().split("T")[0]}\nEND:VCARD`;
 }
@@ -122,19 +132,41 @@ function logSignupLocally(entry) {
   fs.writeFileSync(file, JSON.stringify(signups, null, 2));
 }
 
+// Global daily email cap — hard ceiling prevents relay abuse regardless of IP rotation
+const DAILY_EMAIL_CAP = 100;
+let dailyEmailCount = 0;
+let dailyEmailResetDate = new Date().toISOString().slice(0, 10);
+function checkDailyEmailCap() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== dailyEmailResetDate) {
+    dailyEmailCount = 0;
+    dailyEmailResetDate = today;
+  }
+  return dailyEmailCount < DAILY_EMAIL_CAP;
+}
+
 // Signup endpoint
 app.post("/api/signup", rateLimit(60000, 5), async (req, res) => {
   const { email, name } = req.body;
   if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
 
-  const displayName = name || email.split("@")[0];
+  // Validate email format strictly — prevent use as open email relay
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  if (!emailRegex.test(email) || email.length > 254) {
+    return res.status(400).json({ error: "Invalid email format" });
+  }
+
+  // Sanitize name — strip control chars/newlines, limit length
+  const rawName = (name || email.split("@")[0]).replace(/[\r\n\t]/g, " ").trim().slice(0, 100);
+  const displayName = escapeHtml(rawName);
   const timestamp = new Date().toISOString();
   const results = { email: true, notification: false, sheet: false };
 
-  logSignupLocally({ email, name: displayName, timestamp });
+  logSignupLocally({ email, name: rawName, timestamp });
 
   const transporter = getMailTransporter();
-  if (transporter) {
+  if (transporter && checkDailyEmailCap()) {
+    dailyEmailCount++;
     try {
       await transporter.sendMail({
         from: `"Neonotics" <${process.env.GMAIL_USER}>`,
@@ -148,20 +180,24 @@ app.post("/api/signup", rateLimit(60000, 5), async (req, res) => {
       await transporter.sendMail({
         from: `"Delt Signups" <${process.env.GMAIL_USER}>`,
         to: process.env.GMAIL_USER,
-        subject: `Delt \u2014 New signup: ${displayName}`,
-        html: `<div style="font-family:-apple-system,sans-serif;max-width:480px;padding:32px 24px;color:#18182B"><h1 style="font-size:22px;font-weight:700;margin-bottom:20px">Delt</h1><div style="background:#F7F7F8;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #E3E3E8"><p style="margin:0 0 8px;font-size:18px;font-weight:600">${displayName}</p><p style="margin:0 0 4px;font-size:14px;color:#5C5C72"><a href="mailto:${email}" style="color:#6C5CE7;text-decoration:none">${email}</a></p><p style="margin:8px 0 0;font-size:12px;color:#9494A8">Signed up: ${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</p></div></div>`,
-        attachments: [{ filename: `${displayName.replace(/[^a-zA-Z0-9]/g, "_")}.vcf`, content: generateVCard(displayName, email), contentType: "text/vcard" }],
+        subject: `Delt \u2014 New signup: ${rawName}`,
+        html: `<div style="font-family:-apple-system,sans-serif;max-width:480px;padding:32px 24px;color:#18182B"><h1 style="font-size:22px;font-weight:700;margin-bottom:20px">Delt</h1><div style="background:#F7F7F8;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #E3E3E8"><p style="margin:0 0 8px;font-size:18px;font-weight:600">${displayName}</p><p style="margin:0 0 4px;font-size:14px;color:#5C5C72"><a href="mailto:${escapeHtml(email)}" style="color:#6C5CE7;text-decoration:none">${escapeHtml(email)}</a></p><p style="margin:8px 0 0;font-size:12px;color:#9494A8">Signed up: ${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</p></div></div>`,
+        attachments: [{ filename: `${rawName.replace(/[^a-zA-Z0-9]/g, "_")}.vcf`, content: generateVCard(rawName, email), contentType: "text/vcard" }],
       });
       results.notification = true;
     } catch (e) { console.error("Notification email failed:", e.message); }
+  } else if (!transporter) {
+    console.warn("GMAIL credentials not set — emails skipped.");
+  } else {
+    console.warn(`Daily email cap (${DAILY_EMAIL_CAP}) reached — emails skipped.`);
   }
 
   try {
     const sheetId = process.env.GOOGLE_SHEETS_ID;
-    if (sheetId) results.sheet = await appendToSheet(sheetId, "Sheet1!A:D", [[timestamp, displayName, email, "early-access"]]);
+    if (sheetId) results.sheet = await appendToSheet(sheetId, "Sheet1!A:D", [[timestamp, rawName, email, "early-access"]]);
   } catch (e) { console.error("Sheets append failed:", e.message); }
 
-  console.log(`[signup] ${displayName} <${email}> — email:${results.email} notify:${results.notification} sheet:${results.sheet}`);
+  console.log(`[signup] ${rawName} <${email}> — email:${results.email} notify:${results.notification} sheet:${results.sheet}`);
   res.json({ ok: true, results });
 });
 
