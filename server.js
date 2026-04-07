@@ -119,21 +119,46 @@ let installState = { status: "idle", error: null, progress: "" };
 const integrationsPath = path.join(__dirname, "integrations.json");
 const credentialsPath = path.join(__dirname, "credentials.json");
 const oauthClientsPath = path.join(__dirname, "oauth-clients.json");
+const encryptedOauthPath = path.join(os.homedir(), ".delt", "oauth-clients.enc.json");
 
 let integrationsRegistry = { integrations: [] };
 try {
   integrationsRegistry = JSON.parse(fs.readFileSync(integrationsPath, "utf-8"));
 } catch {}
 
+// OAuth clients — load from encrypted store, migrate from plaintext if needed
 let oauthClients = {};
 try {
-  oauthClients = JSON.parse(fs.readFileSync(oauthClientsPath, "utf-8"));
-} catch {}
+  // Try encrypted store first
+  const encRaw = JSON.parse(fs.readFileSync(encryptedOauthPath, "utf-8"));
+  oauthClients = cryptoLib.decryptData(encRaw);
+} catch {
+  // Fall back to plaintext file and migrate
+  try {
+    oauthClients = JSON.parse(fs.readFileSync(oauthClientsPath, "utf-8"));
+    if (Object.keys(oauthClients).length > 0) {
+      // Migrate: encrypt and save to ~/.delt/, then remove plaintext
+      const deltDir = path.join(os.homedir(), ".delt");
+      if (!fs.existsSync(deltDir)) fs.mkdirSync(deltDir, { recursive: true, mode: 0o700 });
+      const encrypted = cryptoLib.encryptData(oauthClients);
+      fs.writeFileSync(encryptedOauthPath, JSON.stringify(encrypted), { mode: 0o600 });
+      // Delete the plaintext file
+      try { fs.unlinkSync(oauthClientsPath); } catch {}
+      console.log("[Security] Migrated oauth-clients.json to encrypted store at ~/.delt/");
+    }
+  } catch {}
+}
+
+// Save OAuth clients to encrypted store
+function saveOauthClients() {
+  const deltDir = path.join(os.homedir(), ".delt");
+  if (!fs.existsSync(deltDir)) fs.mkdirSync(deltDir, { recursive: true, mode: 0o700 });
+  const encrypted = cryptoLib.encryptData(oauthClients);
+  fs.writeFileSync(encryptedOauthPath, JSON.stringify(encrypted), { mode: 0o600 });
+}
 
 // Harden sensitive file permissions on startup
-for (const f of [credentialsPath, oauthClientsPath]) {
-  try { fs.chmodSync(f, 0o600); } catch {}
-}
+try { fs.chmodSync(credentialsPath, 0o600); } catch {}
 
 // Write persistent integrations.md so Claude always knows what's connected
 function writeIntegrationsMd() {
@@ -229,12 +254,11 @@ function attachStreamHandlers(proc, ws, { streamType, errorType, onText, onCost,
     }
   });
 
+  let stderrBuf = "";
   proc.stderr.on("data", (chunk) => {
+    stderrBuf += chunk.toString();
     const text = chunk.toString();
-    // Detect auth failures and send a specific type so client can show re-auth UI
-    if (text.includes("401") || text.includes("auth") || text.includes("token expired") || text.includes("not logged in") || text.includes("unauthorized")) {
-      safeSend(ws, { type: "auth-expired", message: "Your Claude session has expired. Please sign in again." });
-    } else if (text.includes("Error") || text.includes("ENOENT")) {
+    if (text.includes("Error") || text.includes("ENOENT")) {
       safeSend(ws, { type: errorType, message: text.trim() });
     }
   });
@@ -245,7 +269,14 @@ function attachStreamHandlers(proc, ws, { streamType, errorType, onText, onCost,
         const obj = JSON.parse(buffer.trim());
         safeSend(ws, { type: streamType, data: obj });
         if (obj.type === "result" && obj.cost_usd && onCost) onCost(obj.cost_usd);
-      } catch {}
+      } catch (e) {
+        console.error("[stream] Malformed JSON from Claude:", buffer.trim().slice(0, 200));
+      }
+    }
+    // Detect auth failure by exit code + stderr content — not substring during streaming
+    // Exit code 1 with auth-related stderr = expired session
+    if (code !== 0 && code !== null && /\b(401|403|auth|token.expired|not.logged.in|unauthorized|UNAUTHENTICATED)\b/i.test(stderrBuf)) {
+      safeSend(ws, { type: "auth-expired", message: "Your Claude session has expired. Please sign in again." });
     }
     if (onClose) onClose(code);
   });
@@ -373,10 +404,11 @@ app.use((req, res, next) => {
 // Security headers
 app.use((req, res, next) => {
   res.setHeader("Content-Security-Policy",
-    "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' ws: wss:; img-src 'self' data:;");
+    "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' ws: wss:; img-src 'self' data:; base-uri 'self'; form-action 'self'; frame-ancestors 'none';");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=()");
   res.removeHeader("Server");
   next();
 });
@@ -1432,6 +1464,15 @@ When the user asks you to do something with a connected service (send email, che
 wss.on("connection", (ws, req) => {
   const _remoteAddr = req?.socket?.remoteAddress || "";
   const isRemote = !(_remoteAddr === "127.0.0.1" || _remoteAddr === "::1" || _remoteAddr === "::ffff:127.0.0.1");
+
+  // Authenticate remote WebSocket connections via mobile session cookie
+  if (isRemote) {
+    const cookies = tunnel.parseCookies(req);
+    if (!cookies["delt-mobile-auth"] || !tunnel.validateMobileSession(cookies["delt-mobile-auth"])) {
+      ws.close(4401, "Unauthorized");
+      return;
+    }
+  }
 
   let sessionId = null;
 
