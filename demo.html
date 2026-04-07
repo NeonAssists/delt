@@ -9,741 +9,463 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%E2%9A%A1</text></svg>">
   <style>
-    /* ── Delt's actual design tokens ── */
     :root {
-      --bg-page: #F7F7F8;
-      --bg-surface: #FFFFFF;
-      --bg-elevated: #F0F0F3;
-      --bg-hover: #EAEAEF;
-      --bg-card: #FFFFFF;
-      --border: #E3E3E8;
-      --border-light: #EDEDF1;
-      --text-primary: #18182B;
-      --text-secondary: #5C5C72;
-      --text-muted: #9494A8;
-      --text-faint: #B8B8C8;
-      --accent: #6C5CE7;
-      --accent-hover: #5A4BD6;
-      --accent-soft: rgba(108, 92, 231, 0.08);
-      --accent-softer: rgba(108, 92, 231, 0.04);
-      --success: #10B981;
-      --warning: #F59E0B;
-      --error: #EF4444;
-      --r: 14px;
-      --r-sm: 10px;
-      --r-lg: 18px;
-      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --white: #FAFAFD;
+      --surface: #FFFFFF;
+      --wash: #F5F3FA;
+      --border: #E8E5F0;
+      --text: #0C0A14;
+      --text-2: #55526A;
+      --text-3: #8E8BA3;
+      --purple: #7C3AED;
+      --indigo: #6366F1;
+      --cyan: #06B6D4;
+      --mint: #10B981;
+      --amber: #F59E0B;
+      --red: #EF4444;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       --mono: 'JetBrains Mono', 'SF Mono', monospace;
-      --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
-      --shadow: 0 2px 8px rgba(0,0,0,0.06);
-      --shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
-      /* Landing-specific */
-      --landing-dark: #0C0A1A;
-      --landing-dark-2: #13112B;
-      --landing-dark-card: #1A1833;
-      --landing-border: rgba(108,92,231,0.12);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
-    body {
-      font-family: var(--font);
-      background: var(--landing-dark);
-      color: #fff;
-      -webkit-font-smoothing: antialiased;
-      overflow-x: hidden;
-    }
+    body { font-family: var(--font); background: var(--white); color: var(--text); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
 
-    /* ── Reveal ── */
-    .reveal {
-      opacity: 0;
-      transform: translateY(32px);
-      transition: opacity 0.7s cubic-bezier(0.16,1,0.3,1), transform 0.7s cubic-bezier(0.16,1,0.3,1);
-    }
-    .reveal.visible { opacity: 1; transform: translateY(0); }
-    .rd1 { transition-delay: 0.08s; }
-    .rd2 { transition-delay: 0.16s; }
-    .rd3 { transition-delay: 0.24s; }
-    .rd4 { transition-delay: 0.32s; }
-    .rd5 { transition-delay: 0.4s; }
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1); }
+    .reveal.v { opacity: 1; transform: none; }
+    .d1{transition-delay:.05s} .d2{transition-delay:.1s} .d3{transition-delay:.15s} .d4{transition-delay:.2s} .d5{transition-delay:.25s}
 
-    /* ── Nav ── */
+    /* === NAV === */
     nav {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-      height: 64px;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 32px;
-      background: rgba(12,10,26,0.8);
-      backdrop-filter: blur(20px);
-      border-bottom: 1px solid rgba(255,255,255,0.04);
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100; height: 56px;
+      display: flex; align-items: center; justify-content: space-between; padding: 0 28px;
+      background: rgba(250,250,253,0.8); backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border-bottom: 1px solid transparent; transition: all .3s;
     }
-    .nav-left { display: flex; align-items: center; gap: 10px; }
-    .nav-mark {
-      width: 30px; height: 30px; border-radius: 8px;
-      background: var(--accent);
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 800; font-size: 15px; color: #fff;
-    }
-    .nav-name { font-size: 16px; font-weight: 700; letter-spacing: -0.03em; }
-    .nav-right { display: flex; align-items: center; gap: 24px; }
-    .nav-right a { color: rgba(255,255,255,0.5); text-decoration: none; font-size: 13px; font-weight: 500; transition: color 0.2s; }
-    .nav-right a:hover { color: #fff; }
-    .nav-cta {
-      padding: 8px 20px; border-radius: var(--r-sm);
-      background: var(--accent); color: #fff !important;
-      font-weight: 600; font-size: 13px; border: none; cursor: pointer;
-      transition: all 0.2s; text-decoration: none;
-    }
-    .nav-cta:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(108,92,231,0.3); }
+    nav.s { border-color: var(--border); }
+    .n-l { display: flex; align-items: center; gap: 8px; }
+    .n-mark { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg,var(--purple),var(--indigo)); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #fff; }
+    .n-name { font-size: 15px; font-weight: 800; letter-spacing: -0.04em; }
+    .n-r { display: flex; align-items: center; gap: 24px; }
+    .n-r a { color: var(--text-2); text-decoration: none; font-size: 13px; font-weight: 500; transition: color .2s; }
+    .n-r a:hover { color: var(--text); }
+    .n-cta { padding: 7px 18px; border-radius: 100px; background: var(--text); color: #fff!important; font-weight: 600; font-size: 12px; }
+    .n-cta:hover { opacity: .85; }
 
-    /* ── Hero ── */
+    /* === HERO — asymmetric, product-dominant === */
     .hero {
-      position: relative;
-      padding: 140px 24px 0;
-      text-align: center;
-      overflow: hidden;
+      min-height: 100vh; display: grid;
+      grid-template-columns: 1fr 1.2fr; align-items: center;
+      padding: 80px 48px 48px; gap: 48px;
+      position: relative; overflow: hidden;
     }
-    .hero-glow {
-      position: absolute;
-      width: 800px; height: 800px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(108,92,231,0.15) 0%, transparent 70%);
-      top: -300px; left: 50%; transform: translateX(-50%);
-      pointer-events: none;
+    .hero-bg {
+      position: absolute; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 80% 30%, rgba(124,58,237,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 60% at 20% 70%, rgba(99,102,241,0.04) 0%, transparent 70%),
+        radial-gradient(ellipse 30% 40% at 60% 80%, rgba(6,182,212,0.03) 0%, transparent 70%);
     }
-    .hero-badge {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 5px 14px 5px 8px;
-      border-radius: 100px;
-      background: rgba(108,92,231,0.08);
-      border: 1px solid rgba(108,92,231,0.15);
-      font-size: 12px; font-weight: 600; color: #A78BFA;
-      margin-bottom: 28px; position: relative; z-index: 1;
+
+    .hero-text { position: relative; z-index: 1; max-width: 540px; }
+    .hero-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 14px 5px 8px; border-radius: 100px;
+      background: rgba(124,58,237,0.06); border: 1px solid rgba(124,58,237,0.1);
+      font-size: 12px; font-weight: 600; color: var(--purple); margin-bottom: 24px;
     }
-    .badge-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); animation: pulse-d 2s ease-in-out infinite; }
-    @keyframes pulse-d { 0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.4); } 50% { box-shadow: 0 0 0 5px rgba(16,185,129,0); } }
+    .hero-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.4)} 50%{box-shadow:0 0 0 5px rgba(16,185,129,0)} }
 
     .hero h1 {
-      font-size: clamp(44px, 7vw, 80px);
-      font-weight: 900; letter-spacing: -0.045em;
-      line-height: 1.05; margin-bottom: 20px;
-      position: relative; z-index: 1;
+      font-size: clamp(42px, 5.5vw, 72px); font-weight: 900;
+      letter-spacing: -0.06em; line-height: 0.95; margin-bottom: 20px;
     }
-    .grad { background: linear-gradient(135deg, #C4B5FD 0%, #67E8F9 50%, #6EE7B7 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hero h1 em {
+      font-style: normal;
+      background: linear-gradient(135deg, var(--purple), var(--indigo), var(--cyan));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
     .hero-sub {
-      font-size: clamp(16px, 2vw, 19px);
-      color: rgba(255,255,255,0.55); max-width: 540px;
-      margin: 0 auto 40px; line-height: 1.6;
+      font-size: 17px; color: var(--text-2); line-height: 1.6;
+      margin-bottom: 32px; max-width: 420px;
+    }
+    .hero-actions { display: flex; gap: 10px; align-items: center; }
+    .btn-p {
+      padding: 13px 28px; border-radius: 100px; border: none;
+      background: linear-gradient(135deg,var(--purple),var(--indigo));
+      color: #fff; font-weight: 700; font-size: 14px; font-family: var(--font);
+      cursor: pointer; transition: all .25s; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 7px;
+      box-shadow: 0 4px 20px rgba(124,58,237,.2);
+    }
+    .btn-p:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(124,58,237,.28); }
+    .btn-g {
+      padding: 13px 28px; border-radius: 100px;
+      border: 1.5px solid var(--border); background: transparent;
+      color: var(--text-2); font-weight: 600; font-size: 14px; font-family: var(--font);
+      cursor: pointer; transition: all .2s; text-decoration: none;
+    }
+    .btn-g:hover { border-color: var(--purple); color: var(--purple); }
+
+    /* Product mockup — right side, edge-to-edge, slight tilt */
+    .hero-product {
       position: relative; z-index: 1;
-    }
-    .hero-btns {
-      display: flex; gap: 12px; justify-content: center;
-      position: relative; z-index: 1; margin-bottom: 64px;
-    }
-    .btn-pri {
-      padding: 14px 32px; border-radius: var(--r);
-      background: var(--accent); color: #fff;
-      font-weight: 700; font-size: 15px; border: none; cursor: pointer;
-      transition: all 0.25s; text-decoration: none;
-      display: inline-flex; align-items: center; gap: 8px;
-    }
-    .btn-pri:hover { background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 8px 28px rgba(108,92,231,0.3); }
-    .btn-sec {
-      padding: 14px 32px; border-radius: var(--r);
-      background: transparent; color: rgba(255,255,255,0.7);
-      font-weight: 600; font-size: 15px;
-      border: 1px solid rgba(255,255,255,0.1); cursor: pointer;
-      transition: all 0.25s; text-decoration: none;
-      display: inline-flex; align-items: center; gap: 8px;
-    }
-    .btn-sec:hover { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.18); color: #fff; transform: translateY(-2px); }
-
-    /* ── Product showcase (REAL Delt UI) ── */
-    .product-frame {
-      position: relative; z-index: 1;
-      max-width: 1060px; margin: 0 auto;
-      border-radius: 20px 20px 0 0;
-      overflow: hidden;
-      box-shadow: 0 -4px 80px rgba(108,92,231,0.12), 0 20px 60px rgba(0,0,0,0.4);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-bottom: none;
-    }
-    /* This is the ACTUAL Delt UI — light theme, real components */
-    .delt-ui {
-      background: var(--bg-page);
-      color: var(--text-primary);
-      font-family: var(--font);
-      display: flex;
-      flex-direction: column;
-    }
-    /* Real Delt header */
-    .delt-header {
-      height: 58px;
-      background: var(--bg-surface);
-      border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 20px;
-    }
-    .delt-header-left { display: flex; align-items: center; gap: 10px; }
-    .delt-logo-mark {
-      width: 30px; height: 30px; border-radius: 8px;
-      background: var(--accent);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 15px; font-weight: 800; color: #fff;
-    }
-    .delt-logo-text { font-size: 16px; font-weight: 700; letter-spacing: -0.03em; color: var(--text-primary); }
-    .delt-status {
-      display: flex; align-items: center; gap: 5px;
-      padding: 3px 10px 3px 7px;
-      background: var(--bg-elevated); border-radius: 20px;
-      font-size: 11px; font-weight: 500; color: var(--text-muted);
-    }
-    .delt-status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); box-shadow: 0 0 6px rgba(16,185,129,0.4); }
-    .delt-header-right { display: flex; gap: 6px; }
-    .delt-header-btn {
-      display: inline-flex; align-items: center; gap: 6px;
-      height: 34px; padding: 0 14px;
-      border: 1px solid var(--border); border-radius: var(--r-sm);
-      background: var(--bg-surface); color: var(--text-secondary);
-      font-family: var(--font); font-size: 13px; font-weight: 500;
-    }
-
-    /* Body layout */
-    .delt-body { display: flex; min-height: 520px; }
-
-    /* Real sidebar */
-    .delt-sidebar {
-      width: 220px; border-right: 1px solid var(--border);
-      background: var(--bg-surface); padding: 14px 10px;
-      flex-shrink: 0;
-    }
-    .delt-sidebar-hdr {
-      font-size: 10px; font-weight: 600; color: var(--text-muted);
-      text-transform: uppercase; letter-spacing: 0.06em;
-      padding: 6px 10px 6px; margin-bottom: 2px;
-    }
-    .delt-sidebar-item {
-      padding: 8px 10px; border-radius: 8px;
-      font-size: 13px; color: var(--text-secondary);
-      display: flex; align-items: center; gap: 8px;
-      margin-bottom: 1px;
-      transition: background 0.15s;
-    }
-    .delt-sidebar-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
-    .delt-sidebar-item-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.4; }
-    .delt-sidebar-item.active .delt-sidebar-item-dot { opacity: 1; }
-
-    /* Chat area */
-    .delt-chat {
-      flex: 1; display: flex; flex-direction: column;
-      padding: 0;
-    }
-    .delt-messages {
-      flex: 1; padding: 24px 32px; overflow: hidden;
-      display: flex; flex-direction: column; gap: 24px;
-      max-width: 740px; margin: 0 auto; width: 100%;
-    }
-
-    /* Real Delt message style */
-    .delt-msg {
-      display: flex; gap: 12px;
-      opacity: 0; animation: msg-in 0.45s cubic-bezier(0.16,1,0.3,1) forwards;
-    }
-    .delt-msg:nth-child(1) { animation-delay: 0.6s; }
-    .delt-msg:nth-child(2) { animation-delay: 1.2s; }
-    .delt-msg:nth-child(3) { animation-delay: 2.0s; }
-    .delt-msg:nth-child(4) { animation-delay: 2.8s; }
-    @keyframes msg-in { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform: translateY(0); } }
-
-    .delt-avatar {
-      width: 32px; height: 32px; border-radius: 9px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 700; flex-shrink: 0; margin-top: 2px;
-    }
-    .delt-avatar-user { background: var(--accent); color: #fff; }
-    .delt-avatar-ai { background: var(--accent-soft); color: var(--accent); }
-    .delt-msg-body { flex: 1; min-width: 0; }
-    .delt-msg-sender {
-      font-size: 11px; font-weight: 600; color: var(--text-muted);
-      text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px;
-    }
-    .delt-msg-content {
-      font-size: 15px; line-height: 1.7; color: var(--text-primary);
-    }
-    .delt-msg.user .delt-msg-content {
-      background: var(--accent-soft);
-      padding: 12px 18px;
-      border-radius: 18px 18px 4px 18px;
-      display: inline-block;
-    }
-
-    /* Tool activity badges (real Delt style) */
-    .delt-activity {
-      display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;
-    }
-    .delt-activity-badge {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 10px; border-radius: 6px;
-      font-size: 12px; font-weight: 500;
-      font-family: var(--mono);
-    }
-    .delt-activity-badge.done {
-      background: rgba(16,185,129,0.08); color: var(--success);
-    }
-    .delt-activity-badge.working {
-      background: rgba(108,92,231,0.08); color: var(--accent);
-    }
-    .delt-activity-badge svg { width: 12px; height: 12px; }
-
-    /* Integration badges in chat */
-    .delt-int-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-    .delt-int-badge {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 3px 8px; border-radius: 6px;
-      font-size: 11px; font-weight: 500;
-      background: var(--bg-elevated); border: 1px solid var(--border);
-      color: var(--text-secondary);
-    }
-    .delt-int-badge svg { width: 11px; height: 11px; }
-
-    /* Input bar */
-    .delt-input-area {
-      padding: 12px 32px 20px;
-      max-width: 740px; margin: 0 auto; width: 100%;
-    }
-    .delt-input-row {
-      display: flex; align-items: center; gap: 8px;
-      padding: 12px 14px;
-      background: var(--bg-surface);
+      border-radius: 16px; overflow: hidden;
       border: 1px solid var(--border);
-      border-radius: var(--r);
-      box-shadow: var(--shadow-sm);
-      transition: border-color 0.2s;
+      box-shadow: 0 8px 40px rgba(12,10,20,.08), 0 1px 3px rgba(12,10,20,.04);
+      transform: perspective(1200px) rotateY(-3deg) rotateX(1deg);
+      transition: transform .5s cubic-bezier(.16,1,.3,1);
     }
-    .delt-input-row:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-    .delt-input-placeholder {
-      flex: 1; font-size: 15px; color: var(--text-faint);
-    }
-    .delt-send-btn {
-      width: 34px; height: 34px; border-radius: 10px;
-      background: var(--accent); border: none;
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer;
-    }
-    .delt-input-meta {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 8px 4px 0; font-size: 12px; color: var(--text-muted);
-    }
-    .delt-input-meta kbd {
-      font-family: var(--font); font-size: 11px;
-      background: var(--bg-elevated); padding: 1px 5px; border-radius: 4px;
-      border: 1px solid var(--border);
-    }
-    .delt-multitask-btn {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 10px; border-radius: 6px;
-      background: var(--bg-elevated); border: 1px solid var(--border);
-      color: var(--text-secondary); font-family: var(--font);
-      font-size: 12px; font-weight: 500; cursor: pointer;
-    }
+    .hero-product:hover { transform: perspective(1200px) rotateY(0) rotateX(0); }
 
-    /* ── Section scaffolding ── */
-    section { padding: 100px 24px; position: relative; }
-    .section-inner { max-width: 1060px; margin: 0 auto; }
-    .section-label {
-      display: inline-flex; align-items: center; gap: 8px;
-      font-size: 12px; font-weight: 700; color: #A78BFA;
-      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px;
-    }
-    .section-label::before { content: ''; width: 18px; height: 2px; background: var(--accent); border-radius: 1px; }
-    .section-title {
-      font-size: clamp(32px, 4.5vw, 52px);
-      font-weight: 800; letter-spacing: -0.035em; line-height: 1.1; margin-bottom: 16px;
-    }
-    .section-desc { font-size: 17px; color: rgba(255,255,255,0.5); max-width: 520px; line-height: 1.6; }
+    .delt-ui { background: var(--wash); }
+    .d-hdr { height: 44px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
+    .d-hdr-l { display: flex; align-items: center; gap: 8px; }
+    .d-mark { width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(135deg,var(--purple),var(--indigo)); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: #fff; }
+    .d-hdr-l span { font-size: 13px; font-weight: 700; letter-spacing: -.03em; }
+    .d-status { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-3); padding: 2px 8px 2px 6px; background: var(--wash); border-radius: 100px; }
+    .d-status i { width: 5px; height: 5px; border-radius: 50%; background: var(--mint); display: block; }
+    .d-hdr-r { display: flex; gap: 4px; }
+    .d-hdr-btn { height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); font-size: 11px; font-weight: 500; color: var(--text-2); display: inline-flex; align-items: center; gap: 4px; font-family: var(--font); }
+    .d-body { display: flex; min-height: 340px; }
+    .d-side { width: 160px; border-right: 1px solid var(--border); background: var(--surface); padding: 10px 6px; flex-shrink: 0; }
+    .d-sh { font-size: 9px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; padding: 4px 8px; }
+    .d-si { padding: 5px 8px; border-radius: 6px; font-size: 11px; color: var(--text-2); display: flex; align-items: center; gap: 6px; margin-bottom: 1px; }
+    .d-si.on { background: rgba(124,58,237,.06); color: var(--purple); font-weight: 600; }
+    .d-si i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: .4; display: block; }
+    .d-si.on i { opacity: 1; }
+    .d-chat { flex: 1; display: flex; flex-direction: column; }
+    .d-msgs { flex: 1; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; max-width: 580px; margin: 0 auto; width: 100%; overflow: hidden; }
 
-    /* ── Features ── */
-    .feat-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr);
-      gap: 16px; margin-top: 56px;
-    }
-    .feat-card {
-      background: var(--landing-dark-card); border: 1px solid var(--landing-border);
-      border-radius: 18px; padding: 28px 24px;
-      transition: all 0.3s cubic-bezier(0.16,1,0.3,1);
-      position: relative; overflow: hidden;
-    }
-    .feat-card::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-      background: linear-gradient(90deg, transparent 0%, var(--accent) 50%, transparent 100%);
-      opacity: 0; transition: opacity 0.3s;
-    }
-    .feat-card:hover { transform: translateY(-3px); border-color: rgba(108,92,231,0.25); box-shadow: 0 12px 40px rgba(0,0,0,0.2), 0 0 40px rgba(108,92,231,0.06); }
-    .feat-card:hover::before { opacity: 1; }
-    .feat-icon {
-      width: 44px; height: 44px; border-radius: 12px;
-      display: flex; align-items: center; justify-content: center;
-      margin-bottom: 18px; font-size: 22px;
-    }
-    .fi-purple { background: rgba(108,92,231,0.12); }
-    .fi-cyan { background: rgba(6,182,212,0.12); }
-    .fi-green { background: rgba(16,185,129,0.12); }
-    .fi-amber { background: rgba(245,158,11,0.12); }
-    .fi-rose { background: rgba(244,63,94,0.12); }
-    .fi-blue { background: rgba(59,130,246,0.12); }
-    .feat-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.01em; }
-    .feat-desc { font-size: 13.5px; color: rgba(255,255,255,0.45); line-height: 1.6; }
+    /* Live-typing messages */
+    .dm { display: flex; gap: 8px; opacity: 0; transform: translateY(8px); }
+    .dm.show { opacity: 1; transform: none; transition: opacity .4s, transform .4s cubic-bezier(.16,1,.3,1); }
+    .dm-av { width: 24px; height: 24px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+    .dm-av.u { background: linear-gradient(135deg,var(--purple),var(--indigo)); color: #fff; }
+    .dm-av.a { background: rgba(124,58,237,.07); color: var(--purple); }
+    .dm-b { flex: 1; min-width: 0; }
+    .dm-who { font-size: 8px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+    .dm-c { font-size: 12px; line-height: 1.6; }
+    .dm.user .dm-c { background: rgba(124,58,237,.06); padding: 7px 12px; border-radius: 12px 12px 3px 12px; display: inline-block; }
+    .dm-tools { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+    .dm-tool { display: inline-flex; align-items: center; gap: 2px; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 500; font-family: var(--mono); background: rgba(16,185,129,.07); color: var(--mint); }
+    .dm-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+    .dm-badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 500; background: var(--wash); border: 1px solid var(--border); color: var(--text-2); }
 
-    /* ── Integrations ── */
-    .int-section { background: var(--landing-dark-2); border-top: 1px solid rgba(255,255,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.04); }
-    .int-logos {
-      display: flex; flex-wrap: wrap; gap: 12px;
-      justify-content: center; margin-top: 48px;
+    .d-input { padding: 8px 20px 12px; max-width: 580px; margin: 0 auto; width: 100%; }
+    .d-input-bar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+    .d-input-bar span { flex: 1; font-size: 12px; color: var(--text-3); }
+    .d-send { width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(135deg,var(--purple),var(--indigo)); border: none; display: flex; align-items: center; justify-content: center; }
+
+    /* === MARQUEE — infinite integration ticker === */
+    .marquee-section {
+      padding: 48px 0; overflow: hidden;
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      background: var(--surface);
     }
-    .int-chip {
+    .marquee-label {
+      text-align: center; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .14em;
+      color: var(--text-3); margin-bottom: 20px;
+    }
+    .marquee-wrap { position: relative; overflow: hidden; }
+    .marquee-wrap::before, .marquee-wrap::after {
+      content: ''; position: absolute; top: 0; bottom: 0; width: 80px; z-index: 2; pointer-events: none;
+    }
+    .marquee-wrap::before { left: 0; background: linear-gradient(90deg, var(--surface), transparent); }
+    .marquee-wrap::after { right: 0; background: linear-gradient(90deg, transparent, var(--surface)); }
+    .marquee-track {
+      display: flex; gap: 12px; width: max-content;
+      animation: marquee 40s linear infinite;
+    }
+    .marquee-track:hover { animation-play-state: paused; }
+    @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+    .m-chip {
       display: flex; align-items: center; gap: 8px;
-      padding: 12px 20px;
-      background: var(--landing-dark-card); border: 1px solid var(--landing-border);
-      border-radius: 14px; font-size: 14px; font-weight: 600;
-      transition: all 0.25s; cursor: default;
+      padding: 10px 20px; background: var(--wash);
+      border: 1px solid var(--border); border-radius: 100px;
+      font-size: 13px; font-weight: 600; color: var(--text);
+      white-space: nowrap; flex-shrink: 0;
+      transition: all .2s;
     }
-    .int-chip:hover {
-      border-color: rgba(108,92,231,0.3);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-    }
-    .int-chip-icon {
-      width: 32px; height: 32px; border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 18px;
-    }
-    .int-chip-icon.ic-mail { background: rgba(234,67,53,0.1); }
-    .int-chip-icon.ic-slack { background: rgba(74,21,75,0.15); }
-    .int-chip-icon.ic-gh { background: rgba(255,255,255,0.06); }
-    .int-chip-icon.ic-notion { background: rgba(255,255,255,0.06); }
-    .int-chip-icon.ic-stripe { background: rgba(99,91,255,0.1); }
-    .int-chip-icon.ic-shop { background: rgba(150,191,72,0.1); }
-    .int-chip-icon.ic-hub { background: rgba(255,122,69,0.1); }
-    .int-chip-icon.ic-linear { background: rgba(94,107,228,0.1); }
-    .int-chip-icon.ic-figma { background: rgba(162,89,255,0.1); }
-    .int-chip-icon.ic-air { background: rgba(24,119,242,0.1); }
-    .int-chip-icon.ic-trello { background: rgba(0,121,191,0.1); }
-    .int-chip-icon.ic-drive { background: rgba(66,133,244,0.1); }
-    .int-chip-icon.ic-api { background: rgba(108,92,231,0.1); }
+    .m-chip:hover { border-color: var(--purple); background: rgba(124,58,237,.05); transform: scale(1.04); }
+    .m-icon { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; }
 
-    .int-how {
-      display: flex; align-items: center; gap: 20px;
-      max-width: 700px; margin: 56px auto 0;
-      padding: 24px 28px; border-radius: 16px;
-      background: rgba(108,92,231,0.06);
-      border: 1px solid rgba(108,92,231,0.12);
-    }
-    .int-how-icon {
-      width: 48px; height: 48px; border-radius: 14px;
-      background: rgba(108,92,231,0.12);
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-    .int-how h4 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-    .int-how p { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.5; }
-
-    /* ── Steps ── */
-    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 56px; }
-    .step { text-align: center; padding: 32px 20px; }
-    .step-num {
-      width: 48px; height: 48px; border-radius: 14px;
-      border: 2px solid rgba(255,255,255,0.1);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 20px; font-weight: 800; color: #A78BFA;
-      margin: 0 auto 16px; transition: all 0.3s;
-    }
-    .step:hover .step-num { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 0 28px rgba(108,92,231,0.3); }
-    .step h3 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
-    .step p { font-size: 13.5px; color: rgba(255,255,255,0.45); line-height: 1.6; }
-
-    /* ── Demo conversation ── */
-    .demo-grid {
+    /* === BOLD SPLIT — gradient bg section === */
+    .bold-section {
+      padding: 120px 48px;
+      background: linear-gradient(135deg, #1C0F3A 0%, #0F0D1A 50%, #0A1828 100%);
+      color: #fff;
       display: grid; grid-template-columns: 1fr 1fr;
-      gap: 72px; align-items: center; margin-top: 56px;
+      gap: 64px; align-items: center;
     }
-    .demo-convo {
-      display: flex; flex-direction: column; gap: 14px;
-      background: var(--bg-surface); border-radius: 18px;
-      padding: 24px; border: 1px solid var(--border);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    .bold-text h2 {
+      font-size: clamp(36px, 5vw, 64px); font-weight: 900;
+      letter-spacing: -0.05em; line-height: 0.95; margin-bottom: 20px;
     }
-    /* Messages inside demo use Delt's real light-theme styles */
-    .dc-msg { display: flex; gap: 10px; }
-    .dc-av {
-      width: 28px; height: 28px; border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 2px;
+    .bold-text h2 em {
+      font-style: normal;
+      background: linear-gradient(135deg, #C4B5FD, #67E8F9, #6EE7B7);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     }
-    .dc-av-u { background: var(--accent); color: #fff; }
-    .dc-av-a { background: var(--accent-soft); color: var(--accent); }
-    .dc-body { flex: 1; min-width: 0; }
-    .dc-sender { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
-    .dc-content { font-size: 13.5px; line-height: 1.6; color: var(--text-primary); }
-    .dc-msg.user .dc-content {
-      background: var(--accent-soft); padding: 10px 14px;
-      border-radius: 14px 14px 3px 14px; display: inline-block;
+    .bold-text p { font-size: 16px; color: rgba(255,255,255,.5); line-height: 1.65; margin-bottom: 28px; max-width: 440px; }
+    .bold-features { display: flex; flex-direction: column; gap: 20px; }
+    .bf {
+      display: flex; gap: 14px; align-items: flex-start;
+      padding: 20px; border-radius: 16px;
+      background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06);
+      transition: all .25s;
     }
-    .dc-tool {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 3px 8px; border-radius: 5px;
-      font-size: 11px; font-weight: 500; font-family: var(--mono);
-      margin-top: 6px;
+    .bf:hover { background: rgba(255,255,255,.05); border-color: rgba(124,58,237,.2); transform: translateX(4px); }
+    .bf-icon {
+      width: 40px; height: 40px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
-    .dc-tool.ok { background: rgba(16,185,129,0.08); color: var(--success); }
-    .dc-tool.run { background: var(--accent-soft); color: var(--accent); }
+    .bf h4 { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+    .bf p { font-size: 13px; color: rgba(255,255,255,.45); line-height: 1.5; margin: 0; }
 
-    .demo-points { display: flex; flex-direction: column; gap: 20px; }
-    .demo-point {
-      display: flex; gap: 14px; padding: 20px;
-      border-radius: 14px;
-      background: var(--landing-dark-card); border: 1px solid var(--landing-border);
-      transition: all 0.25s;
-    }
-    .demo-point:hover { border-color: rgba(108,92,231,0.25); transform: translateX(4px); }
-    .demo-point-icon {
-      width: 36px; height: 36px; border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; font-size: 18px;
-    }
-    .demo-point h4 { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
-    .demo-point p { font-size: 12.5px; color: rgba(255,255,255,0.45); line-height: 1.5; }
+    /* === LIVE DEMO — conversation replay === */
+    .demo-section { padding: 100px 48px; }
+    .demo-header { text-align: center; margin-bottom: 56px; }
+    .demo-header .label { font-size: 12px; font-weight: 700; color: var(--purple); text-transform: uppercase; letter-spacing: .12em; margin-bottom: 10px; }
+    .demo-header h2 { font-size: clamp(32px, 4.5vw, 52px); font-weight: 900; letter-spacing: -.05em; line-height: 1.0; }
+    .demo-header p { font-size: 16px; color: var(--text-2); margin-top: 12px; }
 
-    /* ── Value cards ── */
-    .val-grid {
-      display: grid; grid-template-columns: repeat(2, 1fr);
-      gap: 16px; max-width: 780px; margin: 56px auto 0;
+    .demo-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+      max-width: 960px; margin: 0 auto;
     }
-    .val-card {
-      padding: 28px 24px; border-radius: 16px;
-      background: var(--landing-dark-card); border: 1px solid var(--landing-border);
-      transition: all 0.25s;
+    .demo-card {
+      padding: 28px; border-radius: 20px;
+      border: 1px solid var(--border); background: var(--surface);
+      box-shadow: 0 2px 12px rgba(12,10,20,.04);
+      transition: all .3s;
     }
-    .val-card:hover { border-color: rgba(108,92,231,0.25); transform: translateY(-2px); }
-    .val-card h4 { font-size: 15px; font-weight: 700; margin-bottom: 5px; display: flex; align-items: center; gap: 7px; }
-    .val-card p { font-size: 13px; color: rgba(255,255,255,0.45); line-height: 1.6; }
-    .val-card h4 svg { width: 16px; height: 16px; }
+    .demo-card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(12,10,20,.08); }
+    .demo-card-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--purple); margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+    .demo-card-label i { width: 16px; height: 2px; background: linear-gradient(90deg,var(--purple),var(--indigo)); border-radius: 1px; display: block; }
+    .demo-card h3 { font-size: 20px; font-weight: 800; letter-spacing: -.03em; margin-bottom: 6px; }
+    .demo-card p { font-size: 13px; color: var(--text-2); line-height: 1.6; margin-bottom: 16px; }
+    .demo-convo { display: flex; flex-direction: column; gap: 10px; }
+    .dc { display: flex; gap: 8px; }
+    .dc-av { width: 24px; height: 24px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+    .dc-u { background: linear-gradient(135deg,var(--purple),var(--indigo)); color: #fff; }
+    .dc-a { background: rgba(124,58,237,.07); color: var(--purple); }
+    .dc-txt { font-size: 12px; line-height: 1.55; }
+    .dc.user .dc-txt { background: rgba(124,58,237,.05); padding: 6px 10px; border-radius: 10px 10px 2px 10px; display: inline-block; }
+    .dc-tool { display: inline-flex; align-items: center; gap: 2px; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-family: var(--mono); font-weight: 500; background: rgba(16,185,129,.07); color: var(--mint); margin-top: 4px; }
 
-    /* ── CTA ── */
-    .cta-section {
-      text-align: center; padding: 140px 24px;
-      position: relative; overflow: hidden;
+    /* === PHONE — overlapping cards layout === */
+    .phone-section {
+      padding: 100px 48px;
+      background: var(--wash);
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
     }
-    .cta-glow {
-      position: absolute; width: 600px; height: 600px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(108,92,231,0.1) 0%, transparent 70%);
-      top: 50%; left: 50%; transform: translate(-50%, -50%);
-      pointer-events: none;
+    .phone-grid {
+      max-width: 960px; margin: 0 auto;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center;
     }
-    .cta-section h2 {
-      font-size: clamp(36px, 5.5vw, 64px);
-      font-weight: 900; letter-spacing: -0.04em;
-      line-height: 1.05; margin-bottom: 16px;
+    .phone-stack { display: flex; align-items: flex-end; justify-content: center; gap: 20px; position: relative; }
+    .ph-qr {
+      background: var(--surface); border-radius: 18px; padding: 20px;
+      border: 1px solid var(--border); box-shadow: 0 4px 20px rgba(12,10,20,.05);
+      width: 190px; text-align: center; position: relative; z-index: 1;
+    }
+    .ph-qr h4 { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+    .ph-qr .sub { font-size: 10px; color: var(--text-3); margin-bottom: 12px; }
+    .qr-box {
+      width: 100px; height: 100px; margin: 0 auto 10px; border-radius: 10px;
+      background: #fff; border: 1px solid var(--border);
+      display: grid; grid-template-columns: repeat(7,1fr); gap: 1.5px;
+      padding: 8px; align-content: center; justify-content: center;
+    }
+    .qr-box span { border-radius: 1px; aspect-ratio: 1; }
+    .qd { background: var(--text); } .ql { background: transparent; }
+    .ph-qr .note { font-size: 9px; color: var(--text-3); }
+    .ph-line {
+      position: absolute; left: 50%; top: 40%; width: 40px; height: 2px;
+      background: linear-gradient(90deg, var(--purple), transparent); opacity: .3;
+      z-index: 0;
+    }
+    .ph-device {
+      width: 160px; background: var(--surface); border: 2px solid var(--border);
+      border-radius: 24px; padding: 10px 8px 14px;
+      box-shadow: 0 8px 32px rgba(12,10,20,.07);
+      position: relative; z-index: 2;
+    }
+    .ph-notch { width: 50px; height: 5px; border-radius: 3px; background: var(--border); margin: 0 auto 8px; }
+    .ph-screen { background: var(--wash); border-radius: 14px; overflow: hidden; }
+    .ph-h { height: 30px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 8px; gap: 5px; }
+    .ph-logo { width: 16px; height: 16px; border-radius: 4px; background: linear-gradient(135deg,var(--purple),var(--indigo)); display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 800; color: #fff; }
+    .ph-h span { font-size: 10px; font-weight: 700; }
+    .ph-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--mint); margin-left: auto; }
+    .ph-msgs { padding: 8px 6px; display: flex; flex-direction: column; gap: 6px; min-height: 130px; }
+    .ph-m { display: flex; gap: 4px; }
+    .ph-av { width: 14px; height: 14px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 7px; font-weight: 700; flex-shrink: 0; }
+    .ph-av.u { background: linear-gradient(135deg,var(--purple),var(--indigo)); color: #fff; }
+    .ph-av.a { background: rgba(124,58,237,.07); color: var(--purple); }
+    .ph-txt { font-size: 8px; line-height: 1.4; }
+    .ph-m.user .ph-txt { background: rgba(124,58,237,.06); padding: 4px 6px; border-radius: 6px 6px 2px 6px; display: inline-block; }
+    .ph-tool { font-size: 7px; font-family: var(--mono); color: var(--mint); margin-top: 2px; }
+    .ph-input { margin: 4px 6px 8px; padding: 5px 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; font-size: 8px; color: var(--text-3); }
+
+    .phone-text h2 { font-size: clamp(28px, 4vw, 44px); font-weight: 900; letter-spacing: -.05em; line-height: 1.0; margin-bottom: 14px; }
+    .phone-text p { font-size: 16px; color: var(--text-2); line-height: 1.6; margin-bottom: 24px; }
+    .phone-perks { display: flex; flex-direction: column; gap: 14px; }
+    .pp { display: flex; gap: 10px; }
+    .pp-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 13px; }
+    .pp h4 { font-size: 13px; font-weight: 700; margin-bottom: 1px; }
+    .pp p { font-size: 12px; color: var(--text-2); line-height: 1.5; margin: 0; }
+
+    /* === CTA — purple gradient === */
+    .cta {
+      padding: 120px 48px; text-align: center; position: relative; overflow: hidden;
+      background: linear-gradient(135deg, var(--purple) 0%, var(--indigo) 50%, #4F46E5 100%);
+      color: #fff;
+    }
+    .cta-mesh {
+      position: absolute; inset: 0; opacity: .15;
+      background:
+        radial-gradient(ellipse 50% 50% at 20% 50%, #C4B5FD, transparent),
+        radial-gradient(ellipse 50% 50% at 80% 30%, #67E8F9, transparent),
+        radial-gradient(ellipse 50% 50% at 60% 80%, #6EE7B7, transparent);
+    }
+    .cta h2 {
+      font-size: clamp(36px, 5.5vw, 64px); font-weight: 900;
+      letter-spacing: -.05em; line-height: 1.0; margin-bottom: 12px;
       position: relative; z-index: 1;
     }
-    .cta-section .section-desc { max-width: 440px; margin: 0 auto 40px; position: relative; z-index: 1; }
+    .cta-sub { font-size: 16px; color: rgba(255,255,255,.65); max-width: 380px; margin: 0 auto 36px; position: relative; z-index: 1; }
+    .cta-form {
+      display: flex; flex-direction: column; gap: 10px; max-width: 400px;
+      margin: 0 auto; position: relative; z-index: 1;
+    }
+    .cta-row { display: flex; gap: 10px; }
+    .cta-input {
+      flex: 1; padding: 13px 18px; border-radius: 100px;
+      border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.1);
+      color: #fff; font-size: 14px; font-family: var(--font); outline: none;
+      transition: all .2s; backdrop-filter: blur(8px);
+    }
+    .cta-input::placeholder { color: rgba(255,255,255,.4); }
+    .cta-input:focus { border-color: #fff; background: rgba(255,255,255,.15); }
+    .cta-btn {
+      padding: 13px 24px; border-radius: 100px;
+      background: #fff; color: var(--purple); font-weight: 700; font-size: 14px;
+      border: none; cursor: pointer; transition: all .2s; white-space: nowrap;
+      font-family: var(--font);
+    }
+    .cta-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(0,0,0,.15); }
+    .cta-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .cta-note { font-size: 11px; color: rgba(255,255,255,.4); margin-top: 10px; position: relative; z-index: 1; }
+    .cta-err { color: #FCA5A5; font-size: 13px; text-align: center; display: none; }
+    .cta-err.show { display: block; }
+    .cta-ok { display: none; flex-direction: column; align-items: center; gap: 10px; position: relative; z-index: 1; }
+    .cta-ok.show { display: flex; }
+    .cta-ok-icon { width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,.15); display: flex; align-items: center; justify-content: center; font-size: 24px; }
+    .cta-ok h3 { font-size: 22px; font-weight: 800; }
+    .cta-ok p { color: rgba(255,255,255,.55); font-size: 14px; }
 
-    /* Signup form */
-    .signup-form {
-      display: flex; flex-direction: column; gap: 10px;
-      max-width: 420px; margin: 0 auto;
-      position: relative; z-index: 1;
-    }
-    .signup-row { display: flex; gap: 10px; }
-    .signup-input {
-      flex: 1; padding: 14px 18px; border-radius: var(--r);
-      border: 1px solid rgba(255,255,255,0.1);
-      background: var(--landing-dark-card); color: #fff;
-      font-size: 15px; font-family: var(--font); outline: none;
-      transition: all 0.2s;
-    }
-    .signup-input::placeholder { color: rgba(255,255,255,0.25); }
-    .signup-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,92,231,0.15); }
-    .signup-submit {
-      padding: 14px 28px; border-radius: var(--r);
-      background: var(--accent); color: #fff;
-      font-weight: 700; font-size: 15px; border: none;
-      cursor: pointer; transition: all 0.25s; white-space: nowrap;
-    }
-    .signup-submit:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 6px 24px rgba(108,92,231,0.3); }
-    .signup-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
-    .signup-note { font-size: 12px; color: rgba(255,255,255,0.3); margin-top: 10px; position: relative; z-index: 1; text-align: center; }
-    .signup-error { color: var(--error); font-size: 13px; text-align: center; display: none; }
-    .signup-error.show { display: block; }
+    footer { padding: 24px; text-align: center; border-top: 1px solid var(--border); }
+    footer p { font-size: 11px; color: var(--text-3); }
+    footer a { color: var(--text-2); text-decoration: none; }
 
-    .signup-success {
-      display: none; flex-direction: column; align-items: center; gap: 12px;
-      position: relative; z-index: 1;
-    }
-    .signup-success.show { display: flex; }
-    .signup-ok-icon {
-      width: 56px; height: 56px; border-radius: 50%;
-      background: rgba(16,185,129,0.1);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 26px; color: var(--success);
-      animation: pop 0.4s cubic-bezier(0.16,1,0.3,1);
-    }
-    @keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
-    .signup-success h3 { font-size: 22px; font-weight: 700; }
-    .signup-success p { color: rgba(255,255,255,0.5); font-size: 14px; }
-
-    /* ── Footer ── */
-    footer {
-      padding: 32px 24px; border-top: 1px solid rgba(255,255,255,0.04);
-      text-align: center;
-    }
-    footer p { font-size: 12px; color: rgba(255,255,255,0.25); }
-    footer a { color: rgba(255,255,255,0.4); text-decoration: none; }
-    footer a:hover { color: rgba(255,255,255,0.6); }
-
-    /* ── Responsive ── */
+    /* === RESPONSIVE === */
     @media (max-width: 768px) {
+      .hero { grid-template-columns: 1fr; padding: 100px 20px 40px; gap: 32px; }
+      .hero-product { transform: none; }
+      .hero-product:hover { transform: none; }
+      .d-side { display: none; }
+      .d-body { min-height: 280px; }
+      .hero-actions { flex-direction: column; }
+      .bold-section { grid-template-columns: 1fr; padding: 80px 20px; gap: 40px; }
+      .demo-section { padding: 60px 20px; }
+      .demo-grid { grid-template-columns: 1fr; }
+      .phone-section { padding: 60px 20px; }
+      .phone-grid { grid-template-columns: 1fr; gap: 40px; }
+      .phone-stack { gap: 12px; }
+      .ph-qr { width: 160px; padding: 14px; }
+      .ph-device { width: 140px; }
+      .cta { padding: 80px 20px; }
+      .cta-row { flex-direction: column; }
+      .n-r a:not(.n-cta) { display: none; }
       nav { padding: 0 16px; }
-      .nav-right a:not(.nav-cta) { display: none; }
-      .feat-grid { grid-template-columns: 1fr; }
-      .steps { grid-template-columns: 1fr; gap: 8px; }
-      .demo-grid { grid-template-columns: 1fr; gap: 32px; }
-      .val-grid { grid-template-columns: 1fr; }
-      .delt-sidebar { display: none; }
-      .delt-body { min-height: 400px; }
-      .hero-btns { flex-direction: column; align-items: center; }
-      .signup-row { flex-direction: column; }
-      .signup-submit { width: 100%; }
-      .int-chip { padding: 10px 14px; font-size: 13px; }
-      .int-chip-icon { width: 28px; height: 28px; font-size: 15px; }
-      .int-how { flex-direction: column; text-align: center; }
     }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 5px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+    ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:rgba(12,10,20,.06);border-radius:2px}
   </style>
 </head>
 <body>
 
-<!-- Nav -->
 <nav>
-  <div class="nav-left">
-    <div class="nav-mark">D</div>
-    <span class="nav-name">delt</span>
-  </div>
-  <div class="nav-right">
-    <a href="#features">Features</a>
+  <div class="n-l"><div class="n-mark">D</div><span class="n-name">delt</span></div>
+  <div class="n-r">
     <a href="#integrations">Integrations</a>
-    <a href="#how-it-works">How it works</a>
-    <a href="#signup" class="nav-cta">Get early access</a>
+    <a href="#demo">Demo</a>
+    <a href="#signup" class="n-cta">Get early access</a>
   </div>
 </nav>
 
-<!-- Hero -->
+<!-- HERO — asymmetric, product-dominant -->
 <section class="hero">
-  <div class="hero-glow"></div>
-
-  <div class="hero-badge reveal"><span class="badge-dot"></span> Now in early access</div>
-  <h1 class="reveal rd1">One AI.<br><span class="grad">Every tool.</span></h1>
-  <p class="hero-sub reveal rd2">Delt connects to Gmail, Slack, GitHub, Notion, Stripe, and more &mdash; all through one conversation. Ask it to do things. It does them.</p>
-  <div class="hero-btns reveal rd3">
-    <a href="#signup" class="btn-pri">Get early access <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
-    <a href="#features" class="btn-sec">See what it does</a>
+  <div class="hero-bg"></div>
+  <div class="hero-text">
+    <div class="hero-pill reveal"><span class="dot"></span> Now in early access</div>
+    <h1 class="reveal d1">One AI.<br><em>Every tool.</em></h1>
+    <p class="hero-sub reveal d2">Gmail, Slack, GitHub, Salesforce, Stripe — all through one conversation. Runs 100% on your machine.</p>
+    <div class="hero-actions reveal d3">
+      <a href="#signup" class="btn-p">Get early access <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+      <a href="#demo" class="btn-g">See it work</a>
+    </div>
   </div>
 
-  <!-- REAL Delt UI -->
-  <div class="product-frame reveal rd4">
+  <div class="hero-product reveal d4">
     <div class="delt-ui">
-      <div class="delt-header">
-        <div class="delt-header-left">
-          <div class="delt-logo-mark">D</div>
-          <span class="delt-logo-text">delt</span>
-          <div class="delt-status"><span class="delt-status-dot"></span> Connected</div>
-        </div>
-        <div class="delt-header-right">
-          <div class="delt-header-btn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/></svg>
-            Integrations
-          </div>
-          <div class="delt-header-btn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            New chat
-          </div>
-        </div>
+      <div class="d-hdr">
+        <div class="d-hdr-l"><div class="d-mark">D</div><span>delt</span><div class="d-status"><i></i> Ready</div></div>
+        <div class="d-hdr-r"><div class="d-hdr-btn">Integrations</div><div class="d-hdr-btn">+ New</div></div>
       </div>
-      <div class="delt-body">
-        <div class="delt-sidebar">
-          <div class="delt-sidebar-hdr">Today</div>
-          <div class="delt-sidebar-item active"><span class="delt-sidebar-item-dot"></span> Q3 pipeline review</div>
-          <div class="delt-sidebar-item"><span class="delt-sidebar-item-dot"></span> Refund for order #4821</div>
-          <div class="delt-sidebar-item"><span class="delt-sidebar-item-dot"></span> Weekly standup prep</div>
-          <div class="delt-sidebar-hdr" style="margin-top:10px">Yesterday</div>
-          <div class="delt-sidebar-item"><span class="delt-sidebar-item-dot"></span> Deploy staging v2.4</div>
-          <div class="delt-sidebar-item"><span class="delt-sidebar-item-dot"></span> Customer onboarding email</div>
+      <div class="d-body">
+        <div class="d-side">
+          <div class="d-sh">Today</div>
+          <div class="d-si on"><i></i> Q3 pipeline review</div>
+          <div class="d-si"><i></i> Refund #4821</div>
+          <div class="d-si"><i></i> Standup prep</div>
+          <div class="d-sh" style="margin-top:6px">Yesterday</div>
+          <div class="d-si"><i></i> Deploy v2.4</div>
+          <div class="d-si"><i></i> Onboarding draft</div>
         </div>
-        <div class="delt-chat">
-          <div class="delt-messages">
-            <div class="delt-msg user">
-              <div class="delt-avatar delt-avatar-user">N</div>
-              <div class="delt-msg-body">
-                <div class="delt-msg-sender">You</div>
-                <div class="delt-msg-content">Show me the Q3 pipeline from HubSpot and flag any deals stuck more than 2 weeks</div>
+        <div class="d-chat">
+          <div class="d-msgs" id="hero-msgs">
+            <div class="dm user" data-delay="400">
+              <div class="dm-av u">N</div>
+              <div class="dm-b"><div class="dm-who">You</div><div class="dm-c">Show me the Q3 pipeline from HubSpot and flag deals stuck 2+ weeks</div></div>
+            </div>
+            <div class="dm" data-delay="1200">
+              <div class="dm-av a">D</div>
+              <div class="dm-b">
+                <div class="dm-who">Delt</div>
+                <div class="dm-c"><strong>23 open deals</strong> &middot; $184K total. 4 stuck:<br><strong style="color:var(--amber)">Acme</strong> $42K &middot; 18d&emsp;<strong style="color:var(--red)">Meridian</strong> $65K &middot; 31d<br><strong style="color:var(--amber)">TechFlow</strong> $28K &middot; 21d<br><br>Draft follow-ups?</div>
+                <div class="dm-badges"><span class="dm-badge">HubSpot</span><span class="dm-badge">Gmail ready</span></div>
               </div>
             </div>
-            <div class="delt-msg assistant">
-              <div class="delt-avatar delt-avatar-ai">D</div>
-              <div class="delt-msg-body">
-                <div class="delt-msg-sender">Delt</div>
-                <div class="delt-msg-content">
-                  Found <strong>23 open deals</strong> worth $184K. 4 have been stuck in negotiation 14+ days:<br><br>
-                  <strong style="color:#F59E0B">Acme Corp</strong> &mdash; $42K, 18 days<br>
-                  <strong style="color:#F59E0B">TechFlow</strong> &mdash; $28K, 21 days<br>
-                  <strong style="color:#EF4444">Meridian</strong> &mdash; $65K, 31 days <span style="font-size:12px;color:#EF4444">(critical)</span><br>
-                  <strong style="color:#F59E0B">Bolt Labs</strong> &mdash; $15K, 16 days<br><br>
-                  Want me to draft follow-up emails for these?
-                </div>
-                <div class="delt-int-row">
-                  <span class="delt-int-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> HubSpot CRM</span>
-                  <span class="delt-int-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Gmail ready</span>
-                </div>
-              </div>
+            <div class="dm user" data-delay="2200">
+              <div class="dm-av u">N</div>
+              <div class="dm-b"><div class="dm-who">You</div><div class="dm-c">Yes, and post a summary to #sales on Slack</div></div>
             </div>
-            <div class="delt-msg user">
-              <div class="delt-avatar delt-avatar-user">N</div>
-              <div class="delt-msg-body">
-                <div class="delt-msg-sender">You</div>
-                <div class="delt-msg-content">Yes &mdash; and post a summary to #sales on Slack</div>
-              </div>
-            </div>
-            <div class="delt-msg assistant">
-              <div class="delt-avatar delt-avatar-ai">D</div>
-              <div class="delt-msg-body">
-                <div class="delt-msg-sender">Delt</div>
-                <div class="delt-msg-content">
-                  Done. 3 follow-up emails drafted in Gmail (saved as drafts). Pipeline summary posted to <strong>#sales</strong>.
-                </div>
-                <div class="delt-activity">
-                  <span class="delt-activity-badge done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> 3 Gmail drafts</span>
-                  <span class="delt-activity-badge done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Slack #sales updated</span>
-                </div>
+            <div class="dm" data-delay="3000">
+              <div class="dm-av a">D</div>
+              <div class="dm-b">
+                <div class="dm-who">Delt</div>
+                <div class="dm-c">Done. 3 follow-up emails drafted. Summary posted to <strong>#sales</strong>.</div>
+                <div class="dm-tools"><span class="dm-tool">&#10003; 3 Gmail drafts</span><span class="dm-tool">&#10003; Slack #sales</span></div>
               </div>
             </div>
           </div>
-          <div class="delt-input-area">
-            <div class="delt-input-row">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B8B8C8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-              <span class="delt-input-placeholder">Ask me anything...</span>
-              <div class="delt-send-btn">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
-              </div>
-            </div>
-            <div class="delt-input-meta">
-              <span><kbd>Enter</kbd> send &middot; <kbd>Shift+Enter</kbd> new line</span>
-              <div class="delt-multitask-btn">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-                Multitask
-              </div>
+          <div class="d-input">
+            <div class="d-input-bar">
+              <span>Ask anything...</span>
+              <div class="d-send"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></div>
             </div>
           </div>
         </div>
@@ -752,307 +474,259 @@
   </div>
 </section>
 
-<!-- Features -->
-<section id="features">
-  <div class="section-inner">
-    <div class="section-label reveal">Features</div>
-    <h2 class="section-title reveal rd1">Not another chatbot.<br>A command center.</h2>
-    <p class="section-desc reveal rd2">Delt reads your email, checks your CRM, posts to Slack, files your issues &mdash; all in one conversation.</p>
-    <div class="feat-grid">
-      <div class="feat-card reveal">
-        <div class="feat-icon fi-purple"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/></svg></div>
-        <h3 class="feat-title">MCP integrations</h3>
-        <p class="feat-desc">Gmail, Slack, GitHub, Notion, Stripe, Shopify, HubSpot, Linear, Figma, Airtable. One-click connect. Native two-way access.</p>
+<!-- MARQUEE — infinite scrolling integrations -->
+<section class="marquee-section" id="integrations">
+  <div class="marquee-label">20 integrations via Model Context Protocol</div>
+  <div class="marquee-wrap">
+    <div class="marquee-track" id="marquee">
+      <div class="m-chip"><div class="m-icon" style="background:rgba(234,67,53,.08)">&#9993;&#65039;</div> Google Workspace</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(74,21,75,.08)">&#128172;</div> Slack</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(36,41,47,.06)">&#128187;</div> GitHub</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(55,53,47,.06)">&#128221;</div> Notion</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(99,91,255,.06)">&#128179;</div> Stripe</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(0,161,224,.06)">&#9729;&#65039;</div> Salesforce</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(255,122,69,.06)">&#128200;</div> HubSpot</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(150,191,72,.06)">&#128722;</div> Shopify</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(94,107,228,.06)">&#9889;</div> Linear</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(162,89,255,.06)">&#127912;</div> Figma</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(0,120,212,.06)">&#128233;</div> Microsoft 365</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(45,140,255,.06)">&#127909;</div> Zoom</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(241,61,60,.06)">&#128222;</div> Twilio</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(0,126,229,.06)">&#128231;</div> SendGrid</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(24,119,242,.06)">&#128203;</div> Airtable</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(0,121,191,.06)">&#128203;</div> Trello</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(55,53,47,.06)">&#63743;</div> Apple Apps</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(0,122,204,.06)">&#128296;</div> VS Code</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(124,58,237,.06)">&#128187;</div> Local Files</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(124,58,237,.06)">&#128268;</div> Custom API</div>
+    </div>
+  </div>
+</section>
+
+<!-- BOLD SPLIT — dark gradient, feature cards -->
+<section class="bold-section">
+  <div class="bold-text reveal">
+    <h2>Not another<br>chatbot.<br><em>An operator.</em></h2>
+    <p>Delt doesn't just answer questions. It reads your Gmail, posts to Slack, updates your CRM, and chains actions across services — in a single turn.</p>
+  </div>
+  <div class="bold-features">
+    <div class="bf reveal d1">
+      <div class="bf-icon" style="background:rgba(124,58,237,.12)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+      <div><h4>Multi-tool in one turn</h4><p>One sentence triggers 3 APIs. No tab-switching, no orchestration.</p></div>
+    </div>
+    <div class="bf reveal d2">
+      <div class="bf-icon" style="background:rgba(16,185,129,.12)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#34D399" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+      <div><h4>Private by architecture</h4><p>Localhost. No cloud relay. Your data never touches a server you don't own.</p></div>
+    </div>
+    <div class="bf reveal d3">
+      <div class="bf-icon" style="background:rgba(6,182,212,.12)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22D3EE" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+      <div><h4>You stay in control</h4><p>Reads freely. Asks before acting. Sends nothing without your explicit OK.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- DEMO — card grid with live conversations -->
+<section class="demo-section" id="demo">
+  <div class="demo-header">
+    <div class="label reveal">See it work</div>
+    <h2 class="reveal d1">Three tools.<br>One sentence.</h2>
+    <p class="reveal d2">Real workflows, not hypotheticals.</p>
+  </div>
+  <div class="demo-grid">
+    <div class="demo-card reveal">
+      <div class="demo-card-label"><i></i> Sales ops</div>
+      <h3>Pipeline check + outreach</h3>
+      <p>Pull from HubSpot, draft in Gmail, post to Slack.</p>
+      <div class="demo-convo">
+        <div class="dc user"><div class="dc-av dc-u">N</div><div class="dc-txt">Pull Q3 pipeline from HubSpot, flag stale deals, draft follow-ups</div></div>
+        <div class="dc"><div class="dc-av dc-a">D</div><div><div class="dc-txt">23 deals, $184K. 4 stuck 14+ days. 3 follow-up drafts ready in Gmail. Summary posted to #sales.</div><div class="dc-tool">&#10003; hubspot + gmail + slack</div></div></div>
       </div>
-      <div class="feat-card reveal rd1">
-        <div class="feat-icon fi-cyan"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22D3EE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>
-        <h3 class="feat-title">Parallel multitask</h3>
-        <p class="feat-desc">Run a background research task while you're chatting about something else. Independent threads, neither blocks the other.</p>
+    </div>
+    <div class="demo-card reveal d1">
+      <div class="demo-card-label"><i></i> Engineering</div>
+      <h3>Bug triage + assign</h3>
+      <p>Check Linear, assign, link the PR from GitHub.</p>
+      <div class="demo-convo">
+        <div class="dc user"><div class="dc-av dc-u">N</div><div class="dc-txt">Any P0s in Linear today? Post to #engineering</div></div>
+        <div class="dc"><div class="dc-av dc-a">D</div><div><div class="dc-txt">1 P0: "Auth tokens expiring in EU" — Sarah, 2h ago. Posted. Assigned to Marcus. Linked PR #847.</div><div class="dc-tool">&#10003; linear + slack + github</div></div></div>
       </div>
-      <div class="feat-card reveal rd2">
-        <div class="feat-icon fi-green"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#34D399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-        <h3 class="feat-title">100% local & private</h3>
-        <p class="feat-desc">Runs on your machine. Your data never touches a server you don't control. No cloud. No telemetry. Period.</p>
+    </div>
+    <div class="demo-card reveal d2">
+      <div class="demo-card-label"><i></i> Customer success</div>
+      <h3>Refund + apology</h3>
+      <p>Process in Stripe, draft email, log in Notion.</p>
+      <div class="demo-convo">
+        <div class="dc user"><div class="dc-av dc-u">N</div><div class="dc-txt">Refund order #4821 and send an apology email</div></div>
+        <div class="dc"><div class="dc-av dc-a">D</div><div><div class="dc-txt">$89 refunded via Stripe. Apology drafted in Gmail. Logged in the CS Notion board.</div><div class="dc-tool">&#10003; stripe + gmail + notion</div></div></div>
       </div>
-      <div class="feat-card reveal rd3">
-        <div class="feat-icon fi-amber"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FBBF24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
-        <h3 class="feat-title">Persistent memory</h3>
-        <p class="feat-desc">Remembers who you are, what you worked on, where you left off. Close the tab. Come back tomorrow. It knows.</p>
-      </div>
-      <div class="feat-card reveal rd4">
-        <div class="feat-icon fi-rose"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FB7185" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
-        <h3 class="feat-title">File-aware</h3>
-        <p class="feat-desc">Drag a spreadsheet, PDF, screenshot, or codebase. Delt reads it, reasons over it, and acts on it.</p>
-      </div>
-      <div class="feat-card reveal rd5">
-        <div class="feat-icon fi-blue"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#60A5FA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9"/></svg></div>
-        <h3 class="feat-title">Fully configurable</h3>
-        <p class="feat-desc">White-label ready. Change the name, colors, tools, and system prompt. Deploy for your team or your clients.</p>
+    </div>
+    <div class="demo-card reveal d3">
+      <div class="demo-card-label"><i></i> Ops / scheduling</div>
+      <h3>Calendar + notifications</h3>
+      <p>Check calendar, cancel, notify attendees.</p>
+      <div class="demo-convo">
+        <div class="dc user"><div class="dc-av dc-u">N</div><div class="dc-txt">What's on my calendar tomorrow? Cancel the 2pm.</div></div>
+        <div class="dc"><div class="dc-av dc-a">D</div><div><div class="dc-txt">3 meetings. 2pm Design Review cancelled, attendees notified via Google Calendar.</div><div class="dc-tool">&#10003; google calendar</div></div></div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- Integrations -->
-<section class="int-section" id="integrations">
-  <div class="section-inner" style="text-align:center">
-    <div class="section-label reveal" style="justify-content:center">Integrations</div>
-    <h2 class="section-title reveal rd1">Your tools. <span class="grad">Connected.</span></h2>
-    <p class="section-desc reveal rd2" style="margin:0 auto">Native, two-way integrations through the Model Context Protocol. Not screen scraping. Not copy-paste. Real API access.</p>
-
-    <div class="int-logos reveal rd3">
-      <div class="int-chip"><div class="int-chip-icon ic-mail">&#9993;&#65039;</div> Gmail</div>
-      <div class="int-chip"><div class="int-chip-icon ic-slack">&#128172;</div> Slack</div>
-      <div class="int-chip"><div class="int-chip-icon ic-gh">&#128187;</div> GitHub</div>
-      <div class="int-chip"><div class="int-chip-icon ic-notion">&#128221;</div> Notion</div>
-      <div class="int-chip"><div class="int-chip-icon ic-stripe">&#128179;</div> Stripe</div>
-      <div class="int-chip"><div class="int-chip-icon ic-shop">&#128722;</div> Shopify</div>
-      <div class="int-chip"><div class="int-chip-icon ic-hub">&#128200;</div> HubSpot</div>
-      <div class="int-chip"><div class="int-chip-icon ic-linear">&#9889;</div> Linear</div>
-      <div class="int-chip"><div class="int-chip-icon ic-figma">&#127912;</div> Figma</div>
-      <div class="int-chip"><div class="int-chip-icon ic-air">&#128203;</div> Airtable</div>
-      <div class="int-chip"><div class="int-chip-icon ic-trello">&#128203;</div> Trello</div>
-      <div class="int-chip"><div class="int-chip-icon ic-drive">&#128193;</div> Google Drive</div>
-      <div class="int-chip"><div class="int-chip-icon ic-api">&#128268;</div> Custom API</div>
-    </div>
-
-    <div class="int-how reveal rd4">
-      <div class="int-how-icon">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/></svg>
+<!-- PHONE -->
+<section class="phone-section">
+  <div class="phone-grid">
+    <div class="phone-stack reveal">
+      <div class="ph-qr">
+        <h4>Connect your phone</h4>
+        <div class="sub">Scan to open Delt mobile</div>
+        <div class="qr-box">
+          <span class="qd"></span><span class="qd"></span><span class="qd"></span><span class="ql"></span><span class="qd"></span><span class="qd"></span><span class="qd"></span>
+          <span class="qd"></span><span class="ql"></span><span class="qd"></span><span class="qd"></span><span class="qd"></span><span class="ql"></span><span class="qd"></span>
+          <span class="qd"></span><span class="qd"></span><span class="qd"></span><span class="ql"></span><span class="qd"></span><span class="qd"></span><span class="qd"></span>
+          <span class="ql"></span><span class="ql"></span><span class="ql"></span><span class="qd"></span><span class="ql"></span><span class="ql"></span><span class="ql"></span>
+          <span class="qd"></span><span class="qd"></span><span class="ql"></span><span class="qd"></span><span class="ql"></span><span class="qd"></span><span class="qd"></span>
+          <span class="qd"></span><span class="ql"></span><span class="qd"></span><span class="ql"></span><span class="qd"></span><span class="ql"></span><span class="qd"></span>
+          <span class="qd"></span><span class="qd"></span><span class="qd"></span><span class="ql"></span><span class="qd"></span><span class="qd"></span><span class="qd"></span>
+        </div>
+        <div class="note">Secure one-time link</div>
       </div>
-      <div style="text-align:left">
-        <h4>Powered by MCP</h4>
-        <p>The Model Context Protocol gives your AI native access to your tools &mdash; not a browser extension, not an iframe. Real API calls, real data, real actions. Open the Integrations panel, paste your key, done.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- How it works -->
-<section id="how-it-works">
-  <div class="section-inner" style="text-align:center">
-    <div class="section-label reveal" style="justify-content:center">How it works</div>
-    <h2 class="section-title reveal rd1">Running in under 60 seconds</h2>
-    <p class="section-desc reveal rd2" style="margin:0 auto">No accounts. No cloud. Install, connect your tools, go.</p>
-    <div class="steps">
-      <div class="step reveal">
-        <div class="step-num">1</div>
-        <h3>Install</h3>
-        <p>One command installs Delt. It runs locally on localhost &mdash; nothing leaves your computer.</p>
-      </div>
-      <div class="step reveal rd1">
-        <div class="step-num">2</div>
-        <h3>Connect</h3>
-        <p>Open Integrations. Pick your tools. Paste your API key. MCP handles the rest.</p>
-      </div>
-      <div class="step reveal rd2">
-        <div class="step-num">3</div>
-        <h3>Go</h3>
-        <p>Ask Delt to pull your pipeline, draft an email, check a deploy, update a ticket. Plain English.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- Demo conversation -->
-<section>
-  <div class="section-inner">
-    <div class="section-label reveal">In action</div>
-    <h2 class="section-title reveal rd1">See it work.</h2>
-    <p class="section-desc reveal rd2">Multiple tools. One conversation. Real actions.</p>
-
-    <div class="demo-grid">
-      <div class="demo-convo reveal rd3">
-        <div class="dc-msg user">
-          <div class="dc-av dc-av-u">N</div>
-          <div class="dc-body"><div class="dc-sender">You</div><div class="dc-content">Check if anyone opened a P0 in Linear today and post it to #engineering on Slack</div></div>
-        </div>
-        <div class="dc-msg">
-          <div class="dc-av dc-av-a">D</div>
-          <div class="dc-body">
-            <div class="dc-sender">Delt</div>
-            <div class="dc-content">Checking Linear for today's P0 issues...</div>
-            <div class="dc-tool run"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> linear.listIssues()</div>
+      <div class="ph-device">
+        <div class="ph-notch"></div>
+        <div class="ph-screen">
+          <div class="ph-h"><div class="ph-logo">D</div><span>delt</span><div class="ph-dot"></div></div>
+          <div class="ph-msgs">
+            <div class="ph-m user"><div class="ph-av u">N</div><div><div class="ph-txt">Meetings tomorrow?</div></div></div>
+            <div class="ph-m"><div class="ph-av a">D</div><div><div class="ph-txt"><strong>9am</strong> Standup<br><strong>11am</strong> Client<br><strong>2pm</strong> Design</div><div class="ph-tool">&#10003; calendar.list()</div></div></div>
+            <div class="ph-m user"><div class="ph-av u">N</div><div><div class="ph-txt">Cancel the 2pm</div></div></div>
+            <div class="ph-m"><div class="ph-av a">D</div><div><div class="ph-txt">Cancelled. Notified.</div><div class="ph-tool">&#10003; calendar.delete()</div></div></div>
           </div>
-        </div>
-        <div class="dc-msg">
-          <div class="dc-av dc-av-a">D</div>
-          <div class="dc-body">
-            <div class="dc-sender">Delt</div>
-            <div class="dc-content">Found 1 P0: <strong>"Auth tokens expiring early in EU"</strong> &mdash; Sarah, 2h ago. Posted to Slack.</div>
-            <div class="dc-tool ok"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> slack.postMessage(#engineering)</div>
-          </div>
-        </div>
-        <div class="dc-msg user">
-          <div class="dc-av dc-av-u">N</div>
-          <div class="dc-body"><div class="dc-sender">You</div><div class="dc-content">Assign it to Marcus and link the last related PR from GitHub</div></div>
-        </div>
-        <div class="dc-msg">
-          <div class="dc-av dc-av-a">D</div>
-          <div class="dc-body">
-            <div class="dc-sender">Delt</div>
-            <div class="dc-content">Done. Assigned to Marcus. Linked PR <strong>#847</strong> from last Thursday.</div>
-            <div style="display:flex;gap:5px;flex-wrap:wrap">
-              <div class="dc-tool ok"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> linear.updateIssue()</div>
-              <div class="dc-tool ok"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> github.searchPRs()</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="demo-points reveal rd4">
-        <div class="demo-point">
-          <div class="demo-point-icon fi-purple"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
-          <div>
-            <h4>Multi-tool in one turn</h4>
-            <p>One request triggers Linear, Slack, and GitHub. Delt chains them automatically &mdash; no orchestrating required.</p>
-          </div>
-        </div>
-        <div class="demo-point">
-          <div class="demo-point-icon fi-cyan"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22D3EE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
-          <div>
-            <h4>Context that carries</h4>
-            <p>Delt remembers your last conversation. Knows your team, your tools, your preferences. No re-explaining.</p>
-          </div>
-        </div>
-        <div class="demo-point">
-          <div class="demo-point-icon fi-green"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#34D399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
-          <div>
-            <h4>You stay in control</h4>
-            <p>Reads freely. Asks before acting. Sends nothing without your say-so.</p>
-          </div>
+          <div class="ph-input">Ask anything...</div>
         </div>
       </div>
     </div>
-  </div>
-</section>
-
-<!-- Value props -->
-<section style="text-align:center">
-  <div class="section-inner">
-    <div class="section-label reveal" style="justify-content:center">Why Delt</div>
-    <h2 class="section-title reveal rd1">Built different.</h2>
-    <p class="section-desc reveal rd2" style="margin:0 auto">Not another wrapper. Infrastructure for how work actually happens.</p>
-    <div class="val-grid reveal rd3">
-      <div class="val-card">
-        <h4><svg viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Private by architecture</h4>
-        <p>Not private by policy. Private by design. Localhost only. No accounts, no cloud sync, no tracking.</p>
-      </div>
-      <div class="val-card">
-        <h4><svg viewBox="0 0 24 24" fill="none" stroke="#22D3EE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/></svg> Real integrations</h4>
-        <p>MCP gives native API access. Not a screenshot of your dashboard. Actual calls, actual data, actual actions.</p>
-      </div>
-      <div class="val-card">
-        <h4><svg viewBox="0 0 24 24" fill="none" stroke="#34D399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06"/></svg> White-label ready</h4>
-        <p>Change name, colors, tools, system prompt in one config file. Deploy to your team or sell to clients.</p>
-      </div>
-      <div class="val-card">
-        <h4><svg viewBox="0 0 24 24" fill="none" stroke="#FBBF24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> No lock-in</h4>
-        <p>Open protocols. Data is markdown on disk. Integrations are standard MCP servers. Walk away anytime with everything.</p>
+    <div class="phone-text reveal d2">
+      <h2>Your desk.<br>Your pocket.</h2>
+      <p>Scan a QR from desktop. Delt opens on your phone — same session, same tools, same history. Walk away and keep going.</p>
+      <div class="phone-perks">
+        <div class="pp">
+          <div class="pp-icon" style="background:rgba(124,58,237,.07)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg></div>
+          <div><h4>Scan and go</h4><p>No app install. No login. QR creates a secure tunnel.</p></div>
+        </div>
+        <div class="pp">
+          <div class="pp-icon" style="background:rgba(6,182,212,.07)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></div>
+          <div><h4>Session synced</h4><p>Messages and context carry over instantly.</p></div>
+        </div>
+        <div class="pp">
+          <div class="pp-icon" style="background:rgba(16,185,129,.07)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--mint)" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+          <div><h4>Still private</h4><p>One-time link. Expires in 5 minutes. Local the whole time.</p></div>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
 <!-- CTA -->
-<section class="cta-section" id="signup">
-  <div class="cta-glow"></div>
-  <div class="section-label reveal" style="justify-content:center">Early access</div>
-  <h2 class="reveal rd1">Stop switching tabs.<br><span class="grad">Start shipping.</span></h2>
-  <p class="section-desc reveal rd2">Join the waitlist. We're letting people in every week.</p>
-
-  <div class="signup-form reveal rd3" id="signup-form">
-    <div class="signup-row">
-      <input type="text" class="signup-input" id="signup-name" placeholder="Your name" autocomplete="name">
+<section class="cta" id="signup">
+  <div class="cta-mesh"></div>
+  <h2 class="reveal">Stop switching.<br>Start shipping.</h2>
+  <p class="cta-sub reveal d1">Join the waitlist. We let people in every week.</p>
+  <div class="cta-form reveal d2" id="signup-form">
+    <div class="cta-row"><input type="text" class="cta-input" id="signup-name" placeholder="Your name" autocomplete="name"></div>
+    <div class="cta-row">
+      <input type="email" class="cta-input" id="signup-email" placeholder="you@company.com" required autocomplete="email">
+      <button class="cta-btn" id="signup-submit" type="button">Get access</button>
     </div>
-    <div class="signup-row">
-      <input type="email" class="signup-input" id="signup-email" placeholder="you@company.com" required autocomplete="email">
-      <button class="signup-submit" id="signup-submit" type="button">Get access</button>
-    </div>
-    <p class="signup-error" id="signup-error"></p>
+    <p class="cta-err" id="signup-error"></p>
   </div>
-  <p class="signup-note reveal rd3" id="signup-note">Free during early access. No credit card required.</p>
-
-  <div class="signup-success" id="signup-success">
-    <div class="signup-ok-icon">&#10003;</div>
+  <p class="cta-note reveal d2" id="signup-note">No credit card. We'll reach out when your spot opens.</p>
+  <div class="cta-ok" id="signup-success">
+    <div class="cta-ok-icon">&#10003;</div>
     <h3>You're on the list</h3>
-    <p>We'll reach out soon with your invite. Keep an eye on your inbox.</p>
+    <p>We'll reach out soon. Watch your inbox.</p>
   </div>
 </section>
 
-<footer>
-  <p>&copy; 2026 Delt &mdash; Built by <a href="mailto:neonotics@gmail.com">Neonotics</a></p>
-</footer>
+<footer><p>&copy; 2026 Delt &mdash; Built by <a href="mailto:neonotics@gmail.com">Neonotics</a></p></footer>
 
 <script>
-  // Reveal on scroll
-  const obs = new IntersectionObserver(entries => {
-    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
-  }, { threshold: 0.08, rootMargin: '0px 0px -30px 0px' });
+  // Reveal
+  const obs = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) e.target.classList.add('v'); }), { threshold: .08, rootMargin: '0px 0px -20px 0px' });
   document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
 
-  // Smooth scroll
-  document.querySelectorAll('a[href^="#"]').forEach(a => {
-    a.addEventListener('click', e => {
-      e.preventDefault();
-      const t = document.querySelector(a.getAttribute('href'));
-      if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  });
-
-  // Nav darken on scroll
+  // Nav scroll
   const nav = document.querySelector('nav');
-  window.addEventListener('scroll', () => {
-    nav.style.background = scrollY > 40 ? 'rgba(12,10,26,0.95)' : 'rgba(12,10,26,0.8)';
-  });
+  addEventListener('scroll', () => nav.classList.toggle('s', scrollY > 20));
+
+  // Smooth scroll
+  document.querySelectorAll('a[href^="#"]').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault();
+    document.querySelector(a.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth' });
+  }));
+
+  // Hero message cascade — messages appear sequentially when in view
+  const heroMsgs = document.getElementById('hero-msgs');
+  let heroPlayed = false;
+  new IntersectionObserver(([e]) => {
+    if (e.isIntersecting && !heroPlayed) {
+      heroPlayed = true;
+      heroMsgs.querySelectorAll('.dm').forEach(m => {
+        setTimeout(() => m.classList.add('show'), +m.dataset.delay);
+      });
+    }
+  }, { threshold: .3 }).observe(heroMsgs);
+
+  // Marquee duplication for infinite scroll
+  const track = document.getElementById('marquee');
+  track.innerHTML += track.innerHTML;
 
   // Signup
-  const form = document.getElementById('signup-form');
-  const nameInput = document.getElementById('signup-name');
-  const emailInput = document.getElementById('signup-email');
-  const submitBtn = document.getElementById('signup-submit');
-  const errorEl = document.getElementById('signup-error');
-  const noteEl = document.getElementById('signup-note');
-  const successEl = document.getElementById('signup-success');
-
-  async function handleSignup() {
-    const email = emailInput.value.trim();
-    const name = nameInput.value.trim();
-    errorEl.classList.remove('show');
-
-    if (!email || !email.includes('@') || !email.includes('.')) {
-      errorEl.textContent = 'Please enter a valid email address.';
-      errorEl.classList.add('show');
-      emailInput.focus();
-      return;
-    }
-
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Signing up...';
-
-    try {
-      const res = await fetch('/api/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, name: name || undefined }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Something went wrong');
-
-      form.style.display = 'none';
-      noteEl.style.display = 'none';
-      successEl.classList.add('show');
-    } catch (err) {
-      errorEl.textContent = err.message || 'Something went wrong. Try again.';
-      errorEl.classList.add('show');
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Get access';
-    }
+  const form = document.getElementById('signup-form'),
+        nameI = document.getElementById('signup-name'),
+        emailI = document.getElementById('signup-email'),
+        subBtn = document.getElementById('signup-submit'),
+        errEl = document.getElementById('signup-error'),
+        noteEl = document.getElementById('signup-note'),
+        okEl = document.getElementById('signup-success');
+  // Discover Delt server — injected by server or auto-detected
+  let API = '';
+  const DELT_PORT = document.documentElement.dataset.deltPort; // injected by server at /demo
+  if (location.protocol === 'file:' || (location.protocol === 'https:' && location.hostname !== 'localhost')) {
+    API = DELT_PORT ? `http://localhost:${DELT_PORT}` : '';
   }
 
-  submitBtn.addEventListener('click', handleSignup);
-  emailInput.addEventListener('keydown', e => { if (e.key === 'Enter') handleSignup(); });
-  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') emailInput.focus(); });
+  async function discoverDelt() {
+    if (API) return API;
+    if (location.protocol !== 'file:') return ''; // same-origin works
+    // Ask discovery beacon (fixed port 45100) for the real server port
+    try {
+      const c = new AbortController();
+      const t = setTimeout(function() { c.abort(); }, 2000);
+      const r = await fetch('http://localhost:45100/', { signal: c.signal });
+      clearTimeout(t);
+      if (r.ok) { const d = await r.json(); API = d.url || ('http://localhost:' + d.port); return API; }
+    } catch (e) {}
+    return '';
+  }
+
+  async function doSignup() {
+    const email = emailI.value.trim(), name = nameI.value.trim();
+    errEl.classList.remove('show');
+    if (!email || !email.includes('@') || !email.includes('.')) { errEl.textContent = 'Enter a valid email.'; errEl.classList.add('show'); emailI.focus(); return; }
+    subBtn.disabled = true; subBtn.textContent = 'Signing up...';
+    try {
+      const base = await discoverDelt();
+      const r = await fetch(base + '/api/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, name: name || undefined }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Something went wrong');
+      form.style.display = 'none'; noteEl.style.display = 'none'; okEl.classList.add('show');
+    } catch (e) {
+      errEl.textContent = e.message?.includes('fetch') || e.message?.includes('Failed') ? 'Can\'t connect — is Delt running?' : (e.message || 'Something went wrong.');
+      errEl.classList.add('show'); subBtn.disabled = false; subBtn.textContent = 'Get access';
+    }
+  }
+  subBtn.addEventListener('click', doSignup);
+  emailI.addEventListener('keydown', e => { if (e.key === 'Enter') doSignup(); });
+  nameI.addEventListener('keydown', e => { if (e.key === 'Enter') emailI.focus(); });
 </script>
 </body>
 </html>
