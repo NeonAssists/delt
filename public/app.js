@@ -1509,11 +1509,217 @@
       html += '</div>';
     }
 
+    // Custom APIs section
+    html += '<div class="integration-category-label" style="margin-top:16px;">Custom APIs <button id="add-custom-api-btn" style="margin-left:8px;padding:2px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--accent);font-size:11px;cursor:pointer;font-weight:600;">+ Add API</button></div>';
+    html += '<div id="custom-apis-list"></div>';
+    html += '<div id="custom-api-form-container"></div>';
+
     integrationsBody.innerHTML = html;
 
     // Bind events via delegation — remove old listener first to prevent leak
     integrationsBody.removeEventListener("click", handleIntegrationClick);
     integrationsBody.addEventListener("click", handleIntegrationClick);
+
+    // Load custom APIs list
+    loadCustomApis();
+
+    // Add API button
+    const addBtn = document.getElementById("add-custom-api-btn");
+    if (addBtn) addBtn.addEventListener("click", showAddCustomApiForm);
+  }
+
+  // --- Custom API Hub ---
+  async function loadCustomApis() {
+    const listEl = document.getElementById("custom-apis-list");
+    if (!listEl) return;
+    try {
+      const res = await fetch("/custom-apis");
+      const data = await res.json();
+      if (!data.apis || !data.apis.length) {
+        listEl.innerHTML = '<div style="font-size:12px;color:var(--text-faint);padding:8px 0;">No custom APIs added yet. Click + Add API to connect any service.</div>';
+        return;
+      }
+      listEl.innerHTML = data.apis.map(api => `
+        <div class="custom-api-card" data-api-id="${api.id}">
+          <div class="custom-api-info">
+            <span class="custom-api-name">${escapeHtml(api.name)}</span>
+            <span class="custom-api-url">${escapeHtml(api.baseUrl)}</span>
+            ${api.description ? `<span class="custom-api-desc">${escapeHtml(api.description)}</span>` : ""}
+          </div>
+          <div class="custom-api-actions">
+            <span style="font-size:10px;color:var(--text-faint);">${escapeHtml(api.authType)}</span>
+            <button class="custom-api-test-btn" data-api-id="${api.id}" style="padding:2px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-muted);font-size:11px;cursor:pointer;">Test</button>
+            <button class="custom-api-delete-btn" data-api-id="${api.id}" style="padding:2px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--error);font-size:11px;cursor:pointer;">Remove</button>
+          </div>
+        </div>
+      `).join("");
+
+      // Wire up test/delete buttons
+      listEl.querySelectorAll(".custom-api-test-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          btn.textContent = "Testing...";
+          btn.disabled = true;
+          try {
+            const r = await fetch(`/custom-apis/${btn.dataset.apiId}/test`, { method: "POST" });
+            const d = await r.json();
+            btn.textContent = d.ok ? `${d.status} OK ✓` : `${d.status || "Failed"} ✗`;
+            btn.style.color = d.ok ? "var(--success)" : "var(--error)";
+          } catch { btn.textContent = "Error"; btn.style.color = "var(--error)"; }
+          setTimeout(() => { btn.textContent = "Test"; btn.disabled = false; btn.style.color = ""; }, 3000);
+        });
+      });
+      listEl.querySelectorAll(".custom-api-delete-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          btn.textContent = "Removing...";
+          await fetch(`/custom-apis/${btn.dataset.apiId}`, { method: "DELETE" });
+          loadCustomApis();
+          refreshIntegrationChips();
+        });
+      });
+    } catch {
+      listEl.innerHTML = '<div style="color:var(--error);font-size:12px;">Failed to load custom APIs</div>';
+    }
+  }
+
+  async function showAddCustomApiForm() {
+    const container = document.getElementById("custom-api-form-container");
+    if (!container) return;
+    if (container.querySelector(".custom-api-form")) { container.innerHTML = ""; return; }
+
+    // Load templates
+    let templates = [];
+    try {
+      const r = await fetch("/custom-apis/templates");
+      const d = await r.json();
+      templates = d.templates || [];
+    } catch {}
+
+    const form = document.createElement("div");
+    form.className = "custom-api-form";
+    form.innerHTML = `
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px;">Add a Custom API</div>
+      ${templates.length ? `
+        <select id="api-template-select" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);font-size:12px;margin-bottom:8px;">
+          <option value="">Choose a template or enter manually...</option>
+          ${templates.map(t => `<option value="${escapeHtml(JSON.stringify(t))}">${escapeHtml(t.name)} — ${escapeHtml(t.description)}</option>`).join("")}
+        </select>
+      ` : ""}
+      <input class="capi-input" id="capi-name" type="text" placeholder="Name (e.g. Stripe, My CRM)" autocomplete="off">
+      <input class="capi-input" id="capi-url" type="url" placeholder="Base URL (e.g. https://api.example.com/v1)" autocomplete="off">
+      <select class="capi-input" id="capi-auth" style="padding:8px;">
+        <option value="bearer">Bearer Token</option>
+        <option value="api-key">API Key (custom header)</option>
+        <option value="basic">Basic Auth</option>
+        <option value="none">No Auth</option>
+      </select>
+      <div id="capi-auth-fields">
+        <input class="capi-input" id="capi-key" type="password" placeholder="API key or token" autocomplete="off">
+      </div>
+      <input class="capi-input" id="capi-desc" type="text" placeholder="What does this API do? (optional)" autocomplete="off">
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <button id="capi-submit" class="token-wizard-submit" style="flex:1" disabled>Add API</button>
+        <button id="capi-cancel" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;">Cancel</button>
+      </div>
+    `;
+    container.appendChild(form);
+
+    const nameEl = form.querySelector("#capi-name");
+    const urlEl = form.querySelector("#capi-url");
+    const authEl = form.querySelector("#capi-auth");
+    const keyEl = form.querySelector("#capi-key");
+    const descEl = form.querySelector("#capi-desc");
+    const submitBtn = form.querySelector("#capi-submit");
+    const cancelBtn = form.querySelector("#capi-cancel");
+    const authFields = form.querySelector("#capi-auth-fields");
+    const templateSelect = form.querySelector("#api-template-select");
+
+    // Template selector
+    if (templateSelect) {
+      templateSelect.addEventListener("change", () => {
+        if (!templateSelect.value) return;
+        try {
+          const t = JSON.parse(templateSelect.value);
+          nameEl.value = t.name || "";
+          urlEl.value = t.baseUrl || "";
+          authEl.value = t.authType || "bearer";
+          descEl.value = t.description || "";
+          if (t.headerName) {
+            updateAuthFields();
+            const headerEl = form.querySelector("#capi-header");
+            if (headerEl) headerEl.value = t.headerName;
+          }
+          updateAuthFields();
+          checkValid();
+          keyEl.focus();
+        } catch {}
+      });
+    }
+
+    function updateAuthFields() {
+      const type = authEl.value;
+      if (type === "api-key") {
+        authFields.innerHTML = `
+          <input class="capi-input" id="capi-header" type="text" placeholder="Header name (e.g. X-API-Key)" value="X-API-Key" autocomplete="off">
+          <input class="capi-input" id="capi-key" type="password" placeholder="API key" autocomplete="off">
+        `;
+      } else if (type === "basic") {
+        authFields.innerHTML = `
+          <input class="capi-input" id="capi-username" type="text" placeholder="Username" autocomplete="off">
+          <input class="capi-input" id="capi-password" type="password" placeholder="Password" autocomplete="off">
+        `;
+      } else if (type === "none") {
+        authFields.innerHTML = "";
+      } else {
+        authFields.innerHTML = `<input class="capi-input" id="capi-key" type="password" placeholder="Bearer token" autocomplete="off">`;
+      }
+      // Re-wire validation
+      authFields.querySelectorAll("input").forEach(i => i.addEventListener("input", checkValid));
+    }
+
+    function checkValid() {
+      submitBtn.disabled = !nameEl.value.trim() || !urlEl.value.trim();
+    }
+
+    [nameEl, urlEl, descEl].forEach(el => el.addEventListener("input", checkValid));
+    authEl.addEventListener("change", () => { updateAuthFields(); checkValid(); });
+    cancelBtn.addEventListener("click", () => form.remove());
+
+    submitBtn.addEventListener("click", async () => {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Adding...";
+      const body = {
+        name: nameEl.value.trim(),
+        baseUrl: urlEl.value.trim(),
+        authType: authEl.value,
+        description: descEl.value.trim(),
+      };
+      const keyInput = form.querySelector("#capi-key");
+      const headerInput = form.querySelector("#capi-header");
+      const usernameInput = form.querySelector("#capi-username");
+      const passwordInput = form.querySelector("#capi-password");
+      if (keyInput) body.apiKey = keyInput.value.trim();
+      if (headerInput) body.headerName = headerInput.value.trim();
+      if (usernameInput) body.username = usernameInput.value.trim();
+      if (passwordInput) body.password = passwordInput.value.trim();
+
+      try {
+        const r = await fetch("/custom-apis", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        const d = await r.json();
+        if (d.ok) {
+          form.remove();
+          loadCustomApis();
+          refreshIntegrationChips();
+        } else {
+          submitBtn.textContent = d.error || "Failed";
+          submitBtn.disabled = false;
+        }
+      } catch {
+        submitBtn.textContent = "Failed — try again";
+        submitBtn.disabled = false;
+      }
+    });
+
+    nameEl.focus();
   }
 
   function renderIntegrationCard(i) {

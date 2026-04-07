@@ -1117,6 +1117,175 @@ app.post("/integrations/:id/test", localOnly, rateLimit(60000, 5), async (req, r
   res.json(await testMcpServer(req.params.id));
 });
 
+// ============================================
+// Custom API Hub — users can add any API
+// Stored in ~/.delt/custom-apis.json (encrypted)
+// ============================================
+const customApisPath = path.join(deltDataDir, "custom-apis.json");
+
+function loadCustomApis() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(customApisPath, "utf-8"));
+    return cryptoLib.decryptData(raw);
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomApis(apis) {
+  const encrypted = cryptoLib.encryptData(apis);
+  const tmp = customApisPath + ".tmp." + process.pid;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(encrypted), { mode: 0o600 });
+    fs.renameSync(tmp, customApisPath);
+  } catch (err) {
+    try { fs.unlinkSync(tmp); } catch {}
+    console.error("Failed to save custom APIs:", err.message);
+  }
+  mcpLib.invalidateMcpCache();
+}
+
+// List all custom APIs
+app.get("/custom-apis", (req, res) => {
+  const apis = loadCustomApis();
+  // Strip credentials from response
+  const safe = apis.map(a => ({
+    id: a.id,
+    name: a.name,
+    baseUrl: a.baseUrl,
+    authType: a.authType,
+    description: a.description,
+    createdAt: a.createdAt,
+    hasKey: !!(a.apiKey || a.username),
+  }));
+  res.json({ apis: safe });
+});
+
+// Add a custom API
+app.post("/custom-apis", localOnly, rateLimit(60000, 10), (req, res) => {
+  const { name, baseUrl, authType, apiKey, headerName, username, password, description } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: "Name required" });
+  if (!baseUrl || !baseUrl.trim()) return res.status(400).json({ error: "Base URL required" });
+
+  const validAuthTypes = ["bearer", "api-key", "basic", "none"];
+  if (authType && !validAuthTypes.includes(authType)) {
+    return res.status(400).json({ error: `Auth type must be one of: ${validAuthTypes.join(", ")}` });
+  }
+
+  const apis = loadCustomApis();
+  const newApi = {
+    id: uuidv4(),
+    name: name.trim(),
+    baseUrl: baseUrl.trim().replace(/\/+$/, ""),
+    authType: authType || "none",
+    apiKey: apiKey?.trim() || "",
+    headerName: headerName?.trim() || "",
+    username: username?.trim() || "",
+    password: password?.trim() || "",
+    description: (description || "").trim(),
+    createdAt: new Date().toISOString(),
+  };
+  apis.push(newApi);
+  saveCustomApis(apis);
+
+  // Ensure mcp-fetch is enabled for custom API calls
+  const creds = loadCredentials();
+  if (!creds["custom-api"]?.enabled) {
+    saveCredential("custom-api", { type: "enable" });
+  }
+
+  res.json({ ok: true, id: newApi.id });
+});
+
+// Update a custom API
+app.put("/custom-apis/:id", localOnly, (req, res) => {
+  const apis = loadCustomApis();
+  const idx = apis.findIndex(a => a.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+
+  const { name, baseUrl, authType, apiKey, headerName, username, password, description } = req.body;
+  if (name) apis[idx].name = name.trim();
+  if (baseUrl) apis[idx].baseUrl = baseUrl.trim().replace(/\/+$/, "");
+  if (authType) apis[idx].authType = authType;
+  if (apiKey !== undefined) apis[idx].apiKey = apiKey.trim();
+  if (headerName !== undefined) apis[idx].headerName = headerName.trim();
+  if (username !== undefined) apis[idx].username = username.trim();
+  if (password !== undefined) apis[idx].password = password.trim();
+  if (description !== undefined) apis[idx].description = description.trim();
+
+  saveCustomApis(apis);
+  res.json({ ok: true });
+});
+
+// Delete a custom API
+app.delete("/custom-apis/:id", localOnly, (req, res) => {
+  let apis = loadCustomApis();
+  apis = apis.filter(a => a.id !== req.params.id);
+  saveCustomApis(apis);
+
+  // Disable mcp-fetch if no custom APIs remain
+  if (apis.length === 0) {
+    deleteCredential("custom-api");
+  }
+
+  res.json({ ok: true });
+});
+
+// Test a custom API (basic connectivity check)
+app.post("/custom-apis/:id/test", localOnly, rateLimit(60000, 10), async (req, res) => {
+  const apis = loadCustomApis();
+  const api = apis.find(a => a.id === req.params.id);
+  if (!api) return res.status(404).json({ ok: false, error: "Not found" });
+
+  try {
+    const headers = {};
+    if (api.authType === "bearer" && api.apiKey) {
+      headers["Authorization"] = `Bearer ${api.apiKey}`;
+    } else if (api.authType === "api-key" && api.apiKey) {
+      headers[api.headerName || "X-API-Key"] = api.apiKey;
+    } else if (api.authType === "basic" && api.username) {
+      headers["Authorization"] = `Basic ${Buffer.from(`${api.username}:${api.password}`).toString("base64")}`;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    const testRes = await fetch(api.baseUrl, { method: "GET", headers, signal: controller.signal });
+    clearTimeout(timeout);
+
+    res.json({ ok: testRes.status < 500, status: testRes.status, statusText: testRes.statusText });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
+  }
+});
+
+// Pre-built API templates
+app.get("/custom-apis/templates", (req, res) => {
+  res.json({ templates: API_TEMPLATES });
+});
+
+const API_TEMPLATES = [
+  { name: "OpenAI", baseUrl: "https://api.openai.com/v1", authType: "bearer", description: "GPT models, DALL-E, embeddings, fine-tuning" },
+  { name: "Anthropic", baseUrl: "https://api.anthropic.com/v1", authType: "api-key", headerName: "x-api-key", description: "Claude models, messages, completions" },
+  { name: "Replicate", baseUrl: "https://api.replicate.com/v1", authType: "bearer", description: "Run ML models — image gen, video, audio, LLMs" },
+  { name: "ElevenLabs", baseUrl: "https://api.elevenlabs.io/v1", authType: "api-key", headerName: "xi-api-key", description: "Text-to-speech, voice cloning, audio generation" },
+  { name: "Resend", baseUrl: "https://api.resend.com", authType: "bearer", description: "Transactional email API — send, track, manage domains" },
+  { name: "Supabase", baseUrl: "https://your-project.supabase.co/rest/v1", authType: "api-key", headerName: "apikey", description: "Postgres database, auth, storage, realtime" },
+  { name: "Vercel", baseUrl: "https://api.vercel.com", authType: "bearer", description: "Deployments, domains, environment variables, projects" },
+  { name: "Cloudflare", baseUrl: "https://api.cloudflare.com/client/v4", authType: "bearer", description: "DNS, Workers, R2 storage, security, analytics" },
+  { name: "Render", baseUrl: "https://api.render.com/v1", authType: "bearer", description: "Deploys, services, databases, environment" },
+  { name: "Railway", baseUrl: "https://backboard.railway.app/graphql/v2", authType: "bearer", description: "Projects, deployments, services, databases" },
+  { name: "Fly.io", baseUrl: "https://api.machines.dev/v1", authType: "bearer", description: "Apps, machines, volumes, secrets" },
+  { name: "Postmark", baseUrl: "https://api.postmarkapp.com", authType: "api-key", headerName: "X-Postmark-Server-Token", description: "Transactional email, templates, inbound processing" },
+  { name: "Plaid", baseUrl: "https://production.plaid.com", authType: "api-key", headerName: "PLAID-SECRET", description: "Banking data, transactions, balances, identity" },
+  { name: "Twitch", baseUrl: "https://api.twitch.tv/helix", authType: "bearer", description: "Streams, users, clips, chat, subscriptions" },
+  { name: "Spotify", baseUrl: "https://api.spotify.com/v1", authType: "bearer", description: "Search, playlists, tracks, albums, user library" },
+  { name: "Discord", baseUrl: "https://discord.com/api/v10", authType: "api-key", headerName: "Authorization", description: "Guilds, channels, messages, members, webhooks" },
+  { name: "Notion (REST)", baseUrl: "https://api.notion.com/v1", authType: "bearer", description: "Pages, databases, blocks, search — direct REST access" },
+  { name: "Airtable (REST)", baseUrl: "https://api.airtable.com/v0", authType: "bearer", description: "Bases, tables, records — direct REST access" },
+  { name: "Lemon Squeezy", baseUrl: "https://api.lemonsqueezy.com/v1", authType: "bearer", description: "Products, orders, subscriptions, license keys" },
+  { name: "Cal.com", baseUrl: "https://api.cal.com/v1", authType: "api-key", headerName: "cal-api-key", description: "Bookings, event types, availability, schedules" },
+];
+
 // Configure OAuth client credentials (first-install setup)
 app.post("/integrations/:id/oauth-setup", localOnly, rateLimit(60000, 5), (req, res) => {
   const { clientId, clientSecret } = req.body;
@@ -1761,6 +1930,34 @@ INTUITIVE BEHAVIOR RULES:
 - If a tool call fails, try once more, then tell the user what happened — don't loop.
 
 When the user asks you to do something with a connected service, use the corresponding MCP tools. If a tool call fails, tell the user — don't fall back to local apps.]${localCtx}
+
+${buildCustomApisContext()}
+`;
+}
+
+// Build context for custom APIs so Claude knows about each one
+function buildCustomApisContext() {
+  const apis = loadCustomApis();
+  if (!apis.length) return "";
+
+  const lines = apis.map(api => {
+    let authInfo = "";
+    switch (api.authType) {
+      case "bearer": authInfo = "Auth: Bearer token (pre-configured)"; break;
+      case "api-key": authInfo = `Auth: API key in ${api.headerName || "X-API-Key"} header (pre-configured)`; break;
+      case "basic": authInfo = "Auth: Basic auth (pre-configured)"; break;
+      default: authInfo = "Auth: None";
+    }
+    return `- **${api.name}** — Base: ${api.baseUrl}\n  ${authInfo}\n  ${api.description || "Custom API"}`;
+  });
+
+  return `[CUSTOM APIs — The user has configured these additional APIs. Use the mcp__fetch__* tools to call them.
+When making requests to these APIs, construct the full URL from the base URL + endpoint path.
+Include the correct auth headers as described for each API.
+
+${lines.join("\n")}
+
+IMPORTANT: For custom APIs, use mcp__fetch__fetch to make HTTP requests. Set the URL, method, headers (including auth), and body as needed. The auth credentials listed above are informational — you must include them in your fetch requests.]
 
 `;
 }

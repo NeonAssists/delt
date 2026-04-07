@@ -1400,6 +1400,45 @@ header {
   white-space: nowrap;
 }
 
+/* Custom API Hub */
+.custom-api-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 6px;
+  background: var(--bg);
+  transition: border-color 0.15s;
+}
+.custom-api-card:hover { border-color: var(--accent); }
+.custom-api-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.custom-api-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.custom-api-url { font-size: 11px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.custom-api-desc { font-size: 11px; color: var(--text-muted); }
+.custom-api-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 12px; }
+
+.custom-api-form {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  margin-top: 8px;
+}
+.capi-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-size: 12px;
+  margin-bottom: 6px;
+  box-sizing: border-box;
+}
+.capi-input:focus { border-color: var(--accent); outline: none; }
+
 .local-access-panel { padding: 14px 0 4px; }
 .local-access-options { display: flex; flex-direction: column; gap: 6px; }
 .local-access-btn {
