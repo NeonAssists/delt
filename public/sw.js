@@ -1,5 +1,6 @@
-// Delt — Service Worker (PWA shell cache + offline fallback)
-const CACHE_NAME = "delt-v3";
+// Delt — Service Worker (PWA offline fallback only)
+// Strategy: ALWAYS use network. Cache is ONLY for offline fallback.
+const CACHE_NAME = "delt-v8";
 const OFFLINE_URL = "/offline.html";
 const SHELL_URLS = [
   "/",
@@ -10,26 +11,34 @@ const SHELL_URLS = [
   "/offline.html",
 ];
 
+// Listen for skip-waiting message from the page
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener("install", (event) => {
+  // Activate immediately — don't wait for old tabs to close
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_URLS))
   );
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
+  // Take control of all pages immediately
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Skip non-GET and API/WS requests
+  // Skip non-GET and API/WS requests entirely
   if (event.request.method !== "GET") return;
   if (url.pathname.startsWith("/health") ||
       url.pathname.startsWith("/config") ||
@@ -45,33 +54,22 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation requests — network first, offline fallback
-  if (event.request.mode === "navigate") {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => caches.match(OFFLINE_URL))
-    );
-    return;
-  }
-
-  // Static assets — stale-while-revalidate
+  // EVERYTHING is network-first. Cache is only for when you're offline.
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const fetched = fetch(event.request).then((response) => {
+    fetch(event.request)
+      .then((response) => {
         if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
-      }).catch(() => cached);
-      return cached || fetched;
-    })
+      })
+      .catch(() => {
+        // Offline — try cache, or show offline page for navigation
+        if (event.request.mode === "navigate") {
+          return caches.match(OFFLINE_URL);
+        }
+        return caches.match(event.request);
+      })
   );
 });

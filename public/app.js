@@ -352,6 +352,27 @@
     statusLabel.textContent = label;
   }
 
+  // Contextual thinking labels — smarter than generic "Thinking..."
+  function getThinkingLabel() {
+    const lastUserMsg = messagesEl ? messagesEl.querySelector(".message.user:last-of-type .message-content") : null;
+    const text = (lastUserMsg?.textContent || "").toLowerCase();
+    if (/email|mail|inbox|send.*message/i.test(text)) return "Checking your email...";
+    if (/calendar|schedule|meeting|appointment/i.test(text)) return "Looking at your calendar...";
+    if (/slack|channel|dm/i.test(text)) return "Checking Slack...";
+    if (/github|pr|pull request|issue|commit|repo/i.test(text)) return "Working with GitHub...";
+    if (/stripe|payment|invoice|subscription|charge/i.test(text)) return "Checking Stripe...";
+    if (/notion|page|database|wiki/i.test(text)) return "Working with Notion...";
+    if (/figma|design|mockup|prototype/i.test(text)) return "Working with Figma...";
+    if (/file|document|pdf|spreadsheet|csv/i.test(text)) return "Working with your files...";
+    if (/search|find|look up|research/i.test(text)) return "Researching...";
+    if (/write|draft|compose|create/i.test(text)) return "Drafting...";
+    if (/summarize|summary|recap|tldr/i.test(text)) return "Summarizing...";
+    if (/analyze|analysis|report|data/i.test(text)) return "Analyzing...";
+    if (/fix|bug|error|broken|debug/i.test(text)) return "Investigating...";
+    if (/plan|strategy|brainstorm|idea/i.test(text)) return "Thinking it through...";
+    return "Thinking...";
+  }
+
   function handleServer(msg) {
     // Route btw-* and pane2-* to their handlers
     if (msg.type && msg.type.startsWith("btw-")) {
@@ -373,7 +394,7 @@
         break;
       case "thinking":
         showTyping();
-        setStatus("busy", "Thinking...");
+        setStatus("busy", getThinkingLabel());
         break;
       case "stream":
         handleStream(msg.data);
@@ -407,6 +428,9 @@
       case "action":
         // Server-triggered UI action (Claude decided to do something)
         executeAction(msg.action, msg.params);
+        break;
+      case "cron-result":
+        showCronNotification(msg);
         break;
     }
   }
@@ -536,9 +560,35 @@
     completedSteps = [];
   }
 
+  // MCP tool → human-friendly descriptions
+  const MCP_TOOL_LABELS = {
+    gmail: "Checking your email", calendar: "Checking your calendar", sheets: "Working with your spreadsheet",
+    drive: "Accessing your files", slack: "Checking Slack", discord: "Checking Discord",
+    github: "Working with GitHub", linear: "Checking Linear", gitlab: "Working with GitLab",
+    jira: "Checking Jira", vercel: "Checking Vercel", stripe: "Checking Stripe",
+    shopify: "Working with Shopify", salesforce: "Checking Salesforce", hubspot: "Checking HubSpot",
+    pipedrive: "Checking Pipedrive", notion: "Working with Notion", todoist: "Checking your tasks",
+    asana: "Checking Asana", monday: "Checking Monday", airtable: "Working with Airtable",
+    figma: "Working with Figma", dropbox: "Accessing Dropbox", s3: "Accessing cloud storage",
+    resend: "Sending an email", postmark: "Sending an email", sendgrid: "Sending an email",
+    mailgun: "Sending an email", twilio: "Sending a message", supabase: "Querying your database",
+    openai: "Using AI tools", replicate: "Generating content", elevenlabs: "Generating audio",
+  };
+  function descMcpTool(name) {
+    const parts = name.split("__");
+    if (parts.length >= 2) {
+      const server = parts[1].toLowerCase();
+      for (const [key, label] of Object.entries(MCP_TOOL_LABELS)) {
+        if (server.includes(key)) return { label, detail: parts[2] ? parts[2].replace(/_/g, " ") : "" };
+      }
+      return { label: "Using " + parts[1].replace(/-/g, " "), detail: parts[2] ? parts[2].replace(/_/g, " ") : "" };
+    }
+    return null;
+  }
   function descTool(tool) {
     const n = tool.name || "";
     const inp = tool.input || {};
+    if (n.startsWith("mcp__")) { const d = descMcpTool(n); if (d) return d; }
     if (n === "Read" || n.includes("Read"))
       return { label: "Reading a file", detail: shortPath(inp.file_path) };
     if (n === "Write" || n.includes("Write"))
@@ -546,14 +596,16 @@
     if (n === "Edit")
       return { label: "Editing", detail: shortPath(inp.file_path) };
     if (n === "Bash")
-      return { label: "Running a task", detail: (inp.command || "").slice(0, 60) };
+      return { label: "Running a task", detail: (inp.description || inp.command || "").slice(0, 60) };
     if (n === "Glob" || n === "Grep" || n.includes("Search"))
       return { label: "Searching", detail: inp.pattern || inp.query || "" };
     if (n === "Agent")
-      return { label: "Working on a subtask", detail: inp.description || "" };
-    if (n === "WebSearch" || n === "WebFetch")
-      return { label: "Looking something up", detail: "" };
-    return { label: "Working...", detail: "" };
+      return { label: "Delegating to a specialist", detail: inp.description || "" };
+    if (n === "WebSearch")
+      return { label: "Searching the web", detail: inp.query || "" };
+    if (n === "WebFetch")
+      return { label: "Fetching a web page", detail: "" };
+    return { label: "Working on it...", detail: n.replace(/([A-Z])/g, " $1").trim().toLowerCase() };
   }
 
   // (timer and response actions removed — keeping it clean)
@@ -644,11 +696,46 @@
     if (typingEl) { typingEl.remove(); typingEl = null; }
   }
 
-  // --- Error ---
+  // --- Error translation (technical → human) ---
+  const ERROR_TRANSLATIONS = [
+    { match: /EADDRINUSE|port.*in use/i, msg: "Delt is already running in another tab or window.", hint: "Close other tabs running Delt, or restart your computer.", icon: "refresh" },
+    { match: /ECONNREFUSED|connection refused/i, msg: "Can't reach the AI service right now.", hint: "Check your internet connection and try again.", icon: "wifi" },
+    { match: /ENOENT.*claude|claude.*not found|spawn.*ENOENT/i, msg: "Delt's AI engine isn't installed yet.", hint: "Click below to install it.", icon: "download", action: "install" },
+    { match: /timeout|timed? ?out|ETIMEDOUT/i, msg: "That took too long — the AI didn't respond in time.", hint: "Try again with a simpler request, or wait a moment.", icon: "clock" },
+    { match: /ENOMEM|out of memory|heap/i, msg: "Your computer is running low on memory.", hint: "Close some other apps and try again.", icon: "warning" },
+    { match: /rate.?limit|429|too many requests/i, msg: "You've hit the usage limit for now.", hint: "Wait a few minutes, or upgrade your Claude plan.", icon: "pause" },
+    { match: /network|fetch|ERR_NETWORK|ENETUNREACH/i, msg: "Lost connection to the internet.", hint: "Check your Wi-Fi or ethernet and try again.", icon: "wifi" },
+    { match: /MCP.*fail|mcp.*error|server.*failed.*start/i, msg: "One of your connected tools had trouble starting.", hint: "Open Integrations to check which tool isn't working.", icon: "tool", action: "integrations" },
+    { match: /permission|EACCES|EPERM/i, msg: "Delt doesn't have permission to access that.", hint: "Check your file permissions or integration settings.", icon: "lock" },
+    { match: /JSON|parse|syntax/i, msg: "Got an unexpected response.", hint: "Try again. If this keeps happening, restart Delt.", icon: "warning" },
+  ];
+  const ERROR_ICONS = {
+    refresh: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
+    wifi: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>',
+    download: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+    clock: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+    warning: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    pause: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/></svg>',
+    tool: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>',
+    lock: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+    error: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+  };
+  function translateError(raw) {
+    for (const rule of ERROR_TRANSLATIONS) { if (rule.match.test(raw)) return rule; }
+    return { msg: "Something went wrong.", hint: "Try again — if it keeps happening, restart Delt.", icon: "error" };
+  }
   function showError(text) {
+    const t = translateError(text);
     const el = document.createElement("div");
     el.className = "error-banner";
-    el.textContent = text;
+    el.innerHTML = '<div class="error-icon">' + (ERROR_ICONS[t.icon] || ERROR_ICONS.error) + '</div>' +
+      '<div class="error-body"><div class="error-msg">' + escapeHtml(t.msg) + '</div><div class="error-hint">' + escapeHtml(t.hint) + '</div></div>' +
+      (t.action === "integrations" ? '<button class="error-action-btn" data-action="integrations">Open Integrations</button>' : '') +
+      (t.action === "install" ? '<button class="error-action-btn" data-action="install">Install now</button>' : '') +
+      '<button class="error-dismiss-btn" title="Dismiss">&times;</button>';
+    const actionBtn = el.querySelector(".error-action-btn");
+    if (actionBtn) actionBtn.addEventListener("click", () => { if (actionBtn.dataset.action === "integrations" && document.getElementById("integrations-btn")) document.getElementById("integrations-btn").click(); el.remove(); });
+    el.querySelector(".error-dismiss-btn").addEventListener("click", () => el.remove());
     messagesEl.appendChild(el);
     scrollDown();
     setBusy(false);
@@ -1320,6 +1407,10 @@
     pane2Messages.innerHTML = "";
     pane2Welcome.classList.remove("hidden");
     pane2Pane.reset();
+    // Tell server to kill any stale pane2 process and reset its state
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "pane2-new" }));
+    }
     // Render tools in pane 2
     if (config?.tools) {
       renderPane2Tools(config.tools);
@@ -1679,6 +1770,254 @@
   if (btwSendBtn) btwSendBtn.addEventListener("click", () => btwPane.send());
   if (btwStopBtn) btwStopBtn.addEventListener("click", () => btwPane.stop());
 
+  // --- Crons Panel ---
+  const cronsBtn = document.getElementById("crons-btn");
+  const cronsPanel = document.getElementById("crons-panel");
+  const cronsOverlay = document.getElementById("crons-overlay");
+  const cronsClose = document.getElementById("crons-close");
+  const cronsBody = document.getElementById("crons-body");
+  let cronsOpen = false;
+  let cronsData = [];
+
+  function openCrons() {
+    cronsOpen = true;
+    cronsPanel.classList.remove("hidden");
+    cronsOverlay.classList.remove("hidden");
+    loadCronsPanel();
+  }
+  function closeCrons() {
+    cronsOpen = false;
+    cronsPanel.classList.add("hidden");
+    cronsOverlay.classList.add("hidden");
+  }
+  if (cronsBtn) cronsBtn.addEventListener("click", openCrons);
+  if (cronsClose) cronsClose.addEventListener("click", closeCrons);
+  if (cronsOverlay) cronsOverlay.addEventListener("click", closeCrons);
+
+  function formatSchedule(s) {
+    if (!s) return "Unknown";
+    if (s.type === "interval") return `Every ${s.minutes} min`;
+    const h = String(s.hour || 0).padStart(2, "0");
+    const m = String(s.minute || 0).padStart(2, "0");
+    const label = s.type === "weekday" ? "Weekdays" : "Daily";
+    return `${label} at ${h}:${m}`;
+  }
+
+  function timeAgo(ts) {
+    if (!ts) return "Never";
+    const diff = Date.now() - ts;
+    if (diff < 60000) return "just now";
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    return `${Math.floor(diff / 86400000)}d ago`;
+  }
+
+  function renderCronsPanel(crons, showForm) {
+    let html = "";
+
+    if (showForm) {
+      html += `<div class="cron-create-form" id="cron-form">
+        <p class="cron-form-title">New scheduled task</p>
+        <div class="cron-form-field">
+          <label>Name</label>
+          <input type="text" id="cf-name" placeholder="Morning briefing" maxlength="80">
+        </div>
+        <div class="cron-form-field">
+          <label>Prompt</label>
+          <textarea id="cf-prompt" placeholder="Check my email and summarize what needs attention today"></textarea>
+        </div>
+        <div class="cron-form-field">
+          <label>Schedule</label>
+          <div class="cron-schedule-row">
+            <select id="cf-type">
+              <option value="interval">Every N minutes</option>
+              <option value="daily">Daily at time</option>
+              <option value="weekday">Weekdays at time</option>
+            </select>
+            <input type="number" id="cf-minutes" min="1" max="10080" value="30" placeholder="30">
+            <input type="time" id="cf-time" value="09:00" style="display:none">
+          </div>
+        </div>
+        <div class="cron-form-actions">
+          <button class="cron-cancel-btn" id="cf-cancel">Cancel</button>
+          <button class="cron-save-btn" id="cf-save">Save</button>
+        </div>
+      </div>`;
+    } else {
+      html += `<button class="cron-add-btn" id="cron-add-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New scheduled task
+      </button>`;
+    }
+
+    if (!crons.length && !showForm) {
+      html += `<div class="cron-empty">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 12px;display:block;opacity:0.3"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        No scheduled tasks yet.<br>Create one to automate recurring prompts.
+      </div>`;
+    }
+
+    for (const cron of crons) {
+      html += `<div class="cron-item" data-id="${cron.id}">
+        <div class="cron-item-header">
+          <span class="cron-name">${escapeHtmlStr(cron.name)}</span>
+          <button class="cron-run-btn" data-run="${cron.id}" title="Run now">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Run
+          </button>
+          <label class="cron-toggle" title="${cron.enabled ? "Enabled" : "Disabled"}">
+            <input type="checkbox" data-toggle="${cron.id}" ${cron.enabled ? "checked" : ""}>
+            <span class="cron-toggle-slider"></span>
+          </label>
+          <button class="cron-delete-btn" data-delete="${cron.id}" title="Delete">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
+        </div>
+        <div class="cron-meta">
+          <span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            ${escapeHtmlStr(formatSchedule(cron.schedule))}
+          </span>
+          <span>Last: ${timeAgo(cron.lastRun)}</span>
+        </div>
+        <div class="cron-prompt-preview">${escapeHtmlStr(cron.prompt)}</div>
+        <button class="cron-runs-toggle" data-runs="${cron.id}">View history</button>
+        <div class="cron-runs-list hidden" id="runs-${cron.id}"></div>
+      </div>`;
+    }
+
+    cronsBody.innerHTML = html;
+
+    // Form interactions
+    const cfType = document.getElementById("cf-type");
+    const cfMinutes = document.getElementById("cf-minutes");
+    const cfTime = document.getElementById("cf-time");
+    if (cfType) {
+      cfType.addEventListener("change", () => {
+        const isInterval = cfType.value === "interval";
+        cfMinutes.style.display = isInterval ? "" : "none";
+        cfTime.style.display = isInterval ? "none" : "";
+      });
+    }
+    const cfCancel = document.getElementById("cf-cancel");
+    if (cfCancel) cfCancel.addEventListener("click", () => renderCronsPanel(cronsData, false));
+    const cfSave = document.getElementById("cf-save");
+    if (cfSave) cfSave.addEventListener("click", saveCron);
+    const addBtn = document.getElementById("cron-add-btn");
+    if (addBtn) addBtn.addEventListener("click", () => renderCronsPanel(cronsData, true));
+
+    // Item interactions
+    cronsBody.querySelectorAll("[data-toggle]").forEach(el => {
+      el.addEventListener("change", async () => {
+        await fetch(`/crons/${el.dataset.toggle}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: el.checked }),
+        });
+        const idx = cronsData.findIndex(c => c.id === el.dataset.toggle);
+        if (idx >= 0) cronsData[idx].enabled = el.checked;
+      });
+    });
+
+    cronsBody.querySelectorAll("[data-delete]").forEach(el => {
+      el.addEventListener("click", async () => {
+        if (!confirm("Delete this scheduled task?")) return;
+        await fetch(`/crons/${el.dataset.delete}`, { method: "DELETE" });
+        cronsData = cronsData.filter(c => c.id !== el.dataset.delete);
+        renderCronsPanel(cronsData, false);
+      });
+    });
+
+    cronsBody.querySelectorAll("[data-run]").forEach(el => {
+      el.addEventListener("click", async () => {
+        el.innerHTML = "Running\u2026";
+        el.disabled = true;
+        await fetch(`/crons/${el.dataset.run}/run`, { method: "POST" });
+        setTimeout(() => {
+          el.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run`;
+          el.disabled = false;
+        }, 1500);
+      });
+    });
+
+    cronsBody.querySelectorAll("[data-runs]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.runs;
+        const runsEl = document.getElementById(`runs-${id}`);
+        if (!runsEl.classList.contains("hidden")) {
+          runsEl.classList.add("hidden");
+          btn.textContent = "View history";
+          return;
+        }
+        btn.textContent = "Loading\u2026";
+        const res = await fetch(`/crons/${id}/runs`);
+        const runs = await res.json();
+        if (!runs.length) {
+          runsEl.innerHTML = `<div style="font-size:12px;color:var(--text-faint);padding:4px 0">No runs yet</div>`;
+        } else {
+          runsEl.innerHTML = runs.map(r => `
+            <div class="cron-run-entry">
+              <div class="cron-run-time">${new Date(r.timestamp).toLocaleString()} \u2014 ${(r.duration/1000).toFixed(1)}s</div>
+              ${r.error ? `<div class="cron-run-error">${escapeHtmlStr(r.error)}</div>` : `<div class="cron-run-output">${escapeHtmlStr(r.output || "(no output)")}</div>`}
+            </div>`).join("");
+        }
+        runsEl.classList.remove("hidden");
+        btn.textContent = "Hide history";
+      });
+    });
+  }
+
+  async function loadCronsPanel() {
+    cronsBody.innerHTML = `<div class="integrations-loading">Loading...</div>`;
+    try {
+      const res = await fetch("/crons");
+      cronsData = await res.json();
+      renderCronsPanel(cronsData, false);
+    } catch {
+      cronsBody.innerHTML = `<div class="integrations-loading">Failed to load</div>`;
+    }
+  }
+
+  async function saveCron() {
+    const name = document.getElementById("cf-name")?.value.trim();
+    const prompt = document.getElementById("cf-prompt")?.value.trim();
+    const type = document.getElementById("cf-type")?.value;
+    const minutes = parseInt(document.getElementById("cf-minutes")?.value || "30", 10);
+    const time = document.getElementById("cf-time")?.value || "09:00";
+    if (!name || !prompt) { alert("Name and prompt are required"); return; }
+
+    let schedule;
+    if (type === "interval") {
+      schedule = { type: "interval", minutes: Math.max(1, minutes) };
+    } else {
+      const [hour, minute] = time.split(":").map(Number);
+      schedule = { type, hour, minute };
+    }
+
+    const res = await fetch("/crons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, prompt, schedule }),
+    });
+    const cron = await res.json();
+    cronsData.unshift(cron);
+    renderCronsPanel(cronsData, false);
+  }
+
+  function showCronNotification(msg) {
+    const el = document.createElement("div");
+    el.className = "cron-notification";
+    el.innerHTML = `<div class="cron-notification-title">\u23F0 ${escapeHtmlStr(msg.cronName || "Cron")}</div>
+      <div class="cron-notification-body">${msg.error ? "Error: " + escapeHtmlStr(msg.error) : escapeHtmlStr(msg.output || "Done")}</div>`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 6000);
+    if (cronsOpen) loadCronsPanel();
+  }
+
+  function escapeHtmlStr(s) {
+    return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
   // --- Integrations Panel ---
   const integrationsBtn = document.getElementById("integrations-btn");
   const integrationsPanel = document.getElementById("integrations-panel");
@@ -1704,10 +2043,10 @@
     google: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>`,
     github: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#181717"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6.1-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.3 2.8.2 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.2.9 2.4v3.5c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/></svg>`,
     slack: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M5.04 15.16a2.53 2.53 0 0 1-2.52 2.53A2.53 2.53 0 0 1 0 15.16a2.53 2.53 0 0 1 2.52-2.52h2.52v2.52zm1.27 0a2.53 2.53 0 0 1 2.52-2.52 2.53 2.53 0 0 1 2.52 2.52v6.32A2.53 2.53 0 0 1 8.83 24a2.53 2.53 0 0 1-2.52-2.52v-6.32z" fill="#E01E5A"/><path d="M8.83 5.04a2.53 2.53 0 0 1-2.52-2.52A2.53 2.53 0 0 1 8.83 0a2.53 2.53 0 0 1 2.52 2.52v2.52H8.83zm0 1.27a2.53 2.53 0 0 1 2.52 2.52 2.53 2.53 0 0 1-2.52 2.52H2.52A2.53 2.53 0 0 1 0 8.83a2.53 2.53 0 0 1 2.52-2.52h6.31z" fill="#36C5F0"/><path d="M18.96 8.83a2.53 2.53 0 0 1 2.52-2.52A2.53 2.53 0 0 1 24 8.83a2.53 2.53 0 0 1-2.52 2.52h-2.52V8.83zm-1.27 0a2.53 2.53 0 0 1-2.52 2.52 2.53 2.53 0 0 1-2.52-2.52V2.52A2.53 2.53 0 0 1 15.17 0a2.53 2.53 0 0 1 2.52 2.52v6.31z" fill="#2EB67D"/><path d="M15.17 18.96a2.53 2.53 0 0 1 2.52 2.52A2.53 2.53 0 0 1 15.17 24a2.53 2.53 0 0 1-2.52-2.52v-2.52h2.52zm0-1.27a2.53 2.53 0 0 1-2.52-2.52 2.53 2.53 0 0 1 2.52-2.52h6.31A2.53 2.53 0 0 1 24 15.17a2.53 2.53 0 0 1-2.52 2.52h-6.31z" fill="#ECB22E"/></svg>`,
-    notion: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#000"><path d="M4.46 4.63l10.08-.73c.25-.02.3-.01.46.12l2.1 1.47c.17.12.22.15.22.28v12.65c0 .37-.14.58-.57.61l-12.1.7c-.32.02-.48-.03-.64-.24L2.16 17.1c-.18-.24-.25-.42-.25-.63V5.33c0-.27.14-.54.55-.58l2-.12zm10.3 1.75c.05.24 0 .47 0 .72l-8.5.5v8.85c0 .37.2.53.46.51l7.74-.45c.27-.02.37-.16.37-.42V7.7c0-.24.25-.36.47-.34l1.16.08c.22.02.25.15.25.36v9c0 .68-.34 1.07-1.05 1.11l-9.6.55c-.7.04-1.06-.13-1.42-.58l-1.8-2.37c-.22-.3-.36-.52-.36-.86V6.83c0-.55.22-.9.73-.94l11.55-.67v1.16z"/></svg>`,
+    notion: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M4.5 3.5l10.3-.7c.3 0 .4 0 .5.1l2.6 1.8c.2.1.3.2.3.4v13.1c0 .4-.2.7-.6.7l-12.5.7c-.4 0-.5 0-.7-.3l-2.2-2.8c-.2-.3-.3-.5-.3-.8V4.3c0-.4.2-.7.6-.8z" fill="white" stroke="#000" stroke-width="1"/><path d="M14.5 6.5V18c0 .3-.1.4-.4.4l-7.1.4c-.3 0-.4-.1-.4-.4V7.1c0-.2.1-.4.4-.4l7.1-.4c.3 0 .4.1.4.2z" fill="none" stroke="#000" stroke-width=".7"/><line x1="9" y1="9.5" x2="12.5" y2="9.5" stroke="#000" stroke-width=".8"/><line x1="9" y1="11.5" x2="12.5" y2="11.5" stroke="#000" stroke-width=".8"/><line x1="9" y1="13.5" x2="11" y2="13.5" stroke="#000" stroke-width=".8"/></svg>`,
     linear: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M2.77 17.72a11.94 11.94 0 0 1-.72-2.26L11.52 24c.8-.14 1.56-.38 2.27-.72L2.77 17.72zm-1.5-4.5a12.08 12.08 0 0 1 .27-2.72L13.46 22.41c.93-.38 1.8-.88 2.59-1.48L1.78 8.66A12.04 12.04 0 0 0 .58 11.5l8.35 11.94a11.93 11.93 0 0 1-2.38-.44L1.27 13.22zm2.02-6.2L19 22.73a12.05 12.05 0 0 0 2.1-2.1L5.38 4.92A12.02 12.02 0 0 0 3.3 7.02zm4.1-3.58l15.17 11.55c.15-.63.26-1.28.32-1.94L9.35 1.98a12 12 0 0 0-1.96.46zM12 0C9.97 0 8.07.52 6.4 1.42L22.58 17.6A12 12 0 0 0 24 12c0-6.63-5.37-12-12-12z" fill="#5E6AD2"/></svg>`,
-    stripe: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#635BFF"><path d="M13.98 11.01c0-1.47-.68-2.04-1.78-2.04-.75 0-1.58.28-2.2.74v5.58H7.5V7.54h2.5v.86c.8-.67 1.85-1.06 2.97-1.06 2.36 0 3.51 1.37 3.51 3.74v5.21h-2.5v-5.28zM4.5 7.34c.85 0 1.54-.7 1.54-1.56A1.55 1.55 0 0 0 4.5 4.22c-.86 0-1.55.7-1.55 1.56 0 .86.7 1.56 1.55 1.56zm1.25.2H3.24v8.75h2.5V7.54z"/></svg>`,
-    shopify: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#95BF47"><path d="M15.34 3.84a.12.12 0 0 0-.1-.1 1.78 1.78 0 0 0-.5-.04s-1.06.03-1.76.08c-.12-.65-.52-1.8-1.74-1.8h-.08A1.43 1.43 0 0 0 10 2.5c-1.67.34-2.48 2.12-2.74 3.2l-1.9.59s-.56.18-.58.2A.87.87 0 0 0 4.2 7l-2.4 18.5L15.67 28l7.13-1.54S15.4 4.02 15.34 3.84zM11.4 5.2l-1.24.38c.25-.96.72-1.92 1.62-2.27A3.6 3.6 0 0 1 11.4 5.2zm-1.83.57L7.72 6.4A4.35 4.35 0 0 1 9.56 3.2zm.87-2.64c.1 0 .2.04.28.1-.97.46-2 1.62-2.44 3.93l-2 .62c.42-1.4 1.42-4.67 4.16-4.67v.02z"/></svg>`,
+    stripe: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#635BFF"><path d="M13.48 8.82c0-.7.58-1 1.53-1a10 10 0 0 1 4.42 1.14V5.19a11.82 11.82 0 0 0-4.42-.82c-3.63 0-6.04 1.9-6.04 5.06 0 4.94 6.8 4.15 6.8 6.28 0 .83-.72 1.1-1.73 1.1a11.58 11.58 0 0 1-4.83-1.33v3.82a12.26 12.26 0 0 0 4.83 1.02c3.72 0 6.27-1.84 6.27-5.05 0-5.33-6.83-4.38-6.83-6.45z"/></svg>`,
+    shopify: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M16.1 4.5c0-.1-.1-.1-.2-.1s-1.1-.1-1.1-.1-.7-.7-.8-.8c-.1-.1-.2-.1-.3 0l-.4.1c-.2-.7-.6-1.3-1.3-1.3h-.1c-.2-.3-.5-.4-.7-.4-1.7 0-2.6 2.2-2.8 3.3l-1.6.5c-.5.2-.5.2-.6.6L4.8 18.2l8.8 1.6 4.8-1L16.1 4.5z" fill="#95BF47"/><path d="M15.9 4.4s-1.1-.1-1.1-.1-.7-.7-.8-.8v15.3l4.8-1L16.1 4.5c0-.1-.1-.1-.2-.1z" fill="#5E8E3E"/><path d="M12 8.4l-.5 1.9s-.6-.3-1.2-.3c-1 0-1 .6-1 .8 0 .9 2.3 1.2 2.3 3.2 0 1.6-1 2.6-2.4 2.6-1.6 0-2.5-1-2.5-1l.4-1.5s.9.7 1.6.7c.5 0 .7-.4.7-.7 0-1.1-1.9-1.2-1.9-3 0-1.6 1.1-3.1 3.3-3.1.9 0 1.2.3 1.2.3z" fill="white"/></svg>`,
     hubspot: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#FF7A59"><path d="M18.16 7.58V4.95a2.24 2.24 0 0 0 1.3-2.02 2.26 2.26 0 1 0-4.51 0c0 .87.5 1.62 1.22 2v2.65a5.76 5.76 0 0 0-2.8 1.34L6.42 3.9a2.6 2.6 0 0 0 .09-.64 2.54 2.54 0 1 0-2.55 2.54c.5 0 .97-.15 1.37-.42l6.82 4.92a5.72 5.72 0 0 0-.03 7.24l-2.1 2.1a2.13 2.13 0 0 0-.63-.1 2.15 2.15 0 1 0 2.15 2.15c0-.22-.04-.43-.1-.63l2.07-2.07A5.76 5.76 0 1 0 18.16 7.58zm-1 9.87a3.42 3.42 0 1 1 0-6.84 3.42 3.42 0 0 1 0 6.84z"/></svg>`,
     trello: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#0052CC"><rect x="1" y="1" width="22" height="22" rx="3.5"/><rect x="3.5" y="3.5" width="7" height="15" rx="1.5" fill="white"/><rect x="13.5" y="3.5" width="7" height="9" rx="1.5" fill="white"/></svg>`,
     asana: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#F06A6A"><circle cx="12" cy="6.5" r="4.5"/><circle cx="5" cy="17" r="4.5"/><circle cx="19" cy="17" r="4.5"/></svg>`,
@@ -1720,22 +2059,22 @@
     airtable: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M11.5 2.3L3 5.8v.4l8.5 3.3.5.1.5-.1L21 6.2v-.4l-8.5-3.5h-1z" fill="#FCB400"/><path d="M12.5 11v10.6l8.3-3.4c.1 0 .2-.2.2-.3V7.5l-8.5 3.5z" fill="#18BFFF"/><path d="M11.5 11L3 7.5v10.4c0 .1.1.3.2.3l8.3 3.4V11z" fill="#F82B60"/></svg>`,
     mailchimp: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#FFE01B"><circle cx="12" cy="12" r="11"/><path d="M12 6c-3.3 0-6 2.7-6 6s2.7 6 6 6 6-2.7 6-6-2.7-6-6-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4z" fill="#241C15"/></svg>`,
     twilio: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#F22F46"><circle cx="12" cy="12" r="11"/><circle cx="9.5" cy="9.5" r="2" fill="white"/><circle cx="14.5" cy="9.5" r="2" fill="white"/><circle cx="9.5" cy="14.5" r="2" fill="white"/><circle cx="14.5" cy="14.5" r="2" fill="white"/></svg>`,
-    sendgrid: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#1A82E2"><path d="M1 8h7v7H1V8zm7-7h7v7H8V1zm7 7h8v7h-8V8zm0 7h-7v7h7v-7z"/></svg>`,
-    salesforce: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#00A1E0"><path d="M10 4.5a4.5 4.5 0 0 1 7.6-2 5 5 0 0 1 5.4 6 4.5 4.5 0 0 1-2 8.5H5a4 4 0 0 1-1-7.9A5.5 5.5 0 0 1 10 4.5z"/></svg>`,
-    zoom: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#2D8CFF"><rect x="1" y="4" width="22" height="16" rx="4"/><path d="M5 8h9v5.5c0 .8-.7 1.5-1.5 1.5H5V8z" fill="white"/><path d="M15 10l4-2.5v9L15 14v-4z" fill="white"/></svg>`,
+    sendgrid: `<svg width="20" height="20" viewBox="0 0 24 24"><rect x="1" y="1" width="7.3" height="7.3" fill="#9DE1F3"/><rect x="8.3" y="1" width="7.3" height="7.3" fill="#27B4E1"/><rect x="15.6" y="1" width="7.3" height="7.3" fill="#1A82E2"/><rect x="1" y="8.3" width="7.3" height="7.3" fill="#27B4E1"/><rect x="8.3" y="8.3" width="7.3" height="7.3" fill="#1A82E2"/><rect x="1" y="15.6" width="7.3" height="7.3" fill="#1A82E2"/></svg>`,
+    salesforce: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M10.1 4.4c.8-1.3 2.2-2.1 3.8-2.1 1.8 0 3.3 1 4.1 2.4a5.2 5.2 0 0 1 1.7-.3c2.9 0 5.3 2.4 5.3 5.3 0 2.9-2.4 5.3-5.3 5.3-.5 0-.9-.1-1.4-.2a4.6 4.6 0 0 1-3.8 2c-.9 0-1.7-.3-2.4-.7a5 5 0 0 1-4.1 2.2c-2.1 0-3.9-1.3-4.6-3.2-.4.1-.8.1-1.2.1C.9 15.2-.7 13.1.3 11c-.6-.9-1-2-1-3.1 0-3 2.5-5.4 5.5-5.4 1.3 0 2.5.5 3.5 1.3.5-.6 1.1-1 1.8-1.4z" fill="#00A1E0"/></svg>`,
+    zoom: `<svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#2D8CFF"/><path d="M6 8.5h7.5c.6 0 1 .4 1 1V15L17.5 17V7L14.5 9H7c-.6 0-1 .4-1 1v3.5c0 .6.4 1 1 1h7" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
     vscode: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M17.58 2L7.72 10.16 3.87 7.17 2 8.04v7.92l1.87.87 3.85-2.99L17.58 22 22 20.08V3.92L17.58 2zM7.72 14.17L5.04 12l2.68-2.17v4.34zm9.86 3.93L12.7 12l4.88-6.1v12.2z" fill="#007ACC"/></svg>`,
     computer: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
     api: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
-    todoist: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#E44332"><path d="M21 4.5H3c-.6 0-1 .4-1 1v13c0 .6.4 1 1 1h18c.6 0 1-.4 1-1v-13c0-.6-.4-1-1-1zM7 15l-2-2 1.4-1.4L7 12.2l3.6-3.6L12 10 7 15zm10-4H13v-1h4v1zm0-3H13V7h4v1z"/></svg>`,
+    todoist: `<svg width="20" height="20" viewBox="0 0 24 24"><rect width="24" height="24" rx="5" fill="#E44332"/><path d="M6.4 7.2c4.3-2.5 6-1 9.4.6.2.1.2.3 0 .5L14.1 9.5c-.2.1-.3.1-.5 0-2.7-1.3-4.2-2.5-7.7-.4-.2.1-.3.1-.5 0L4 8c-.2-.2-.2-.4 0-.5l2.4-1.3zm0 4.4c4.3-2.5 6-1 9.4.6.2.1.2.3 0 .5l-1.7 1.2c-.2.1-.3.1-.5 0-2.7-1.3-4.2-2.5-7.7-.4-.2.1-.3.1-.5 0L4 12.4c-.2-.2-.2-.4 0-.5l2.4-1.3zm0 4.4c4.3-2.5 6-1 9.4.6.2.1.2.3 0 .5l-1.7 1.2c-.2.1-.3.1-.5 0-2.7-1.3-4.2-2.5-7.7-.4-.2.1-.3.1-.5 0L4 16.8c-.2-.2-.2-.4 0-.5l2.4-1.3z" fill="white"/></svg>`,
     jira: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84a.84.84 0 0 0-.84-.84H11.53z" fill="#2684FF"/><path d="M8.77 4.79c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V5.63a.84.84 0 0 0-.84-.84H8.77z" fill="url(#jg1)" opacity=".7"/><path d="M6 7.57c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.35 4.34 4.35V8.41a.84.84 0 0 0-.84-.84H6z" fill="url(#jg2)" opacity=".5"/><defs><linearGradient id="jg1" x1="12" y1="5" x2="16" y2="15"><stop stop-color="#0052CC"/><stop offset="1" stop-color="#2684FF"/></linearGradient><linearGradient id="jg2" x1="9" y1="8" x2="14" y2="18"><stop stop-color="#0052CC"/><stop offset="1" stop-color="#2684FF"/></linearGradient></defs></svg>`,
     discord: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#5865F2"><path d="M19.27 5.33C17.94 4.71 16.5 4.26 15 4a.09.09 0 0 0-.07.03c-.18.33-.39.76-.53 1.09a16.09 16.09 0 0 0-4.8 0c-.14-.34-.36-.76-.54-1.09-.01-.02-.04-.03-.07-.03-1.5.26-2.93.71-4.27 1.33-.01 0-.02.01-.03.02-2.72 4.07-3.47 8.03-3.1 11.95 0 .02.01.04.03.05 1.8 1.32 3.53 2.12 5.24 2.65.03.01.06 0 .07-.02.4-.55.76-1.13 1.07-1.74.02-.04 0-.08-.04-.09-.57-.22-1.11-.48-1.64-.78-.04-.02-.04-.08-.01-.11.11-.08.22-.17.33-.25.02-.02.05-.02.07-.01 3.44 1.57 7.15 1.57 10.55 0 .02-.01.05-.01.07.01.11.09.22.17.33.26.04.03.04.09-.01.11-.52.31-1.07.56-1.64.78-.04.01-.05.06-.04.09.32.61.68 1.19 1.07 1.74.03.01.06.02.09.01 1.72-.53 3.45-1.33 5.25-2.65.02-.01.03-.03.03-.05.44-4.53-.73-8.46-3.1-11.95-.01-.01-.02-.02-.04-.02zM8.52 14.91c-1.03 0-1.89-.95-1.89-2.12s.84-2.12 1.89-2.12c1.06 0 1.9.96 1.89 2.12 0 1.17-.84 2.12-1.89 2.12zm6.97 0c-1.03 0-1.89-.95-1.89-2.12s.84-2.12 1.89-2.12c1.06 0 1.9.96 1.89 2.12 0 1.17-.83 2.12-1.89 2.12z"/></svg>`,
-    calendly: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#006BFF"><rect x="2" y="3" width="20" height="19" rx="3"/><path d="M2 8h20" stroke="white" stroke-width="1.5"/><circle cx="8" cy="13" r="1.5" fill="white"/><circle cx="12" cy="13" r="1.5" fill="white"/><circle cx="16" cy="13" r="1.5" fill="white"/><circle cx="8" cy="17.5" r="1.5" fill="white"/><circle cx="12" cy="17.5" r="1.5" fill="white"/></svg>`,
+    calendly: `<svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#006BFF"/><path d="M15.8 8.2a5.4 5.4 0 1 0 0 7.6" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/><circle cx="15.8" cy="8.2" r="1.3" fill="#00D4AA"/><circle cx="15.8" cy="15.8" r="1.3" fill="#FF6A00"/></svg>`,
     intercom: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#1F8DED"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M7 8v5M10 7v7M13.5 7v7M17 8v5" stroke="white" stroke-width="1.8" stroke-linecap="round"/><path d="M7 16s2 2 5 2 5-2 5-2" stroke="white" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>`,
     confluence: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M3.3 16.5c-.3.5-.6 1-.8 1.4-.2.3-.1.8.3 1l3.6 2.1c.4.2.8.1 1-.2.2-.4.5-.9.8-1.4 1.9-3.2 3.9-2.8 7.6-1.1l3.4 1.5c.4.2.8 0 1-.4l1.6-3.8c.2-.4 0-.8-.4-1l-3.2-1.5C12.1 10.7 7.7 9.7 3.3 16.5z" fill="#1868DB"/><path d="M20.7 7.5c.3-.5.6-1 .8-1.4.2-.3.1-.8-.3-1L17.6 3c-.4-.2-.8-.1-1 .2-.2.4-.5.9-.8 1.4-1.9 3.2-3.9 2.8-7.6 1.1L4.8 4.2c-.4-.2-.8 0-1 .4L2.2 8.4c-.2.4 0 .8.4 1l3.2 1.5c6.1 2.4 10.5 3.4 14.9-3.4z" fill="#205DC5"/></svg>`,
     supabase: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M13.7 21.8c-.4.5-1.3.2-1.3-.5V13h8.6c.9 0 1.4 1 .8 1.7l-8.1 7.1z" fill="#3ECF8E"/><path d="M13.7 21.8c-.4.5-1.3.2-1.3-.5V13h8.6c.9 0 1.4 1 .8 1.7l-8.1 7.1z" fill="url(#sg)" fill-opacity=".2"/><path d="M10.3 2.2c.4-.5 1.3-.2 1.3.5V11H3c-.9 0-1.4-1-.8-1.7l8.1-7.1z" fill="#3ECF8E"/><defs><linearGradient id="sg" x1="12.5" y1="14" x2="19" y2="22"><stop stop-color="#249361"/><stop offset="1" stop-color="#3ECF8E" stop-opacity="0"/></linearGradient></defs></svg>`,
     vercel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#000"><path d="M12 2L2 20h20L12 2z"/></svg>`,
     database: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>`,
-    zendesk: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#03363D"><path d="M11 6v14l-9-14h9zm2 0c0 2.76 2.24 5 5 5s5-2.24 5-5H13zm0 4v10h9L13 10z"/></svg>`,
+    zendesk: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M11.2 3v14.2L2 3h9.2z" fill="#03363D"/><path d="M11.2 18.8H2l9.2-14.2v14.2z" fill="#03363D" opacity=".5"/><path d="M12.8 5.2c0 2.5 2 4.6 4.6 4.6S22 7.7 22 5.2H12.8z" fill="#03363D"/><path d="M12.8 21h9.2L12.8 6.8V21z" fill="#03363D"/></svg>`,
     clickup: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M4 16.5l3.6-2.8c1.8 2.3 3 3 4.4 3 1.4 0 2.6-.8 4.4-3l3.6 2.8c-2.4 3.2-4.8 4.7-8 4.7s-5.6-1.5-8-4.7z" fill="#8930FD"/><path d="M12 7.5l-6.5 5.3-2.5-3L12 3l9 6.8-2.5 3L12 7.5z" fill="#49CCF9"/></svg>`,
     monday: `<svg width="20" height="20" viewBox="0 0 24 24"><circle cx="5" cy="15" r="3" fill="#FF3D57"/><circle cx="12" cy="12" r="3" fill="#FFCB00"/><circle cx="19" cy="9" r="3" fill="#00D647"/><rect x="3" y="15" width="4" height="5" rx="2" fill="#FF3D57"/><rect x="10" y="12" width="4" height="8" rx="2" fill="#FFCB00"/><rect x="17" y="9" width="4" height="11" rx="2" fill="#00D647"/></svg>`,
   };
@@ -1754,6 +2093,71 @@
   if (integrationsBtn) integrationsBtn.addEventListener("click", openIntegrations);
   if (integrationsClose) integrationsClose.addEventListener("click", closeIntegrations);
   if (integrationsOverlay) integrationsOverlay.addEventListener("click", closeIntegrations);
+
+  // --- Memory Profile Panel ---
+  const memoryBtn = document.getElementById("memory-btn");
+  const memoryPanel = document.getElementById("memory-panel");
+  const memoryOverlay = document.getElementById("memory-overlay");
+  const memoryClose = document.getElementById("memory-close");
+  const memoryBody = document.getElementById("memory-body");
+
+  function openMemory() { memoryPanel.classList.remove("hidden"); memoryOverlay.classList.remove("hidden"); loadMemory(); }
+  function closeMemory() { memoryPanel.classList.add("hidden"); memoryOverlay.classList.add("hidden"); }
+  if (memoryBtn) memoryBtn.addEventListener("click", openMemory);
+  if (memoryClose) memoryClose.addEventListener("click", closeMemory);
+  if (memoryOverlay) memoryOverlay.addEventListener("click", closeMemory);
+
+  async function loadMemory() {
+    memoryBody.innerHTML = '<div class="integrations-loading">Loading...</div>';
+    try {
+      const res = await fetch("/memory");
+      const data = await res.json();
+      renderMemoryPanel(data);
+    } catch { memoryBody.innerHTML = '<div class="integrations-loading">Could not load your profile.</div>'; }
+  }
+
+  function renderMemoryPanel(data) {
+    const userContent = data.user || "";
+    const meta = data.meta || {};
+    const lastExtracted = meta.lastExtraction ? new Date(meta.lastExtraction).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Never";
+    const extractCount = meta.exchangeCount || 0;
+    const isEmpty = !userContent.trim();
+    memoryBody.innerHTML =
+      '<div class="memory-profile-section">' +
+        '<div class="memory-profile-header">' +
+          '<div class="memory-profile-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>' +
+          '<div class="memory-profile-meta"><span class="memory-meta-item">Updated: ' + escapeHtml(lastExtracted) + '</span><span class="memory-meta-item">' + extractCount + ' learning' + (extractCount !== 1 ? 's' : '') + ' so far</span></div>' +
+        '</div>' +
+        (isEmpty ?
+          '<div class="memory-empty"><div class="memory-empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div><p class="memory-empty-title">No profile yet</p><p class="memory-empty-sub">The more you chat, the more Delt learns about you. This builds up naturally over time.</p></div>' :
+          '<div class="memory-content-display" id="memory-content-display">' + renderMd(userContent) + '</div>'
+        ) +
+        '<div class="memory-actions"><button class="memory-edit-btn" id="memory-edit-btn">' + (isEmpty ? 'Add something about yourself' : 'Edit your profile') + '</button>' +
+        (!isEmpty ? '<button class="memory-clear-btn" id="memory-clear-btn">Clear profile</button>' : '') + '</div>' +
+        '<div class="memory-editor hidden" id="memory-editor"><textarea class="memory-textarea" id="memory-textarea" rows="12" placeholder="Tell Delt about yourself — role, preferences, projects, style...">' + escapeHtml(userContent) + '</textarea>' +
+        '<div class="memory-editor-actions"><button class="memory-save-btn" id="memory-save-btn">Save changes</button><button class="memory-cancel-btn" id="memory-cancel-btn">Cancel</button></div></div>' +
+      '</div>' +
+      '<div class="memory-info-section"><div class="memory-info-card"><strong>How does this work?</strong><p>After conversations, Delt reviews what it learned about you and saves it here. This profile is included at the start of every new chat so Delt remembers you across sessions.</p><p style="margin-top:8px;"><strong>This data never leaves your computer.</strong> Stored at <code>~/.delt/memory/user.md</code>.</p></div></div>';
+
+    const editBtn = memoryBody.querySelector("#memory-edit-btn");
+    const clearBtn = memoryBody.querySelector("#memory-clear-btn");
+    const editor = memoryBody.querySelector("#memory-editor");
+    const display = memoryBody.querySelector("#memory-content-display");
+    const textarea = memoryBody.querySelector("#memory-textarea");
+    const saveBtn = memoryBody.querySelector("#memory-save-btn");
+    const cancelBtn = memoryBody.querySelector("#memory-cancel-btn");
+    if (editBtn) editBtn.addEventListener("click", () => { editor.classList.remove("hidden"); if (display) display.classList.add("hidden"); editBtn.classList.add("hidden"); if (clearBtn) clearBtn.classList.add("hidden"); textarea.focus(); });
+    if (cancelBtn) cancelBtn.addEventListener("click", () => { editor.classList.add("hidden"); if (display) display.classList.remove("hidden"); if (editBtn) editBtn.classList.remove("hidden"); if (clearBtn) clearBtn.classList.remove("hidden"); });
+    if (saveBtn) saveBtn.addEventListener("click", async () => {
+      saveBtn.textContent = "Saving..."; saveBtn.disabled = true;
+      try { await fetch("/memory", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: textarea.value }) }); loadMemory(); }
+      catch { saveBtn.textContent = "Failed — try again"; saveBtn.disabled = false; }
+    });
+    if (clearBtn) clearBtn.addEventListener("click", async () => {
+      if (!confirm("Clear your profile? Delt will start learning about you from scratch.")) return;
+      try { await fetch("/memory", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: "" }) }); loadMemory(); } catch {}
+    });
+  }
 
   async function loadIntegrations() {
     integrationsBody.innerHTML = '<div class="integrations-loading">Loading...</div>';
@@ -1876,6 +2280,7 @@
         document.querySelectorAll(".cc-category").forEach(el => {
           if (cat === "all") {
             el.style.display = "";
+            el.querySelectorAll(".cc-card").forEach(c => c.style.display = "");
           } else if (cat === "connected") {
             // Show categories that have connected items, hide cards that aren't connected
             const cards = el.querySelectorAll(".cc-card");
@@ -2263,7 +2668,7 @@
         showLocalAccessWizard(id, card || btn.closest(".cc-card"));
 
       } else if (authType === "oauth2") {
-        startOAuthFlow(id);
+        showOAuthInlineSteps(id, card || btn.closest(".cc-card"));
 
       } else if (authType === "token") {
         // Try auto-detect first
@@ -2304,17 +2709,35 @@
       return;
     }
 
+    // Show loading state immediately so it's visible before any async work
+    expandEl.innerHTML = `<div class="cc-inline-connect"><div class="cc-inline-loading-row"><span class="cc-inline-spinner"></span><span style="font-size:12px;color:var(--text-muted)">Loading…</span></div></div>`;
+    expandEl.classList.add("open");
+    expandEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
     // Fetch integration details
     const intData = await fetch("/integrations").then(r => r.json());
     const integration = (intData.integrations || []).find(i => i.id === integrationId);
-    if (!integration) return;
+    if (!integration) {
+      expandEl.classList.remove("open");
+      expandEl.innerHTML = "";
+      return;
+    }
 
     const tc = integration.tokenConfig || {};
     const hasFields = tc.fields && tc.fields.length > 0;
     const helpUrl = tc.helpUrl;
 
-    // Open the help URL automatically
-    if (helpUrl) window.open(helpUrl, "_blank");
+    // Open help URL as a positioned side popup so Delt instructions stay visible alongside it
+    let helpPopup = null;
+    if (helpUrl) {
+      const popW = Math.round(screen.width * 0.48);
+      const popH = Math.round(screen.height * 0.9);
+      helpPopup = window.open(helpUrl, "delt-help", `width=${popW},height=${popH},left=0,top=0,resizable=yes,scrollbars=yes`);
+      window.focus();
+    }
+
+    // Always show floating guide with setup steps while connecting
+    let connectGuide = showFloatingGuide(integrationId, integration.name);
 
     // Build inline form
     const inputsHtml = hasFields
@@ -2336,8 +2759,8 @@
 
     expandEl.innerHTML = `
       <div class="cc-inline-connect">
-        ${helpUrl ? `<div class="cc-inline-hint">A tab opened to <strong>${escapeHtml(integration.name)}</strong>. Grab your key and paste it here.</div>` : ""}
-        ${helpUrl ? `<a class="cc-inline-reopen" href="${escapeHtml(helpUrl)}" target="_blank">Didn't open? Click here</a>` : ""}
+        ${helpUrl ? `<div class="cc-inline-hint"><span class="cc-inline-hint-arrow">&#x2190;</span> A page opened to the left — follow the steps there to get your key, then paste it here.</div>` : ""}
+        ${helpUrl ? `<a class="cc-inline-reopen" href="${escapeHtml(helpUrl)}" target="_blank" rel="noopener">Page didn't open? Click here to try again</a>` : ""}
         ${inputsHtml}
         <div class="cc-inline-actions">
           <button class="cc-inline-submit" disabled>Connect</button>
@@ -2371,6 +2794,7 @@
     });
 
     cancel.addEventListener("click", () => {
+      if (connectGuide) { connectGuide.close(); connectGuide = null; }
       expandEl.classList.remove("open");
       expandEl.innerHTML = "";
     });
@@ -2397,6 +2821,8 @@
         });
         const result = await res.json();
         if (result.ok) {
+          try { if (helpPopup && !helpPopup.closed) helpPopup.close(); } catch {}
+          if (connectGuide) { connectGuide.close(); connectGuide = null; }
           submit.textContent = "Connected!";
           submit.classList.add("success");
           setTimeout(() => loadIntegrations(), 600);
@@ -2418,6 +2844,270 @@
     inputs[0]?.focus();
     // Scroll card into view
     expandEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  // --- Service-specific connect steps — written for total clarity ---
+  const CONNECT_STEPS = {
+    "github": [
+      { title: `Scroll to the bottom and click the green "Generate token" button`, detail: `` },
+      { title: "You'll see a code that starts with ghp_ — copy it right away", detail: "It disappears if you leave this page!" },
+      { title: "Come back here, paste it in the box, and click Connect", detail: "" },
+    ],
+    "slack": [
+      { title: `Click "Create New App", then pick "From scratch"`, detail: `Name it anything you want (like "Delt") and choose your workspace` },
+      { title: `On the left side, click "OAuth & Permissions"`, detail: `` },
+      { title: `Scroll down to "Bot Token Scopes" and add these three: channels:read, chat:write, users:read`, detail: `Just type each one and select it` },
+      { title: `Scroll back up and click "Install to Workspace", then click Allow`, detail: `` },
+      { title: "You'll see a token that starts with xoxb- — copy it and paste it here", detail: "" },
+    ],
+    "notion": [
+      { title: `Click the "New integration" button`, detail: `` },
+      { title: `Name it anything (like "Delt") and click Submit`, detail: `` },
+      { title: `You'll see your secret key — click "Show" to reveal it`, detail: `It starts with secret_` },
+      { title: "Copy it, paste it here, and click Connect", detail: "" },
+    ],
+    "linear": [
+      { title: `Click "Create new API key"`, detail: `` },
+      { title: `Name it anything (like "Delt") and click Create`, detail: `` },
+      { title: "Copy the key right away — you won't be able to see it again!", detail: "" },
+      { title: "Paste it here and click Connect", detail: "" },
+    ],
+    "stripe": [
+      { title: `Look for "Secret key" on this page`, detail: `` },
+      { title: `Click "Reveal test key" to see it`, detail: `It starts with sk_test_ (or sk_live_ if you want to use your real account)` },
+      { title: "Copy the key, paste it here, and click Connect", detail: "" },
+    ],
+    "shopify": [
+      { title: `Click "Create an app" and name it "Delt"`, detail: `` },
+      { title: `Click "Configure Admin API scopes"`, detail: `` },
+      { title: "Check these boxes: read_products, write_products, read_orders — then click Save", detail: "" },
+      { title: `Click "Install app" at the top of the page`, detail: `` },
+      { title: "You'll see an access token — copy it right away (it only shows once!)", detail: "Paste it here and click Connect" },
+    ],
+    "hubspot": [
+      { title: `Click "Create a private app"`, detail: `` },
+      { title: `Name it "Delt", then click the "Scopes" tab at the top`, detail: `` },
+      { title: "Search for and add: crm.objects.contacts.read and crm.objects.deals.read", detail: "Just type in the search box and check the boxes" },
+      { title: `Click "Create app" and then "Continue creating"`, detail: `` },
+      { title: "Copy the access token, paste it here, and click Connect", detail: "" },
+    ],
+    "trello": [
+      { title: `Click "Create" to make a new Power-Up (use any name)`, detail: `` },
+      { title: `On the left side, click "API key" and copy the key you see`, detail: `` },
+      { title: `Next to the key, click the blue word "Token"`, detail: `` },
+      { title: `Click "Allow" — then copy the long token that appears`, detail: `` },
+      { title: "Paste it here and click Connect", detail: "" },
+    ],
+    "figma": [
+      { title: `Scroll down to "Personal access tokens"`, detail: `` },
+      { title: `Click "Generate new token" and name it "Delt"`, detail: `` },
+      { title: "Press Enter — then copy the token right away", detail: "It disappears if you leave this page!" },
+      { title: "Paste it here and click Connect", detail: "" },
+    ],
+    "airtable": [
+      { title: `Click the blue "Create token" button (top right)`, detail: `` },
+      { title: `Name it "Delt" — then add these scopes: data.records:read and data.records:write`, detail: `` },
+      { title: `Under "Access", click "Add a base" and pick the ones you want Delt to use`, detail: `` },
+      { title: `Click "Create token" and copy it right away (you only see it once!)`, detail: `` },
+      { title: "Paste it here and click Connect", detail: "" },
+    ],
+    "microsoft-365": [
+      { title: `Click "New registration" — name it "Delt" — click Register`, detail: `` },
+      { title: `Copy the "Application (client) ID" and paste it in the first box below`, detail: `` },
+      { title: `Copy the "Directory (tenant) ID" and paste it in the second box`, detail: `` },
+      { title: `Click "Certificates & secrets" on the left, then "New client secret", then Add`, detail: `Copy the Value (not the Secret ID!) and paste it in the third box` },
+    ],
+    "twilio": [
+      { title: `At the top of the page, find "Account SID" and copy it`, detail: `It starts with AC` },
+      { title: `Next to "Auth Token", click the eye icon to reveal it — then copy it`, detail: `` },
+      { title: "Get your Twilio phone number ready too", detail: "Looks like +15551234567" },
+      { title: "Paste all three into the boxes below and click Connect", detail: "" },
+    ],
+    "sendgrid": [
+      { title: `Click "Create API Key"`, detail: `` },
+      { title: `Name it "Delt" and choose "Restricted Access"`, detail: `` },
+      { title: `Find "Mail Send" in the list and set it to "Full Access"`, detail: `` },
+      { title: `Click "Create & View" — copy the key right away!`, detail: `SendGrid only shows this once — don't close the page yet` },
+      { title: "Paste it here and click Connect", detail: "" },
+    ],
+    "zoom": [
+      { title: `Click "Create" and pick "Server-to-Server OAuth"`, detail: `` },
+      { title: `Name it "Delt" and click Create`, detail: `` },
+      { title: "You'll see three things on the same page: Account ID, Client ID, and Client Secret", detail: "Copy each one" },
+      { title: "Paste all three into the boxes below and click Connect", detail: "" },
+    ],
+    "todoist": [
+      { title: "Scroll down — you'll see your API token on this page", detail: "It's a long string of letters and numbers" },
+      { title: "Copy it and paste it here", detail: "" },
+      { title: "Click Connect — that's it!", detail: "" },
+    ],
+    "jira": [
+      { title: `Click "Create API token"`, detail: `` },
+      { title: `Name it "Delt" and click Create — copy the token right away!`, detail: `You won't be able to see it again` },
+      { title: "Type in your Atlassian email address below", detail: "" },
+      { title: "Type in your Jira domain (like yourcompany.atlassian.net)", detail: "" },
+      { title: "Paste the token and click Connect", detail: "" },
+    ],
+    "asana": [
+      { title: `Click "Create new token"`, detail: `` },
+      { title: `Name it "Delt" and click Create token`, detail: `` },
+      { title: "Copy the token, paste it here, and click Connect", detail: "" },
+    ],
+    "discord": [
+      { title: `Click "New Application" — name it "Delt" — click Create`, detail: `` },
+      { title: `On the left side, click "Bot" — then click "Add Bot" and confirm`, detail: `` },
+      { title: `Click "Reset Token" and copy the new token`, detail: `` },
+      { title: "Paste it here and click Connect", detail: "" },
+    ],
+    "dropbox": [
+      { title: `Click "Create app" — pick "Scoped access" then "Full Dropbox"`, detail: `` },
+      { title: `Name it "Delt" and click Create app`, detail: `` },
+      { title: `Click the "Permissions" tab — check files.content.read and files.content.write — then click Submit`, detail: `` },
+      { title: `Go back to the "Settings" tab, scroll to "Generated access token", click Generate, and copy it`, detail: `` },
+      { title: "Paste it here and click Connect", detail: "" },
+    ],
+    "calendly": [
+      { title: `Scroll down to "Personal access tokens"`, detail: `` },
+      { title: `Click "Generate New Token" and name it "Delt"`, detail: `` },
+      { title: "Click Create Token — then copy it", detail: "" },
+      { title: "Paste it here and click Connect", detail: "" },
+    ],
+    "intercom": [
+      { title: `Click "New app" — name it "Delt" — click Create app`, detail: `` },
+      { title: `On the left side, click "Authentication"`, detail: `` },
+      { title: `Copy the "Access token" you see there`, detail: `` },
+      { title: "Paste it here and click Connect", detail: "" },
+    ],
+    "confluence": [
+      { title: `Click "Create API token" and name it "Delt"`, detail: `` },
+      { title: "Click Create — copy the token right away (you won't see it again!)", detail: "" },
+      { title: "Type in your Atlassian email below", detail: "" },
+      { title: "Type in your Confluence domain (like yourcompany.atlassian.net)", detail: "" },
+      { title: "Paste the token and click Connect", detail: "" },
+    ],
+    "supabase": [
+      { title: "You should see your project's API Settings page", detail: "" },
+      { title: `Copy the "Project URL" (looks like https://abcdef.supabase.co)`, detail: `` },
+      { title: `Scroll down to "Project API keys" and copy the "service_role" key`, detail: `Important: use service_role, not the anon key` },
+      { title: "Paste both into the boxes below and click Connect", detail: "" },
+    ],
+    "vercel": [
+      { title: `Click "Create Token"`, detail: `` },
+      { title: `Name it "Delt" — leave everything else as-is`, detail: `` },
+      { title: `Set expiration to "No Expiration" so it doesn't stop working later`, detail: `` },
+      { title: "Click Create — copy the token", detail: "" },
+      { title: "Paste it here and click Connect", detail: "" },
+    ],
+    "postgres": [
+      { title: "Find your database connection string", detail: "Check your database dashboard, or ask whoever set it up" },
+      { title: "It looks something like: postgresql://user:password@host:5432/dbname", detail: "" },
+      { title: "Paste it here and click Connect", detail: "" },
+    ],
+    "zendesk": [
+      { title: `Click "Add API token" and name it "Delt"`, detail: `` },
+      { title: "Copy the token that appears (it only shows once!)", detail: "" },
+      { title: "Type in your admin email address below", detail: "" },
+      { title: "Type in your subdomain (like yourcompany.zendesk.com)", detail: "" },
+      { title: "Paste the token and click Connect", detail: "" },
+    ],
+    "clickup": [
+      { title: `Click "Generate" to create a new token`, detail: `` },
+      { title: "Copy the token that appears", detail: "" },
+      { title: "Paste it here and click Connect", detail: "" },
+    ],
+    "monday": [
+      { title: `Scroll down to find "API v2 Token"`, detail: `` },
+      { title: `Click "Generate" and copy the token`, detail: `` },
+      { title: "Paste it here and click Connect", detail: "" },
+    ],
+  };
+
+  // --- Floating guide panel (shown while a help popup is open) ---
+  function showFloatingGuide(integrationId, serviceName) {
+    const steps = CONNECT_STEPS[integrationId] || [
+      { title: "Follow the instructions on the page that opened", detail: "It'll walk you through creating a key or token" },
+      { title: "When you see your key or token, copy it", detail: "Select it and press Ctrl+C (or Cmd+C on Mac)" },
+      { title: "Come back here, paste it in the box, and click Connect", detail: "" },
+    ];
+    // Remove any existing guide
+    document.querySelectorAll(".connect-guide-backdrop").forEach(el => el.remove());
+    document.querySelectorAll(".connect-guide-panel").forEach(el => el.remove());
+
+    // Backdrop so it's unmissable
+    const backdrop = document.createElement("div");
+    backdrop.className = "connect-guide-backdrop";
+    document.body.appendChild(backdrop);
+
+    const panel = document.createElement("div");
+    panel.className = "connect-guide-panel";
+    panel.innerHTML = `
+      <div class="connect-guide-header">
+        <span class="connect-guide-title">How to connect ${escapeHtml(serviceName)}</span>
+        <button class="connect-guide-dismiss" title="Got it">&times;</button>
+      </div>
+      <div class="connect-guide-steps">
+        ${steps.map((s, i) => `
+          <div class="connect-guide-step">
+            <span class="connect-guide-step-num">${i + 1}</span>
+            <div>
+              <strong>${escapeHtml(s.title)}</strong>
+              ${s.detail ? `<span class="connect-guide-detail">${escapeHtml(s.detail)}</span>` : ""}
+            </div>
+          </div>`).join("")}
+      </div>
+      <div class="connect-guide-footer">Follow these steps, then come back here to paste your key.</div>
+    `;
+    function dismiss() { backdrop.remove(); panel.remove(); }
+    panel.querySelector(".connect-guide-dismiss").onclick = dismiss;
+    backdrop.addEventListener("click", dismiss);
+    document.body.appendChild(panel);
+    return { close: dismiss };
+  }
+
+  // --- Inline OAuth steps (shown inside card expand area before sign-in) ---
+  async function showOAuthInlineSteps(integrationId, cardEl) {
+    const expandEl = document.getElementById(`cc-expand-${integrationId}`);
+    if (!expandEl) { startOAuthFlow(integrationId); return; }
+
+    // Toggle off if already open
+    if (expandEl.classList.contains("open")) {
+      expandEl.classList.remove("open");
+      expandEl.innerHTML = "";
+      return;
+    }
+
+    // Fetch setup steps from integration data
+    const intData = await fetch("/integrations").then(r => r.json()).catch(() => ({ integrations: [] }));
+    const integration = (intData.integrations || []).find(i => i.id === integrationId);
+    const steps = integration?.setupSteps || [];
+
+    const stepsHtml = steps.length
+      ? `<ol class="cc-oauth-steps">${steps.map(s => `<li>${s}</li>`).join("")}</ol>`
+      : `<p class="cc-oauth-steps-note">A sign-in window will open. If you see a warning, don't worry — just click <strong>Advanced</strong> (small text at the bottom), then <strong>Go to Delt (unsafe)</strong>. It's safe — "unsafe" just means the app is new.</p>`;
+
+    expandEl.innerHTML = `
+      <div class="cc-inline-connect">
+        <div class="cc-oauth-info">
+          <div class="cc-oauth-info-title">Before you sign in</div>
+          ${stepsHtml}
+        </div>
+        <div class="cc-inline-actions" style="margin-top:12px">
+          <button class="cc-inline-submit cc-oauth-go-btn">Continue to Sign in</button>
+          <button class="cc-inline-cancel">Cancel</button>
+        </div>
+      </div>`;
+    expandEl.classList.add("open");
+    expandEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+    expandEl.querySelector(".cc-inline-cancel").onclick = () => {
+      expandEl.classList.remove("open");
+      expandEl.innerHTML = "";
+    };
+    expandEl.querySelector(".cc-oauth-go-btn").onclick = () => {
+      expandEl.classList.remove("open");
+      expandEl.innerHTML = "";
+      startOAuthFlow(integrationId);
+    };
   }
 
   // OAuth flow — open popup + poll fallback for PWA/desktop
@@ -2456,59 +3146,75 @@
           <span style="font-size:20px;">&#x1f512;</span>
           <h3>Quick heads-up before you sign in</h3>
         </div>
-        <p class="oauth-guidance-subtitle">Google will show a security warning because Delt is a new app that hasn't been verified yet. Your data stays 100% on your computer — nothing is sent to any server.</p>
+        <p class="oauth-guidance-subtitle">Google will show a scary-looking warning — don't worry! Delt is new so Google hasn't reviewed it yet. Your data never leaves your computer.</p>
         <div class="oauth-guidance-steps">
           <div class="oauth-guidance-step">
             <span class="oauth-guidance-step-num">1</span>
             <div>
-              <strong>Choose your Google account</strong>
-              <span class="oauth-guidance-step-detail">Pick the account you want to connect</span>
+              <strong>Pick your Google account</strong>
+              <span class="oauth-guidance-step-detail">Choose the one you want to connect to Delt</span>
             </div>
           </div>
           <div class="oauth-guidance-step">
             <span class="oauth-guidance-step-num">2</span>
             <div>
-              <strong>Click "Advanced"</strong>
-              <span class="oauth-guidance-step-detail">It's the small text at the bottom left of the warning screen</span>
+              <strong>Click the small "Advanced" text at the bottom left</strong>
+              <span class="oauth-guidance-step-detail">It's easy to miss — look near the bottom of the warning page</span>
             </div>
           </div>
           <div class="oauth-guidance-step">
             <span class="oauth-guidance-step-num">3</span>
             <div>
               <strong>Click "Go to Delt (unsafe)"</strong>
-              <span class="oauth-guidance-step-detail">This just means Google hasn't reviewed the app yet — it's safe</span>
+              <span class="oauth-guidance-step-detail">It says "unsafe" but that just means Google hasn't checked the app yet — totally safe</span>
             </div>
           </div>
           <div class="oauth-guidance-step">
             <span class="oauth-guidance-step-num">4</span>
             <div>
-              <strong>Allow access</strong>
-              <span class="oauth-guidance-step-detail">Review the permissions and click "Continue"</span>
+              <strong>Click "Continue" to allow access</strong>
+              <span class="oauth-guidance-step-detail">This lets Delt read your email, calendar, and sheets so it can help you</span>
             </div>
           </div>
         </div>
         <div class="oauth-guidance-actions">
-          <button class="oauth-guidance-continue">Continue to Google Sign-in</button>
+          <button class="oauth-guidance-continue">Got it — open Google Sign-in</button>
           <button class="oauth-guidance-cancel">Cancel</button>
         </div>
-        <p class="oauth-guidance-footer">Delt runs entirely on your machine. Your tokens are encrypted and stored locally in <code>~/.delt/</code></p>
+        <p class="oauth-guidance-footer">Everything stays on your computer. Your login info is encrypted and stored locally in <code>~/.delt/</code></p>
       </div>
     `;
 
     overlay.querySelector(".oauth-guidance-cancel").onclick = () => overlay.remove();
     overlay.querySelector(".oauth-guidance-continue").onclick = () => {
-      overlay.remove();
+      // Collapse overlay to compact floating card so steps stay visible during sign-in
+      overlay.classList.add("oauth-guidance-collapsed");
+      overlay.querySelector(".oauth-guidance-actions").remove();
+      overlay.querySelector(".oauth-guidance-footer").remove();
+      overlay.querySelector(".oauth-guidance-subtitle").remove();
+      const hdr = overlay.querySelector(".oauth-guidance-header");
+      if (hdr) {
+        const closeBtn = document.createElement("button");
+        closeBtn.className = "oauth-guidance-dismiss";
+        closeBtn.textContent = "\u2715";
+        closeBtn.onclick = () => overlay.remove();
+        hdr.appendChild(closeBtn);
+      }
+      overlay.removeEventListener("click", clickOutside);
       openOAuthPopup(integrationId, authUrl);
     };
-    overlay.addEventListener("click", (e) => {
+    function clickOutside(e) {
       if (e.target === overlay) overlay.remove();
-    });
+    }
+    overlay.addEventListener("click", clickOutside);
 
     document.body.appendChild(overlay);
   }
 
   function openOAuthPopup(integrationId, authUrl) {
-    const popup = window.open(authUrl, "oauth", "width=500,height=700,left=200,top=100");
+    const popW = Math.min(520, Math.round(screen.width * 0.45));
+    const popH = Math.round(screen.height * 0.85);
+    const popup = window.open(authUrl, "oauth", `width=${popW},height=${popH},left=0,top=0,resizable=yes,scrollbars=yes`);
 
     // If popup was blocked, open in current tab as fallback
     if (!popup || popup.closed) {
@@ -2520,18 +3226,24 @@
     function done() {
       if (resolved) return;
       resolved = true;
-      // Remove waiting indicator if present
       document.querySelectorAll(".oauth-waiting-indicator").forEach((el) => el.remove());
+      document.querySelectorAll(".oauth-guidance-overlay").forEach((el) => el.remove());
+      document.querySelectorAll(".connect-guide-panel").forEach((el) => el.remove());
       loadIntegrations();
     }
 
     // Show a subtle waiting indicator in the main window
     showOAuthWaitingIndicator();
 
+    function closePopup() {
+      try { if (popup && !popup.closed) popup.close(); } catch {}
+    }
+
     // Method 1: postMessage from popup (works in regular browser)
     window.addEventListener("message", function handler(e) {
       if (e.data?.type === "oauth-complete" && e.data?.integrationId === integrationId) {
         window.removeEventListener("message", handler);
+        closePopup();
         done();
       }
     });
@@ -2547,6 +3259,7 @@
         const integration = (status.integrations || []).find((i) => i.id === integrationId);
         if (integration && integration.connected) {
           clearInterval(poll);
+          closePopup();
           done();
         }
       } catch {}
@@ -3233,7 +3946,7 @@
     });
   }
 
-  // Register service worker for PWA
+  // Register service worker for PWA (auto-update logic is in index.html <head>)
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   }
@@ -3407,22 +4120,37 @@
     }, 2000);
   }
 
-  function startAuthPoll() {
-    if (authPollTimer) clearInterval(authPollTimer);
-    authPollTimer = setInterval(async () => {
-      try {
-        // Use deep auth check — actually runs Claude to verify token is valid
-        const res = await fetch("/verify-auth", { method: "POST" });
-        const data = await res.json();
-        if (data.authed) {
-          clearInterval(authPollTimer);
-          if (obAuthDot) obAuthDot.className = "ob-auth-dot ok";
-          if (obAuthText) obAuthText.textContent = "Connected!";
-          setTimeout(() => showObStep(obReady), 800);
-        }
-      } catch {}
-    }, 5000); // 5s interval since this actually calls Claude
+  async function checkAuthNow() {
+    if (!authPollActive) return;
+    try {
+      const res = await fetch("/verify-auth", { method: "POST" });
+      const data = await res.json();
+      if (data.authed) {
+        clearInterval(authPollTimer);
+        authPollActive = false;
+        if (obAuthDot) obAuthDot.className = "ob-auth-dot ok";
+        if (obAuthText) obAuthText.textContent = "Connected!";
+        setTimeout(() => showObStep(obReady), 800);
+      }
+    } catch {}
   }
+
+  let authPollActive = false;
+
+  function startAuthPoll() {
+    authPollActive = true;
+    if (authPollTimer) clearInterval(authPollTimer);
+    authPollTimer = setInterval(checkAuthNow, 5000);
+  }
+
+  // Instant check the moment the user returns to this window after signing in
+  function onWindowRefocus() {
+    if (authPollActive) checkAuthNow();
+  }
+  window.addEventListener("focus", onWindowRefocus);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) onWindowRefocus();
+  });
 
   async function advanceToSignin() {
     const health = await checkClaude();

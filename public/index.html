@@ -16,10 +16,32 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Delt">
   <meta name="theme-color" content="#6C5CE7">
+  <script>
+  // Auto-update: nuke stale service workers and caches on every page load.
+  // This runs before anything else so users always get fresh assets.
+  (function() {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.getRegistrations().then(function(regs) {
+      regs.forEach(function(reg) {
+        // Force the SW to check for updates
+        reg.update();
+        // If there's a waiting worker, activate it now
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+      });
+    });
+    // Listen for new SW taking control — reload to get fresh assets
+    var refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function() {
+      if (!refreshing) { refreshing = true; window.location.reload(); }
+    });
+  })();
+  </script>
 </head>
 <body>
   <!-- Onboarding — first-time setup for new users -->
-  <div id="install-gate" class="onboard hidden">
+  <div id="install-gate" class="onboard">
     <div class="onboard-card">
 
       <!-- Step 1: Welcome -->
@@ -129,19 +151,15 @@
         <div style="text-align:left;margin:0 0 20px;display:flex;flex-direction:column;gap:8px;">
           <div style="display:flex;gap:8px;font-size:14px;line-height:1.5;align-items:flex-start;">
             <span style="background:var(--accent-soft);color:var(--accent);width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">1</span>
-            <span>A <strong>Terminal window</strong> opens (black screen with text &mdash; that's normal)</span>
+            <span>Your <strong>browser</strong> opens to Claude's sign-in page</span>
           </div>
           <div style="display:flex;gap:8px;font-size:14px;line-height:1.5;align-items:flex-start;">
             <span style="background:var(--accent-soft);color:var(--accent);width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">2</span>
-            <span>Your <strong>browser</strong> opens to Claude's login page</span>
+            <span><strong>Sign in</strong> with your email (or Google account)</span>
           </div>
           <div style="display:flex;gap:8px;font-size:14px;line-height:1.5;align-items:flex-start;">
             <span style="background:var(--accent-soft);color:var(--accent);width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">3</span>
-            <span><strong>Sign in</strong> with your Claude account (free or paid &mdash; either works)</span>
-          </div>
-          <div style="display:flex;gap:8px;font-size:14px;line-height:1.5;align-items:flex-start;">
-            <span style="background:var(--accent-soft);color:var(--accent);width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">4</span>
-            <span><strong>Come back here</strong> &mdash; this page detects it automatically. You'll never do this again.</span>
+            <span><strong>Come back here</strong> &mdash; this page detects it automatically</span>
           </div>
         </div>
 
@@ -149,7 +167,7 @@
 
         <div class="ob-auth-hint hidden" id="ob-auth-hint" style="background:rgba(108,92,231,0.06);border-radius:10px;padding:12px 14px;margin-top:16px;text-align:left;">
           <p style="font-size:13px;color:var(--text-secondary);line-height:1.5;margin:0;">
-            <strong>Look for the Terminal window</strong> that just opened (check your dock/taskbar). It will open your browser to sign in. Once done, come back here &mdash; this page updates on its own.
+            <strong>A browser tab should have opened.</strong> Sign in there, then come back to this page &mdash; it'll update on its own.
           </p>
         </div>
 
@@ -195,11 +213,17 @@
         <div class="integration-chips" id="integration-chips"></div>
       </div>
       <div class="header-right">
+        <button class="header-btn" id="memory-btn" title="What Delt knows about you">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          </svg>
+          Profile
+        </button>
         <button class="header-btn" id="integrations-btn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/>
+            <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
           </svg>
-          Integrations
+          Apps
         </button>
         <button class="header-btn" id="new-chat-btn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -442,17 +466,32 @@
     </div>
     <div class="btw-overlay hidden" id="btw-overlay"></div>
 
-    <!-- Integrations Panel -->
+    <!-- Command Center (Integrations) -->
     <div class="integrations-overlay hidden" id="integrations-overlay"></div>
     <div class="integrations-panel hidden" id="integrations-panel">
       <div class="integrations-header">
         <div>
-          <h2 class="integrations-title">Integrations</h2>
-          <p class="integrations-subtitle">Connect your tools</p>
+          <h2 class="integrations-title">Command Center</h2>
+          <p class="integrations-subtitle">Your tools, one tap away</p>
         </div>
         <button class="pane-close-btn" id="integrations-close">&times;</button>
       </div>
       <div class="integrations-body" id="integrations-body">
+        <div class="integrations-loading">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Memory Profile Panel -->
+    <div class="integrations-overlay hidden" id="memory-overlay"></div>
+    <div class="integrations-panel hidden" id="memory-panel">
+      <div class="integrations-header">
+        <div>
+          <h2 class="integrations-title">Your Profile</h2>
+          <p class="integrations-subtitle">What Delt knows about you</p>
+        </div>
+        <button class="pane-close-btn" id="memory-close">&times;</button>
+      </div>
+      <div class="integrations-body" id="memory-body">
         <div class="integrations-loading">Loading...</div>
       </div>
     </div>

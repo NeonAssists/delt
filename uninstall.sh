@@ -66,7 +66,7 @@ if [ -n "$PORT" ]; then
   lsof -ti:$PORT 2>/dev/null | xargs kill -9 2>/dev/null || true
 fi
 # Also kill by process name as fallback
-pgrep -f "node.*server\.js.*Delt" 2>/dev/null | xargs kill -9 2>/dev/null || true
+pgrep -f "node.*Delt.*server\.js" 2>/dev/null | xargs kill -9 2>/dev/null || true
 echo -e "  ${GREEN}✓${NC} Server stopped"
 
 # ---- Step 2: Remove auto-start ----

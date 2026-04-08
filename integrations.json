@@ -43,10 +43,12 @@
       "authType": "oauth2",
       "capabilities": {
         "can": [
-          "Send, read, draft, search, label, and archive emails",
+          "Read and search inbox emails",
+          "Send, draft, and compose emails",
+          "Manage email labels and mark as read",
           "Create, read, and update calendar events",
           "Create, read, and edit spreadsheets",
-          "Browse and read Drive files"
+          "Create and edit Drive files"
         ],
         "creates": [
           "Emails",
@@ -55,21 +57,21 @@
           "Drive files"
         ],
         "limitations": [
-          "Cannot create Google Docs (use Sheets or send content via email instead)"
+          "Cannot browse existing Drive files (coming soon)"
         ]
       },
       "oauth": {
         "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth",
         "tokenUrl": "https://oauth2.googleapis.com/token",
         "scopes": [
-          "https://www.googleapis.com/auth/gmail.modify",
-          "https://www.googleapis.com/auth/gmail.compose",
           "https://www.googleapis.com/auth/gmail.readonly",
+          "https://www.googleapis.com/auth/gmail.modify",
+          "https://www.googleapis.com/auth/gmail.send",
+          "https://www.googleapis.com/auth/gmail.compose",
           "https://www.googleapis.com/auth/gmail.labels",
           "https://www.googleapis.com/auth/calendar",
           "https://www.googleapis.com/auth/calendar.events",
           "https://www.googleapis.com/auth/spreadsheets",
-          "https://www.googleapis.com/auth/drive.readonly",
           "https://www.googleapis.com/auth/drive.file"
         ]
       },
@@ -100,12 +102,13 @@
         }
       },
       "setupSteps": [
-        "Click 'Sign in with Google' below and choose your account",
-        "You'll be asked to approve access — Delt will be able to read and send email, manage your calendar, edit spreadsheets, and browse Drive files",
-        "Once approved, all four services are ready to use"
+        "Click <strong>Sign in</strong> — your browser opens to Google",
+        "Pick your Google account and sign in",
+        "You'll see a warning — click <strong>Advanced</strong> (small text, bottom left), then <strong>Go to Delt (unsafe)</strong>",
+        "Check the boxes for what you want to share, then click <strong>Continue</strong>"
       ],
       "setupTime": "~30 sec",
-      "troubleshooting": "Sign-in failing? Make sure pop-ups aren't blocked in your browser.",
+      "troubleshooting": "The \"unsafe\" warning is normal — it just means Google hasn't reviewed Delt yet. Your data stays on your computer.",
       "tryIt": "What's on my calendar today?"
     },
     {
@@ -115,6 +118,7 @@
       "icon": "github",
       "category": "development",
       "authType": "token",
+      "oauthAvailable": true,
       "capabilities": {
         "can": [
           "Create and manage repos, issues, PRs, branches",
@@ -132,10 +136,19 @@
         ],
         "limitations": []
       },
+      "oauth": {
+        "authorizationUrl": "https://github.com/login/oauth/authorize",
+        "tokenUrl": "https://github.com/login/oauth/access_token",
+        "scopes": [
+          "repo",
+          "read:org",
+          "read:user"
+        ]
+      },
       "tokenConfig": {
         "label": "Personal Access Token",
         "placeholder": "ghp_xxxxxxxxxxxxxxxxxxxx",
-        "helpUrl": "https://github.com/settings/tokens?type=beta",
+        "helpUrl": "https://github.com/settings/tokens/new?description=Delt&scopes=repo,read:org,read:user",
         "scopes": "repo, read:org, read:user"
       },
       "mcpServers": {
@@ -151,15 +164,17 @@
         }
       },
       "setupSteps": [
-        "If you have GitHub CLI installed, your token is detected automatically — just click Connect",
-        "Otherwise: go to github.com → Settings → Developer Settings → Personal Access Tokens",
-        "Click 'Generate new token (classic)' and name it 'Delt'",
-        "Check these scopes: repo (access your repositories), read:org (see your organizations), read:user (read your profile)",
-        "Copy the token and paste it below"
+        "Click <strong>Sign in</strong> — your browser opens to GitHub",
+        "Log in if you're not already, then click the green <strong>Authorize</strong> button"
       ],
-      "setupTime": "~1 min",
-      "troubleshooting": "Token rejected? Make sure you chose Classic token (not fine-grained) and checked all three scopes.",
-      "tryIt": "Show my open pull requests"
+      "setupTime": "~15 sec",
+      "troubleshooting": "Pop-up blocked? Allow pop-ups for this page and try again.",
+      "tryIt": "Show my open pull requests",
+      "tokenSteps": [
+        "<a href=\"https://github.com/settings/tokens/new?description=Delt&scopes=repo,read:org,read:user\" target=\"_blank\">Click here</a> — everything is already filled in",
+        "Scroll down and click <strong>Generate token</strong>",
+        "Copy the token (starts with <strong>ghp_</strong>) and paste it below"
+      ]
     },
     {
       "id": "slack",
@@ -168,6 +183,7 @@
       "icon": "slack",
       "category": "communication",
       "authType": "token",
+      "oauthAvailable": true,
       "capabilities": {
         "can": [
           "Send messages to channels",
@@ -182,10 +198,23 @@
           "Cannot create channels or manage workspace settings"
         ]
       },
+      "oauth": {
+        "authorizationUrl": "https://slack.com/oauth/v2/authorize",
+        "tokenUrl": "https://slack.com/api/oauth.v2.access",
+        "scopes": [
+          "channels:read",
+          "chat:write",
+          "users:read",
+          "channels:history",
+          "groups:read",
+          "im:read",
+          "mpim:read"
+        ]
+      },
       "tokenConfig": {
         "label": "Bot User OAuth Token",
         "placeholder": "xoxb-xxxxxxxxxxxx-xxxxxxxxxxxx",
-        "helpUrl": "https://api.slack.com/apps",
+        "helpUrl": "https://api.slack.com/apps?new_app=1",
         "scopes": "channels:read, chat:write, users:read"
       },
       "mcpServers": {
@@ -201,14 +230,13 @@
         }
       },
       "setupSteps": [
-        "Go to api.slack.com/apps → 'Create New App' → 'From scratch'",
-        "Name it 'Delt' and pick your workspace",
-        "Go to 'OAuth & Permissions' and add these Bot Token scopes: channels:read (view channels), chat:write (send messages), users:read (see member names)",
-        "Click 'Install to Workspace' and copy the Bot User OAuth Token"
+        "Click <strong>Sign in</strong> — your browser opens to Slack",
+        "Pick your workspace, then click <strong>Allow</strong>"
       ],
-      "setupTime": "~3 min",
-      "troubleshooting": "Bot not posting? Invite it to the channel first with /invite @Delt",
-      "tryIt": "What's the latest in #general?"
+      "setupTime": "~15 sec",
+      "troubleshooting": "Bot not posting? Type <strong>/invite @Delt</strong> in the channel first.",
+      "tryIt": "What's the latest in #general?",
+      "tokenSteps": []
     },
     {
       "id": "notion",
@@ -217,6 +245,7 @@
       "icon": "notion",
       "category": "productivity",
       "authType": "token",
+      "oauthAvailable": true,
       "capabilities": {
         "can": [
           "Create and edit pages",
@@ -233,10 +262,15 @@
           "Can only access pages explicitly shared with the integration"
         ]
       },
+      "oauth": {
+        "authorizationUrl": "https://api.notion.com/v1/oauth/authorize",
+        "tokenUrl": "https://api.notion.com/v1/oauth/token",
+        "scopes": []
+      },
       "tokenConfig": {
         "label": "Integration Token",
         "placeholder": "ntn_xxxxxxxxxxxxxxxxxxxx",
-        "helpUrl": "https://www.notion.so/profile/integrations",
+        "helpUrl": "https://www.notion.so/profile/integrations/new",
         "scopes": "read, update, insert"
       },
       "mcpServers": {
@@ -252,14 +286,13 @@
         }
       },
       "setupSteps": [
-        "Go to notion.so/profile/integrations and click 'New integration'",
-        "Name it 'Delt', pick your workspace, and make sure these capabilities are checked: Read content, Update content, Insert content",
-        "Click Submit and copy the token",
-        "Important: open each Notion page you want Delt to access, click ··· → Connections → Add Delt"
+        "Click <strong>Sign in</strong> — your browser opens to Notion",
+        "Pick which pages to share with Delt, then click <strong>Allow access</strong>"
       ],
-      "setupTime": "~2 min",
-      "troubleshooting": "Can't find your pages? Each page must be shared with the integration individually via ··· → Connections.",
-      "tryIt": "Search my Notion for meeting notes"
+      "setupTime": "~15 sec",
+      "troubleshooting": "Need to share more pages later? Open any page → <strong>···</strong> → <strong>Connections</strong> → <strong>Add Delt</strong>.",
+      "tryIt": "Search my Notion for meeting notes",
+      "tokenSteps": []
     },
     {
       "id": "linear",
@@ -301,13 +334,12 @@
         }
       },
       "setupSteps": [
-        "Go to Linear → Settings → Account → API",
-        "Click 'Create key', name it 'Delt'",
-        "This gives Delt full access to your issues, projects, and teams",
-        "Copy the key right away — it's only shown once"
+        "<a href=\"https://linear.app/settings/account/api\" target=\"_blank\">Click here</a> to open Linear settings",
+        "Click <strong>Create key</strong>, name it <strong>Delt</strong>, and copy the key that appears",
+        "Paste it below"
       ],
-      "setupTime": "~1 min",
-      "troubleshooting": "Key not working? Make sure you copied the full key — it starts with lin_api_",
+      "setupTime": "~15 sec",
+      "troubleshooting": "The key only shows once. If you lost it, delete the old one and create a new one.",
       "tryIt": "Show my assigned issues"
     },
     {
@@ -352,13 +384,12 @@
         }
       },
       "setupSteps": [
-        "Go to dashboard.stripe.com → Developers → API Keys",
-        "Copy your Secret key (starts with sk_test_ or sk_live_)",
-        "This gives Delt access to your payments, customers, invoices, and subscriptions",
-        "Want limited access? Create a Restricted key and enable only Customers, Charges, Invoices, and Subscriptions"
+        "<a href=\"https://dashboard.stripe.com/apikeys\" target=\"_blank\">Click here</a> to open your Stripe dashboard",
+        "Click <strong>Reveal test key</strong> next to \"Secret key\" and copy it",
+        "Paste it below"
       ],
-      "setupTime": "~1 min",
-      "troubleshooting": "Using test mode? Make sure the key starts with sk_test_, not sk_live_",
+      "setupTime": "~10 sec",
+      "troubleshooting": "Start with your test key (sk_test_...) to try it safely. Switch to live when you're ready.",
       "tryIt": "Show my recent payments"
     },
     {
@@ -403,13 +434,12 @@
         }
       },
       "setupSteps": [
-        "Go to your Shopify Admin → Settings → Apps → Develop apps",
-        "Create an app named 'Delt'",
-        "Under Admin API scopes, enable: Products (read and write) and Orders (read only)",
-        "Click Install app and copy the Admin API access token"
+        "<a href=\"https://admin.shopify.com/settings/apps/development\" target=\"_blank\">Click here</a> to open Shopify app settings",
+        "Click <strong>Create an app</strong>, name it <strong>Delt</strong>, then click <strong>Install app</strong>",
+        "Copy the <strong>Admin API access token</strong> and paste it below"
       ],
-      "setupTime": "~3 min",
-      "troubleshooting": "Don't see Develop apps? Your store owner needs to enable custom app development in Settings first.",
+      "setupTime": "~1 min",
+      "troubleshooting": "No \"Create an app\" button? Ask your store owner to enable custom app development first.",
       "tryIt": "List my top-selling products"
     },
     {
@@ -419,6 +449,7 @@
       "icon": "hubspot",
       "category": "crm",
       "authType": "token",
+      "oauthAvailable": true,
       "capabilities": {
         "can": [
           "Create and manage contacts, deals, and tickets",
@@ -433,6 +464,16 @@
           "Notes"
         ],
         "limitations": []
+      },
+      "oauth": {
+        "authorizationUrl": "https://app.hubspot.com/oauth/authorize",
+        "tokenUrl": "https://api.hubapi.com/oauth/v1/token",
+        "scopes": [
+          "crm.objects.contacts.read",
+          "crm.objects.contacts.write",
+          "crm.objects.deals.read",
+          "crm.objects.deals.write"
+        ]
       },
       "tokenConfig": {
         "label": "Private App Access Token",
@@ -453,14 +494,13 @@
         }
       },
       "setupSteps": [
-        "Go to HubSpot → Settings → Integrations → Private Apps",
-        "Create a private app named 'Delt'",
-        "Under Scopes, enable read and write access for Contacts and Deals",
-        "Click Create app and copy the access token"
+        "Click <strong>Sign in</strong> — your browser opens to HubSpot",
+        "Log in and click <strong>Grant access</strong>"
       ],
-      "setupTime": "~3 min",
-      "troubleshooting": "No Private Apps option? This feature requires a HubSpot Professional or Enterprise plan.",
-      "tryIt": "Show my recent deals"
+      "setupTime": "~15 sec",
+      "troubleshooting": "Pop-up blocked? Allow pop-ups for this page and try again.",
+      "tryIt": "Show my recent deals",
+      "tokenSteps": []
     },
     {
       "id": "trello",
@@ -503,13 +543,12 @@
         }
       },
       "setupSteps": [
-        "Go to trello.com/power-ups/admin and sign in",
-        "Create a Power-Up and click 'Generate a new API Key'",
-        "Click the Token link next to the key — this lets Delt read and edit your boards, lists, and cards",
-        "Click Allow and copy the token"
+        "<a href=\"https://trello.com/1/authorize?expiration=never&scope=read,write&response_type=token&key=YOUR_KEY&name=Delt\" target=\"_blank\">Click here</a> to open Trello",
+        "Click <strong>Allow</strong> — a token will appear on screen",
+        "Copy the token and paste it below"
       ],
-      "setupTime": "~2 min",
-      "troubleshooting": "Can't find the Token link? It appears right below your API Key after you generate it.",
+      "setupTime": "~15 sec",
+      "troubleshooting": "Link not working? Make sure you're logged into Trello first.",
       "tryIt": "Show my Trello boards"
     },
     {
@@ -519,6 +558,7 @@
       "icon": "figma",
       "category": "design",
       "authType": "token",
+      "oauthAvailable": true,
       "capabilities": {
         "can": [
           "Read and inspect design files, frames, and components",
@@ -532,10 +572,17 @@
           "Cannot create or edit designs on the canvas — Figma has no write API. To create visual designs, build them as HTML/CSS and deploy or screenshot them."
         ]
       },
+      "oauth": {
+        "authorizationUrl": "https://www.figma.com/oauth",
+        "tokenUrl": "https://api.figma.com/v1/oauth/token",
+        "scopes": [
+          "files:read"
+        ]
+      },
       "tokenConfig": {
         "label": "Personal Access Token",
         "placeholder": "figd_xxxxxxxxxxxxxxxxxxxx",
-        "helpUrl": "https://www.figma.com/settings",
+        "helpUrl": "https://www.figma.com/settings#personal-access-tokens",
         "scopes": "file:read"
       },
       "mcpServers": {
@@ -551,14 +598,17 @@
         }
       },
       "setupSteps": [
-        "Go to figma.com → Settings → Personal access tokens",
-        "Click 'Generate new token' and name it 'Delt'",
-        "Set the File content scope to Read only — Delt can view your designs but won't modify them",
-        "Click Generate and copy the token right away — it's only shown once"
+        "Click <strong>Sign in</strong> — your browser opens to Figma",
+        "Log in and click <strong>Allow access</strong>"
       ],
-      "setupTime": "~1 min",
-      "troubleshooting": "Token not working? Make sure you set the File content scope — tokens with no scopes can't access anything.",
-      "tryIt": "List my recent Figma files"
+      "setupTime": "~15 sec",
+      "troubleshooting": "Pop-up blocked? Allow pop-ups for this page and try again.",
+      "tryIt": "List my recent Figma files",
+      "tokenSteps": [
+        "<a href=\"https://www.figma.com/settings\" target=\"_blank\">Click here</a> to open Figma settings",
+        "Scroll down to <strong>Personal access tokens</strong> and click <strong>Generate new token</strong>",
+        "Name it <strong>Delt</strong>, copy the token, and paste it below"
+      ]
     },
     {
       "id": "vscode",
@@ -593,12 +643,11 @@
         }
       },
       "setupSteps": [
-        "In VS Code, open Extensions and search for 'vscode-mcp' — install it",
-        "Make sure VS Code is running with the extension active",
-        "Click Enable below — no API keys needed, Delt connects directly to your running VS Code"
+        "Open VS Code, go to Extensions (the puzzle piece icon), search for <strong>vscode-mcp</strong>, and click <strong>Install</strong>",
+        "Come back here and click <strong>Enable</strong>"
       ],
-      "setupTime": "~1 min",
-      "troubleshooting": "Not connecting? Make sure VS Code is running and the vscode-mcp extension shows as active.",
+      "setupTime": "~30 sec",
+      "troubleshooting": "Not connecting? Make sure VS Code is open and the extension is installed.",
       "tryIt": "Show errors in my current file"
     },
     {
@@ -641,13 +690,12 @@
         }
       },
       "setupSteps": [
-        "Go to airtable.com/create/tokens and click 'Create new token'",
-        "Name it 'Delt' and add these scopes: Read records and Write records",
-        "Choose which bases Delt can access — you can limit it to specific ones",
-        "Click Create token and copy it"
+        "<a href=\"https://airtable.com/create/tokens\" target=\"_blank\">Click here</a> to open Airtable token settings",
+        "Click <strong>Create token</strong>, name it <strong>Delt</strong>, add your bases, and copy the token",
+        "Paste it below"
       ],
-      "setupTime": "~2 min",
-      "troubleshooting": "Token rejected? Make sure you added at least one base to the token's access list.",
+      "setupTime": "~30 sec",
+      "troubleshooting": "Token rejected? Make sure you added at least one base when creating the token.",
       "tryIt": "Show records from my first table"
     },
     {
@@ -684,12 +732,11 @@
         }
       },
       "setupSteps": [
-        "Click Enable below",
-        "Your Mac will ask for permission to access Reminders, Calendar, and Contacts — click Allow on each",
-        "No sign-in needed — Delt uses your existing Mac account"
+        "Click <strong>Enable</strong> below",
+        "Your Mac will ask for permission — click <strong>OK</strong> on each popup"
       ],
       "setupTime": "Instant",
-      "troubleshooting": "Permission denied? Go to System Settings → Privacy & Security and grant access manually.",
+      "troubleshooting": "Accidentally clicked Don't Allow? Go to System Settings → Privacy & Security and turn on access for Delt.",
       "tryIt": "Show my reminders for today"
     },
     {
@@ -749,14 +796,13 @@
         }
       },
       "setupSteps": [
-        "Go to Azure Portal → App registrations → New registration",
-        "Name it 'Delt' and set the redirect URI to http://localhost",
-        "Under API permissions, add Microsoft Graph access for: email (Mail.Read, Mail.Send), calendar (Calendars.ReadWrite), and files (Files.ReadWrite)",
-        "Copy the Application (client) ID and Directory (tenant) ID",
-        "Using a personal Microsoft account? Enter 'common' as the Tenant ID"
+        "<a href=\"https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/CreateApplicationBlade\" target=\"_blank\">Click here</a> to open Azure — sign in with your Microsoft account",
+        "Name the app <strong>Delt</strong> and click <strong>Register</strong>",
+        "Copy the <strong>Application (client) ID</strong> from the overview page",
+        "Paste it below as Client ID — for Tenant ID, type <strong>common</strong>"
       ],
-      "setupTime": "~5 min",
-      "troubleshooting": "Getting unauthorized? Make sure you clicked Grant admin consent after adding API permissions.",
+      "setupTime": "~1 min",
+      "troubleshooting": "Not working? Make sure Tenant ID says <strong>common</strong> (not your email address).",
       "tryIt": "Check my Outlook inbox"
     },
     {
@@ -818,13 +864,12 @@
         }
       },
       "setupSteps": [
-        "Go to console.twilio.com — your Account SID and Auth Token are right on the dashboard",
-        "Click 'Show' next to Auth Token and copy it",
-        "Go to Phone Numbers → Manage and copy a number that has SMS and Voice enabled",
-        "These credentials let Delt send texts and make calls from your Twilio account"
+        "<a href=\"https://console.twilio.com\" target=\"_blank\">Click here</a> to open your Twilio dashboard",
+        "Your <strong>Account SID</strong>, <strong>Auth Token</strong>, and <strong>phone number</strong> are all on the main page",
+        "Copy each one and paste them into the fields below"
       ],
-      "setupTime": "~2 min",
-      "troubleshooting": "Messages not sending? Trial accounts can only text verified numbers — verify the recipient first.",
+      "setupTime": "~30 sec",
+      "troubleshooting": "Texts not sending? Trial accounts can only text <a href=\"https://console.twilio.com/us1/develop/phone-numbers/manage/verified\" target=\"_blank\">verified numbers</a>.",
       "tryIt": "Send a test text to my phone"
     },
     {
@@ -866,13 +911,12 @@
         }
       },
       "setupSteps": [
-        "Go to app.sendgrid.com → Settings → API Keys → Create API Key",
-        "Name it 'Delt' and choose 'Restricted Access'",
-        "Enable: Mail Send (to send emails) and Template Engine (to use your templates)",
-        "Click 'Create & View' and copy the key right away — it's only shown once"
+        "<a href=\"https://app.sendgrid.com/settings/api_keys\" target=\"_blank\">Click here</a> to open SendGrid settings",
+        "Click <strong>Create API Key</strong>, name it <strong>Delt</strong>, choose <strong>Full Access</strong>, and click <strong>Create & View</strong>",
+        "Copy the key and paste it below"
       ],
-      "setupTime": "~2 min",
-      "troubleshooting": "Emails bouncing? You need to verify your sender identity in SendGrid before sending.",
+      "setupTime": "~20 sec",
+      "troubleshooting": "Emails bouncing? <a href=\"https://app.sendgrid.com/settings/sender_auth\" target=\"_blank\">Verify your sender address</a> first.",
       "tryIt": "Send a test email to myself"
     },
     {
@@ -910,13 +954,11 @@
         }
       },
       "setupSteps": [
-        "Install the Salesforce CLI first — run: npm install -g @salesforce/cli",
-        "Then run: sf org login web — a browser window will open to sign you in",
-        "This gives Delt access to your leads, opportunities, accounts, contacts, and reports",
-        "Once signed in, click Enable below"
+        "Click <strong>Enable</strong> — Delt will connect to Salesforce automatically",
+        "Your browser will open to Salesforce — sign in and allow access"
       ],
-      "setupTime": "~3 min",
-      "troubleshooting": "sf command not found? Close and reopen Terminal after installing the Salesforce CLI.",
+      "setupTime": "~1 min",
+      "troubleshooting": "Connection failed? Make sure you have a Salesforce account and try again.",
       "tryIt": "Show my open opportunities"
     },
     {
@@ -976,58 +1018,595 @@
         }
       },
       "setupSteps": [
-        "Go to marketplace.zoom.us → Develop → Build App → Server-to-Server OAuth",
-        "Name it 'Delt' and create the app",
-        "Add scopes: meeting:read (view meetings) and meeting:write (create and update meetings)",
-        "Activate the app, then copy the Account ID, Client ID, and Client Secret"
+        "<a href=\"https://marketplace.zoom.us/develop/create\" target=\"_blank\">Click here</a> to open Zoom's app page",
+        "Choose <strong>Server-to-Server OAuth</strong>, name it <strong>Delt</strong>",
+        "Add <strong>meeting:read</strong> and <strong>meeting:write</strong> scopes, then click <strong>Activate</strong>",
+        "Copy the <strong>Account ID</strong>, <strong>Client ID</strong>, and <strong>Client Secret</strong> into the fields below"
       ],
-      "setupTime": "~5 min",
-      "troubleshooting": "App stuck on inactive? Make sure you added both scopes and clicked Activate.",
+      "setupTime": "~2 min",
+      "troubleshooting": "App won't activate? Make sure you added meeting:read and meeting:write scopes.",
       "tryIt": "Schedule a meeting for tomorrow at 2pm"
     },
     {
-      "id": "custom-api",
-      "name": "Custom API",
-      "description": "Connect any service that has an API key",
-      "icon": "api",
-      "category": "custom",
-      "authType": "custom",
+      "id": "todoist",
+      "name": "Todoist",
+      "description": "Tasks, projects, labels, reminders",
+      "icon": "todoist",
+      "category": "productivity",
+      "authType": "token",
       "capabilities": {
         "can": [
-          "Fetch data from any HTTP API",
-          "Send requests with custom headers and auth"
+          "Create, update, and complete tasks",
+          "Manage projects and sections",
+          "Add labels, priorities, and due dates",
+          "View task comments and activity"
         ],
-        "creates": [
-          "API requests"
-        ],
-        "limitations": [
-          "Depends on the target API's capabilities"
-        ]
+        "creates": ["Tasks", "Projects", "Labels", "Comments"],
+        "limitations": []
       },
       "tokenConfig": {
-        "label": "API Key",
-        "placeholder": "Paste your API key here",
-        "helpUrl": "",
-        "scopes": ""
+        "label": "API Token",
+        "placeholder": "Your Todoist API token",
+        "helpUrl": "https://app.todoist.com/app/settings/integrations/developer",
+        "scopes": "task:add, data:read, data:read_write"
       },
       "mcpServers": {
-        "fetch": {
+        "todoist": {
           "command": "npx",
-          "args": [
-            "-y",
-            "mcp-fetch"
-          ],
-          "envMapping": {}
+          "args": ["-y", "todoist-mcp-server"],
+          "envMapping": { "TODOIST_API_TOKEN": "token" }
         }
       },
       "setupSteps": [
-        "Find the API docs for the service you want to connect",
-        "Create a new API key in their settings",
+        "<a href=\"https://app.todoist.com/app/settings/integrations/developer\" target=\"_blank\">Click here</a> to open Todoist settings",
+        "Copy your <strong>API token</strong> from the page",
         "Paste it below"
       ],
-      "setupTime": "Varies",
-      "troubleshooting": "Not working? Double-check the API key and make sure it has the right permissions.",
-      "tryIt": "Fetch data from my API"
+      "setupTime": "~10 sec",
+      "troubleshooting": "Token not visible? Scroll down on the integrations page — it's under \"API token\".",
+      "tryIt": "Show my tasks for today"
+    },
+    {
+      "id": "jira",
+      "name": "Jira",
+      "description": "Issues, sprints, boards, projects",
+      "icon": "jira",
+      "category": "development",
+      "authType": "token",
+      "capabilities": {
+        "can": [
+          "Create, update, and transition issues",
+          "Search with JQL queries",
+          "View sprints and boards",
+          "Add comments and attachments"
+        ],
+        "creates": ["Issues", "Comments", "Sprints"],
+        "limitations": ["Requires Jira Cloud (not Server/Data Center)"]
+      },
+      "tokenConfig": {
+        "label": "API Token",
+        "placeholder": "Your Jira API token",
+        "helpUrl": "https://id.atlassian.com/manage-profile/security/api-tokens",
+        "scopes": "read, write",
+        "fields": [
+          { "key": "email", "label": "Atlassian Email", "placeholder": "you@company.com" },
+          { "key": "token", "label": "API Token", "placeholder": "Your Jira API token" },
+          { "key": "domain", "label": "Jira Domain", "placeholder": "yourcompany.atlassian.net" }
+        ]
+      },
+      "mcpServers": {
+        "jira": {
+          "command": "npx",
+          "args": ["-y", "mcp-jira"],
+          "envMapping": {
+            "JIRA_EMAIL": "email",
+            "JIRA_API_TOKEN": "token",
+            "JIRA_BASE_URL": "domain"
+          }
+        }
+      },
+      "setupSteps": [
+        "<a href=\"https://id.atlassian.com/manage-profile/security/api-tokens\" target=\"_blank\">Click here</a> to create an API token",
+        "Click <strong>Create API token</strong>, name it <strong>Delt</strong>, and copy it",
+        "Fill in your email, the token, and your Jira domain below"
+      ],
+      "setupTime": "~30 sec",
+      "troubleshooting": "Domain format: yourcompany.atlassian.net (no https://)",
+      "tryIt": "Show my assigned Jira tickets"
+    },
+    {
+      "id": "asana",
+      "name": "Asana",
+      "description": "Tasks, projects, portfolios, timelines",
+      "icon": "asana",
+      "category": "productivity",
+      "authType": "token",
+      "capabilities": {
+        "can": [
+          "Create and manage tasks and subtasks",
+          "Organize projects and sections",
+          "Set assignees, due dates, and custom fields",
+          "Search across workspaces"
+        ],
+        "creates": ["Tasks", "Projects", "Sections", "Comments"],
+        "limitations": []
+      },
+      "tokenConfig": {
+        "label": "Personal Access Token",
+        "placeholder": "1/12345:abcdef...",
+        "helpUrl": "https://app.asana.com/0/my-apps",
+        "scopes": "default"
+      },
+      "mcpServers": {
+        "asana": {
+          "command": "npx",
+          "args": ["-y", "asana-mcp-server"],
+          "envMapping": { "ASANA_ACCESS_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "<a href=\"https://app.asana.com/0/my-apps\" target=\"_blank\">Click here</a> to open Asana developer settings",
+        "Click <strong>Create new token</strong>, name it <strong>Delt</strong>",
+        "Copy the token and paste it below"
+      ],
+      "setupTime": "~15 sec",
+      "troubleshooting": "Token starts with 1/ followed by numbers. If it doesn't look right, create a new one.",
+      "tryIt": "Show my Asana tasks"
+    },
+    {
+      "id": "discord",
+      "name": "Discord",
+      "description": "Messages, channels, servers, webhooks",
+      "icon": "discord",
+      "category": "communication",
+      "authType": "token",
+      "capabilities": {
+        "can": [
+          "Send messages to channels",
+          "Read channel history",
+          "List servers and members",
+          "Manage webhooks"
+        ],
+        "creates": ["Messages", "Webhooks"],
+        "limitations": ["Bot must be invited to servers first"]
+      },
+      "tokenConfig": {
+        "label": "Bot Token",
+        "placeholder": "Your Discord bot token",
+        "helpUrl": "https://discord.com/developers/applications",
+        "scopes": "bot"
+      },
+      "mcpServers": {
+        "discord": {
+          "command": "npx",
+          "args": ["-y", "discord-mcp"],
+          "envMapping": { "DISCORD_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "<a href=\"https://discord.com/developers/applications\" target=\"_blank\">Click here</a> to open Discord Developer Portal",
+        "Click <strong>New Application</strong>, name it <strong>Delt</strong>",
+        "Go to <strong>Bot</strong> tab → <strong>Reset Token</strong> → copy the token",
+        "Paste it below"
+      ],
+      "setupTime": "~1 min",
+      "troubleshooting": "Bot not responding? Make sure you invited it to your server with the right permissions.",
+      "tryIt": "Send a message to #general"
+    },
+    {
+      "id": "dropbox",
+      "name": "Dropbox",
+      "description": "Files, folders, sharing, search",
+      "icon": "dropbox",
+      "category": "storage",
+      "authType": "token",
+      "capabilities": {
+        "can": [
+          "Upload and download files",
+          "Create and manage folders",
+          "Share files and folders",
+          "Search across your Dropbox"
+        ],
+        "creates": ["Files", "Folders", "Shared links"],
+        "limitations": []
+      },
+      "tokenConfig": {
+        "label": "Access Token",
+        "placeholder": "sl.xxxxx...",
+        "helpUrl": "https://www.dropbox.com/developers/apps/create",
+        "scopes": "files.content.read, files.content.write"
+      },
+      "mcpServers": {
+        "dropbox": {
+          "command": "npx",
+          "args": ["-y", "dropbox-mcp"],
+          "envMapping": { "DROPBOX_ACCESS_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "<a href=\"https://www.dropbox.com/developers/apps/create\" target=\"_blank\">Click here</a> to create a Dropbox app",
+        "Choose <strong>Scoped access</strong>, <strong>Full Dropbox</strong>, name it <strong>Delt</strong>",
+        "Go to <strong>Permissions</strong> tab and enable file read/write, then generate an access token",
+        "Paste the token below"
+      ],
+      "setupTime": "~1 min",
+      "troubleshooting": "Token expired? Dropbox short-lived tokens expire after 4 hours. Generate a new one.",
+      "tryIt": "Show my recent Dropbox files"
+    },
+    {
+      "id": "calendly",
+      "name": "Calendly",
+      "description": "Scheduling, events, availability",
+      "icon": "calendly",
+      "category": "productivity",
+      "authType": "token",
+      "capabilities": {
+        "can": [
+          "View scheduled events and invitees",
+          "Check availability windows",
+          "Create scheduling links",
+          "Cancel or reschedule events"
+        ],
+        "creates": ["Scheduling links", "Events"],
+        "limitations": ["Cannot modify availability rules"]
+      },
+      "tokenConfig": {
+        "label": "Personal Access Token",
+        "placeholder": "eyJhb...",
+        "helpUrl": "https://calendly.com/integrations/api_webhooks",
+        "scopes": "default"
+      },
+      "mcpServers": {
+        "calendly": {
+          "command": "npx",
+          "args": ["-y", "calendly-mcp"],
+          "envMapping": { "CALENDLY_API_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "<a href=\"https://calendly.com/integrations/api_webhooks\" target=\"_blank\">Click here</a> to open Calendly API settings",
+        "Click <strong>Generate new token</strong> and copy it",
+        "Paste it below"
+      ],
+      "setupTime": "~10 sec",
+      "troubleshooting": "No API access? You need a Calendly Professional plan or higher.",
+      "tryIt": "Show my upcoming Calendly events"
+    },
+    {
+      "id": "intercom",
+      "name": "Intercom",
+      "description": "Conversations, contacts, help articles",
+      "icon": "intercom",
+      "category": "support",
+      "authType": "token",
+      "capabilities": {
+        "can": [
+          "View and reply to conversations",
+          "Search and manage contacts",
+          "Create and update help articles",
+          "View team inbox stats"
+        ],
+        "creates": ["Replies", "Notes", "Articles", "Tags"],
+        "limitations": []
+      },
+      "tokenConfig": {
+        "label": "Access Token",
+        "placeholder": "dG9rO...",
+        "helpUrl": "https://app.intercom.com/a/apps/_/developer-hub/app-packages",
+        "scopes": "read, write"
+      },
+      "mcpServers": {
+        "intercom": {
+          "command": "npx",
+          "args": ["-y", "intercom-mcp"],
+          "envMapping": { "INTERCOM_ACCESS_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "<a href=\"https://app.intercom.com/a/apps/_/developer-hub\" target=\"_blank\">Click here</a> to open Intercom Developer Hub",
+        "Create a new app or select existing, go to <strong>Authentication</strong>",
+        "Copy your <strong>Access Token</strong> and paste it below"
+      ],
+      "setupTime": "~30 sec",
+      "troubleshooting": "Need admin access to your Intercom workspace to create tokens.",
+      "tryIt": "Show my open conversations"
+    },
+    {
+      "id": "confluence",
+      "name": "Confluence",
+      "description": "Pages, spaces, search, comments",
+      "icon": "confluence",
+      "category": "productivity",
+      "authType": "token",
+      "capabilities": {
+        "can": [
+          "Create and edit pages",
+          "Search across spaces",
+          "Add comments and attachments",
+          "View page history"
+        ],
+        "creates": ["Pages", "Comments", "Attachments"],
+        "limitations": ["Requires Confluence Cloud"]
+      },
+      "tokenConfig": {
+        "label": "API Token",
+        "placeholder": "Your Confluence API token",
+        "helpUrl": "https://id.atlassian.com/manage-profile/security/api-tokens",
+        "scopes": "read, write",
+        "fields": [
+          { "key": "email", "label": "Atlassian Email", "placeholder": "you@company.com" },
+          { "key": "token", "label": "API Token", "placeholder": "Your API token" },
+          { "key": "domain", "label": "Confluence Domain", "placeholder": "yourcompany.atlassian.net" }
+        ]
+      },
+      "mcpServers": {
+        "confluence": {
+          "command": "npx",
+          "args": ["-y", "confluence-mcp"],
+          "envMapping": {
+            "CONFLUENCE_EMAIL": "email",
+            "CONFLUENCE_API_TOKEN": "token",
+            "CONFLUENCE_BASE_URL": "domain"
+          }
+        }
+      },
+      "setupSteps": [
+        "<a href=\"https://id.atlassian.com/manage-profile/security/api-tokens\" target=\"_blank\">Click here</a> — same token page as Jira",
+        "Create a token if you don't have one, then fill in the fields below"
+      ],
+      "setupTime": "~30 sec",
+      "troubleshooting": "Same API token works for both Jira and Confluence if they're on the same Atlassian account.",
+      "tryIt": "Search my Confluence for meeting notes"
+    },
+    {
+      "id": "supabase",
+      "name": "Supabase",
+      "description": "Database, auth, storage, edge functions",
+      "icon": "supabase",
+      "category": "development",
+      "authType": "token",
+      "capabilities": {
+        "can": [
+          "Query and modify database tables",
+          "Manage auth users",
+          "Upload and download storage files",
+          "View project settings"
+        ],
+        "creates": ["Records", "Users", "Files", "Buckets"],
+        "limitations": []
+      },
+      "tokenConfig": {
+        "label": "Service Role Key",
+        "placeholder": "eyJhb...",
+        "helpUrl": "https://supabase.com/dashboard/project/_/settings/api",
+        "scopes": "service_role",
+        "fields": [
+          { "key": "url", "label": "Project URL", "placeholder": "https://xxxx.supabase.co" },
+          { "key": "token", "label": "Service Role Key", "placeholder": "eyJhb..." }
+        ]
+      },
+      "mcpServers": {
+        "supabase": {
+          "command": "npx",
+          "args": ["-y", "supabase-mcp-server"],
+          "envMapping": {
+            "SUPABASE_URL": "url",
+            "SUPABASE_SERVICE_ROLE_KEY": "token"
+          }
+        }
+      },
+      "setupSteps": [
+        "<a href=\"https://supabase.com/dashboard\" target=\"_blank\">Click here</a> to open your Supabase dashboard",
+        "Select your project → <strong>Settings</strong> → <strong>API</strong>",
+        "Copy the <strong>Project URL</strong> and <strong>service_role key</strong> (not anon key)",
+        "Paste them below"
+      ],
+      "setupTime": "~20 sec",
+      "troubleshooting": "Use the service_role key, not the anon key. The anon key has limited access.",
+      "tryIt": "Show my database tables"
+    },
+    {
+      "id": "vercel",
+      "name": "Vercel",
+      "description": "Deployments, projects, domains, logs",
+      "icon": "vercel",
+      "category": "development",
+      "authType": "token",
+      "capabilities": {
+        "can": [
+          "View deployments and their status",
+          "Manage projects and domains",
+          "Read build and function logs",
+          "Trigger new deployments"
+        ],
+        "creates": ["Deployments", "Environment variables"],
+        "limitations": ["Cannot modify source code directly"]
+      },
+      "tokenConfig": {
+        "label": "Access Token",
+        "placeholder": "Your Vercel token",
+        "helpUrl": "https://vercel.com/account/tokens",
+        "scopes": "full access"
+      },
+      "mcpServers": {
+        "vercel": {
+          "command": "npx",
+          "args": ["-y", "vercel-mcp"],
+          "envMapping": { "VERCEL_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "<a href=\"https://vercel.com/account/tokens\" target=\"_blank\">Click here</a> to open Vercel token settings",
+        "Click <strong>Create</strong>, name it <strong>Delt</strong>, set scope to your team",
+        "Copy the token and paste it below"
+      ],
+      "setupTime": "~15 sec",
+      "troubleshooting": "Token only shows once when created. If you lost it, create a new one.",
+      "tryIt": "Show my latest deployments"
+    },
+    {
+      "id": "postgres",
+      "name": "PostgreSQL",
+      "description": "Query databases, manage tables, view schemas",
+      "icon": "database",
+      "category": "development",
+      "authType": "token",
+      "capabilities": {
+        "can": [
+          "Run SQL queries (SELECT, INSERT, UPDATE, DELETE)",
+          "View table schemas and relationships",
+          "List databases and tables",
+          "Export query results"
+        ],
+        "creates": ["Records", "Tables"],
+        "limitations": ["Be careful with write queries on production databases"]
+      },
+      "tokenConfig": {
+        "label": "Connection String",
+        "placeholder": "postgresql://user:pass@host:5432/dbname",
+        "scopes": "full access"
+      },
+      "mcpServers": {
+        "postgres": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-postgres"],
+          "envMapping": { "DATABASE_URL": "token" }
+        }
+      },
+      "setupSteps": [
+        "Get your PostgreSQL connection string from your database provider",
+        "Format: <strong>postgresql://user:password@host:5432/database</strong>",
+        "Paste it below"
+      ],
+      "setupTime": "~10 sec",
+      "troubleshooting": "Connection refused? Make sure your database allows connections from localhost and the port is correct.",
+      "tryIt": "Show my database tables"
+    },
+    {
+      "id": "zendesk",
+      "name": "Zendesk",
+      "description": "Tickets, users, organizations, knowledge base",
+      "icon": "zendesk",
+      "category": "support",
+      "authType": "token",
+      "capabilities": {
+        "can": [
+          "Create and update tickets",
+          "Search users and organizations",
+          "View ticket comments and history",
+          "Manage macros and views"
+        ],
+        "creates": ["Tickets", "Comments", "Users"],
+        "limitations": []
+      },
+      "tokenConfig": {
+        "label": "API Token",
+        "placeholder": "Your Zendesk API token",
+        "helpUrl": "https://support.zendesk.com/hc/en-us/articles/4408889192858",
+        "scopes": "read, write",
+        "fields": [
+          { "key": "email", "label": "Admin Email", "placeholder": "you@company.com" },
+          { "key": "token", "label": "API Token", "placeholder": "Your Zendesk API token" },
+          { "key": "subdomain", "label": "Subdomain", "placeholder": "yourcompany (from yourcompany.zendesk.com)" }
+        ]
+      },
+      "mcpServers": {
+        "zendesk": {
+          "command": "npx",
+          "args": ["-y", "zendesk-mcp"],
+          "envMapping": {
+            "ZENDESK_EMAIL": "email",
+            "ZENDESK_API_TOKEN": "token",
+            "ZENDESK_SUBDOMAIN": "subdomain"
+          }
+        }
+      },
+      "setupSteps": [
+        "Go to your Zendesk admin → <strong>Apps and integrations</strong> → <strong>APIs</strong> → <strong>Zendesk API</strong>",
+        "Enable Token Access and click <strong>Add API token</strong>",
+        "Fill in the fields below"
+      ],
+      "setupTime": "~30 sec",
+      "troubleshooting": "Subdomain is just the part before .zendesk.com — no dots or full URL.",
+      "tryIt": "Show my open tickets"
+    },
+    {
+      "id": "clickup",
+      "name": "ClickUp",
+      "description": "Tasks, docs, goals, time tracking",
+      "icon": "clickup",
+      "category": "productivity",
+      "authType": "token",
+      "capabilities": {
+        "can": [
+          "Create and manage tasks",
+          "View spaces, folders, and lists",
+          "Track time on tasks",
+          "Update custom fields and statuses"
+        ],
+        "creates": ["Tasks", "Comments", "Time entries"],
+        "limitations": []
+      },
+      "tokenConfig": {
+        "label": "API Token",
+        "placeholder": "pk_xxxxx...",
+        "helpUrl": "https://app.clickup.com/settings/apps",
+        "scopes": "default"
+      },
+      "mcpServers": {
+        "clickup": {
+          "command": "npx",
+          "args": ["-y", "clickup-mcp"],
+          "envMapping": { "CLICKUP_API_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "<a href=\"https://app.clickup.com/settings/apps\" target=\"_blank\">Click here</a> to open ClickUp app settings",
+        "Under <strong>API Token</strong>, click <strong>Generate</strong> (or copy existing)",
+        "Paste it below"
+      ],
+      "setupTime": "~10 sec",
+      "troubleshooting": "Token starts with pk_. If it doesn't, you may be copying the wrong value.",
+      "tryIt": "Show my ClickUp tasks"
+    },
+    {
+      "id": "monday",
+      "name": "Monday.com",
+      "description": "Boards, items, updates, automations",
+      "icon": "monday",
+      "category": "productivity",
+      "authType": "token",
+      "capabilities": {
+        "can": [
+          "Create and update items on boards",
+          "Read board structure and columns",
+          "Post updates and replies",
+          "Search across workspaces"
+        ],
+        "creates": ["Items", "Updates", "Subitems"],
+        "limitations": []
+      },
+      "tokenConfig": {
+        "label": "API Token",
+        "placeholder": "eyJhb...",
+        "helpUrl": "https://monday.com/developers/apps/manage",
+        "scopes": "boards:read, boards:write"
+      },
+      "mcpServers": {
+        "monday": {
+          "command": "npx",
+          "args": ["-y", "monday-mcp"],
+          "envMapping": { "MONDAY_API_TOKEN": "token" }
+        }
+      },
+      "setupSteps": [
+        "Click your avatar in Monday.com → <strong>Developers</strong> → <strong>My access tokens</strong>",
+        "Copy your <strong>API v2 Token</strong>",
+        "Paste it below"
+      ],
+      "setupTime": "~10 sec",
+      "troubleshooting": "Token is a long JWT string starting with eyJ. Make sure you copy the full thing.",
+      "tryIt": "Show my Monday boards"
     }
   ]
 }

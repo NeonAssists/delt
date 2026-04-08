@@ -527,6 +527,31 @@ app.use((req, res, next) => {
   next();
 });
 
+// Force sw.js to never be cached by the browser
+app.get("/sw.js", (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.sendFile(path.join(__dirname, "public", "sw.js"));
+});
+
+// Force-update endpoint — nukes old service worker and reloads with fresh assets
+app.get("/force-update", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.send(`<!DOCTYPE html><html><head><title>Updating Delt...</title></head><body>
+<p>Updating...</p>
+<script>
+(async () => {
+  if ('serviceWorker' in navigator) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister()));
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+  }
+  window.location.replace('/');
+})();
+</script></body></html>`);
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json());
 
@@ -2425,6 +2450,17 @@ FORMATTING RULES — CRITICAL. The user does NOT read long text. They SCAN. Form
         pane2Process = null;
       }
     }
+
+    // New pane2 session — kill any stale process, reset server state
+    if (msg.type === "pane2-new") {
+      if (pane2Process) {
+        try { pane2Process.kill("SIGINT"); } catch {}
+        pane2Process = null;
+      }
+      pane2SessionId = null;
+      pane2MessageCount = 0;
+      safeSend(ws, { type: "pane2-ready" });
+    }
   });
 
   ws.on("close", () => {
@@ -2547,6 +2583,165 @@ function logSignupLocally(entry) {
   signups.push(entry);
   try { fs.writeFileSync(signupsPath, JSON.stringify(signups, null, 2)); } catch (e) { console.error("Failed to log signup:", e.message); }
 }
+
+// ============================================
+// Crons — scheduled tasks
+// ============================================
+const cronsPath = path.join(os.homedir(), ".delt", "crons.json");
+const cronRunsDir = path.join(os.homedir(), ".delt", "cron-runs");
+
+function loadCrons() {
+  try { return JSON.parse(fs.readFileSync(cronsPath, "utf-8")); }
+  catch { return []; }
+}
+
+function saveCrons(crons) {
+  fs.mkdirSync(path.dirname(cronsPath), { recursive: true });
+  fs.writeFileSync(cronsPath, JSON.stringify(crons, null, 2), { mode: 0o600 });
+}
+
+function isCronDue(cron, now) {
+  if (!cron.enabled || !cron.schedule) return false;
+  const { schedule, lastRun } = cron;
+
+  if (schedule.type === "interval") {
+    const ms = (schedule.minutes || 30) * 60000;
+    return !lastRun || (Date.now() - lastRun >= ms);
+  }
+
+  if (schedule.type === "daily" || schedule.type === "weekday") {
+    if (schedule.type === "weekday") {
+      const day = now.getDay();
+      if (day === 0 || day === 6) return false;
+    }
+    if (now.getHours() !== schedule.hour || now.getMinutes() !== schedule.minute) return false;
+    if (!lastRun) return true;
+    const last = new Date(lastRun);
+    return !(last.getDate() === now.getDate() &&
+             last.getMonth() === now.getMonth() &&
+             last.getFullYear() === now.getFullYear());
+  }
+
+  return false;
+}
+
+function broadcastToAll(data) {
+  for (const [, clients] of sessionClients) {
+    for (const client of clients) {
+      if (client.readyState === WebSocket.OPEN) safeSend(client, data);
+    }
+  }
+}
+
+function runCron(cron) {
+  if (!fs.existsSync(cronRunsDir)) fs.mkdirSync(cronRunsDir, { recursive: true });
+  const startTime = Date.now();
+
+  // Mark lastRun immediately to prevent double-fire
+  const crons = loadCrons();
+  const idx = crons.findIndex(c => c.id === cron.id);
+  if (idx >= 0) { crons[idx].lastRun = startTime; saveCrons(crons); }
+
+  const args = ["-p", cron.prompt, "--output-format", "text"];
+  const mcpFile = writeMcpConfigFile();
+  if (mcpFile) {
+    args.push("--mcp-config", mcpFile);
+    const mcpConfig = buildMcpConfig();
+    const allowedTools = Object.keys(mcpConfig.mcpServers).map(n => `mcp__${n}__*`).join(",");
+    if (allowedTools) args.push("--allowedTools", allowedTools);
+  }
+
+  const proc = spawn("claude", args, { cwd: os.homedir(), env: { ...process.env } });
+  let output = "";
+  let errOut = "";
+  proc.stdout.on("data", d => { output += d.toString(); });
+  proc.stderr.on("data", d => { errOut += d.toString(); });
+
+  proc.on("close", (code) => {
+    const result = {
+      cronId: cron.id,
+      cronName: cron.name,
+      timestamp: startTime,
+      output: output.trim(),
+      error: code !== 0 ? (errOut.trim() || `Exit code ${code}`) : null,
+      duration: Date.now() - startTime,
+    };
+    try {
+      fs.writeFileSync(
+        path.join(cronRunsDir, `${cron.id}-${startTime}.json`),
+        JSON.stringify(result, null, 2),
+        { mode: 0o600 }
+      );
+    } catch (e) { console.error("[Cron] Save failed:", e.message); }
+
+    broadcastToAll({ type: "cron-result", ...result });
+    console.log(`[Cron] "${cron.name}" done in ${result.duration}ms`);
+  });
+}
+
+// Check every minute
+setInterval(() => {
+  const now = new Date();
+  for (const cron of loadCrons()) {
+    if (isCronDue(cron, now)) {
+      console.log(`[Cron] Running "${cron.name}"`);
+      runCron(cron);
+    }
+  }
+}, 60000);
+
+app.get("/crons", localOnly, (req, res) => res.json(loadCrons()));
+
+app.post("/crons", localOnly, rateLimit(60000, 20), (req, res) => {
+  const { name, prompt, schedule } = req.body;
+  if (!name || !prompt || !schedule) return res.status(400).json({ error: "name, prompt, schedule required" });
+  const crons = loadCrons();
+  const cron = { id: uuidv4(), name: name.trim(), prompt: prompt.trim(), schedule, enabled: true, lastRun: null, created: Date.now() };
+  crons.push(cron);
+  saveCrons(crons);
+  res.json(cron);
+});
+
+app.put("/crons/:id", localOnly, (req, res) => {
+  const crons = loadCrons();
+  const idx = crons.findIndex(c => c.id === req.params.id);
+  if (idx < 0) return res.status(404).json({ error: "Not found" });
+  const { name, prompt, schedule, enabled } = req.body;
+  if (name !== undefined) crons[idx].name = name.trim();
+  if (prompt !== undefined) crons[idx].prompt = prompt.trim();
+  if (schedule !== undefined) crons[idx].schedule = schedule;
+  if (enabled !== undefined) crons[idx].enabled = enabled;
+  saveCrons(crons);
+  res.json(crons[idx]);
+});
+
+app.delete("/crons/:id", localOnly, (req, res) => {
+  const crons = loadCrons();
+  const idx = crons.findIndex(c => c.id === req.params.id);
+  if (idx < 0) return res.status(404).json({ error: "Not found" });
+  crons.splice(idx, 1);
+  saveCrons(crons);
+  res.json({ ok: true });
+});
+
+app.post("/crons/:id/run", localOnly, rateLimit(60000, 10), (req, res) => {
+  const cron = loadCrons().find(c => c.id === req.params.id);
+  if (!cron) return res.status(404).json({ error: "Not found" });
+  runCron(cron);
+  res.json({ ok: true });
+});
+
+app.get("/crons/:id/runs", localOnly, (req, res) => {
+  if (!fs.existsSync(cronRunsDir)) return res.json([]);
+  try {
+    const runs = fs.readdirSync(cronRunsDir)
+      .filter(f => f.startsWith(req.params.id + "-") && f.endsWith(".json"))
+      .sort().reverse().slice(0, 20)
+      .map(f => { try { return JSON.parse(fs.readFileSync(path.join(cronRunsDir, f), "utf-8")); } catch { return null; } })
+      .filter(Boolean);
+    res.json(runs);
+  } catch { res.json([]); }
+});
 
 // Global daily email cap — hard ceiling prevents relay abuse regardless of IP rotation
 const DAILY_EMAIL_CAP = 100;
@@ -2730,7 +2925,7 @@ server.on("error", (err) => {
 // ============================================
 const CURRENT_VERSION = require("./package.json").version;
 const UPDATE_URL = "https://delt-marketing.vercel.app/api/version";
-const DOWNLOAD_BASE = "https://claude-code-ui-six.vercel.app";
+const DOWNLOAD_BASE = "https://delt.vercel.app";
 
 function compareVersions(a, b) {
   const pa = a.split(".").map(Number);
