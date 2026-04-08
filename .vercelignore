@@ -1,0 +1,12 @@
+node_modules
+logs
+history
+credentials.json
+.git
+*.zip
+*.mp4
+demo-captures
+signups.json
+Delt.pkg
+test
+.DS_Store

@@ -2729,7 +2729,7 @@ server.on("error", (err) => {
 // Auto-update — check marketing site for newer version
 // ============================================
 const CURRENT_VERSION = require("./package.json").version;
-const UPDATE_URL = "https://claude-code-ui-six.vercel.app/api/version";
+const UPDATE_URL = "https://delt-marketing.vercel.app/api/version";
 const DOWNLOAD_BASE = "https://claude-code-ui-six.vercel.app";
 
 function compareVersions(a, b) {
