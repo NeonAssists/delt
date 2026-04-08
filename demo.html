@@ -17,7 +17,7 @@
       --text: #0C0A14;
       --text-2: #55526A;
       --text-3: #8E8BA3;
-      --purple: #7C3AED;
+      --purple: #2563EB;
       --indigo: #6366F1;
       --cyan: #06B6D4;
       --mint: #10B981;
@@ -62,7 +62,7 @@
     .hero-bg {
       position: absolute; inset: 0; z-index: 0;
       background:
-        radial-gradient(ellipse 60% 50% at 80% 30%, rgba(124,58,237,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 50% at 80% 30%, rgba(37,99,235,0.06) 0%, transparent 70%),
         radial-gradient(ellipse 40% 60% at 20% 70%, rgba(99,102,241,0.04) 0%, transparent 70%),
         radial-gradient(ellipse 30% 40% at 60% 80%, rgba(6,182,212,0.03) 0%, transparent 70%);
     }
@@ -71,7 +71,7 @@
     .hero-pill {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 5px 14px 5px 8px; border-radius: 100px;
-      background: rgba(124,58,237,0.06); border: 1px solid rgba(124,58,237,0.1);
+      background: rgba(37,99,235,0.06); border: 1px solid rgba(37,99,235,0.1);
       font-size: 12px; font-weight: 600; color: var(--purple); margin-bottom: 24px;
     }
     .hero-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); animation: pulse 2s infinite; }
@@ -97,9 +97,9 @@
       color: #fff; font-weight: 700; font-size: 14px; font-family: var(--font);
       cursor: pointer; transition: all .25s; text-decoration: none;
       display: inline-flex; align-items: center; gap: 7px;
-      box-shadow: 0 4px 20px rgba(124,58,237,.2);
+      box-shadow: 0 4px 20px rgba(37,99,235,.2);
     }
-    .btn-p:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(124,58,237,.28); }
+    .btn-p:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(37,99,235,.28); }
     .btn-g {
       padding: 13px 28px; border-radius: 100px;
       border: 1.5px solid var(--border); background: transparent;
@@ -132,7 +132,7 @@
     .d-side { width: 160px; border-right: 1px solid var(--border); background: var(--surface); padding: 10px 6px; flex-shrink: 0; }
     .d-sh { font-size: 9px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; padding: 4px 8px; }
     .d-si { padding: 5px 8px; border-radius: 6px; font-size: 11px; color: var(--text-2); display: flex; align-items: center; gap: 6px; margin-bottom: 1px; }
-    .d-si.on { background: rgba(124,58,237,.06); color: var(--purple); font-weight: 600; }
+    .d-si.on { background: rgba(37,99,235,.06); color: var(--purple); font-weight: 600; }
     .d-si i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: .4; display: block; }
     .d-si.on i { opacity: 1; }
     .d-chat { flex: 1; display: flex; flex-direction: column; }
@@ -153,11 +153,11 @@
     .dm.show { opacity: 1; transform: none; transition: opacity .4s, transform .4s cubic-bezier(.16,1,.3,1); }
     .dm-av { width: 24px; height: 24px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
     .dm-av.u { background: linear-gradient(135deg,var(--purple),var(--indigo)); color: #fff; }
-    .dm-av.a { background: rgba(124,58,237,.07); color: var(--purple); }
+    .dm-av.a { background: rgba(37,99,235,.07); color: var(--purple); }
     .dm-b { flex: 1; min-width: 0; }
     .dm-who { font-size: 8px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
     .dm-c { font-size: 12px; line-height: 1.6; }
-    .dm.user .dm-c { background: rgba(124,58,237,.06); padding: 7px 12px; border-radius: 12px 12px 3px 12px; display: inline-block; }
+    .dm.user .dm-c { background: rgba(37,99,235,.06); padding: 7px 12px; border-radius: 12px 12px 3px 12px; display: inline-block; }
     .dm-tools { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
     .dm-tool { display: inline-flex; align-items: center; gap: 2px; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 500; font-family: var(--mono); background: rgba(16,185,129,.07); color: var(--mint); }
     .dm-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
@@ -228,7 +228,7 @@
       white-space: nowrap; flex-shrink: 0;
       transition: all .2s;
     }
-    .m-chip:hover { border-color: var(--purple); background: rgba(124,58,237,.05); transform: scale(1.04); }
+    .m-chip:hover { border-color: var(--purple); background: rgba(37,99,235,.05); transform: scale(1.04); }
     .m-icon { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; }
     .m-icon img, .m-icon svg { width: 14px; height: 14px; display: block; }
 
@@ -257,7 +257,7 @@
       background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06);
       transition: all .25s;
     }
-    .bf:hover { background: rgba(255,255,255,.05); border-color: rgba(124,58,237,.2); transform: translateX(4px); }
+    .bf:hover { background: rgba(255,255,255,.05); border-color: rgba(37,99,235,.2); transform: translateX(4px); }
     .bf-icon {
       width: 40px; height: 40px; border-radius: 12px;
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
@@ -291,9 +291,9 @@
     .dc { display: flex; gap: 8px; }
     .dc-av { width: 24px; height: 24px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
     .dc-u { background: linear-gradient(135deg,var(--purple),var(--indigo)); color: #fff; }
-    .dc-a { background: rgba(124,58,237,.07); color: var(--purple); }
+    .dc-a { background: rgba(37,99,235,.07); color: var(--purple); }
     .dc-txt { font-size: 12px; line-height: 1.55; }
-    .dc.user .dc-txt { background: rgba(124,58,237,.05); padding: 6px 10px; border-radius: 10px 10px 2px 10px; display: inline-block; }
+    .dc.user .dc-txt { background: rgba(37,99,235,.05); padding: 6px 10px; border-radius: 10px 10px 2px 10px; display: inline-block; }
     .dc-tool { display: inline-flex; align-items: center; gap: 2px; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-family: var(--mono); font-weight: 500; background: rgba(16,185,129,.07); color: var(--mint); margin-top: 4px; }
 
     /* === PHONE — overlapping cards layout === */
@@ -344,9 +344,9 @@
     .ph-m { display: flex; gap: 4px; }
     .ph-av { width: 14px; height: 14px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 7px; font-weight: 700; flex-shrink: 0; }
     .ph-av.u { background: linear-gradient(135deg,var(--purple),var(--indigo)); color: #fff; }
-    .ph-av.a { background: rgba(124,58,237,.07); color: var(--purple); }
+    .ph-av.a { background: rgba(37,99,235,.07); color: var(--purple); }
     .ph-txt { font-size: 8px; line-height: 1.4; }
-    .ph-m.user .ph-txt { background: rgba(124,58,237,.06); padding: 4px 6px; border-radius: 6px 6px 2px 6px; display: inline-block; }
+    .ph-m.user .ph-txt { background: rgba(37,99,235,.06); padding: 4px 6px; border-radius: 6px 6px 2px 6px; display: inline-block; }
     .ph-tool { font-size: 7px; font-family: var(--mono); color: var(--mint); margin-top: 2px; }
     .ph-input { margin: 4px 6px 8px; padding: 5px 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; font-size: 8px; color: var(--text-3); }
 
@@ -466,7 +466,7 @@
       <div class="d-hdr">
         <div class="d-hdr-l"><div class="d-mark">D</div><span>delt</span><div class="d-status"><i></i> Ready</div></div>
         <div class="d-hdr-r">
-          <div class="d-hdr-btn" style="border-color:var(--purple);color:var(--purple);background:rgba(124,58,237,.04)">
+          <div class="d-hdr-btn" style="border-color:var(--purple);color:var(--purple);background:rgba(37,99,235,.04)">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/></svg>
             Integrations
           </div>
@@ -605,8 +605,8 @@
       <div class="m-chip"><div class="m-icon" style="background:rgba(0,121,191,.06)"><img src="https://cdn.simpleicons.org/trello/0052CC" alt="Trello"></div> Trello</div>
       <div class="m-chip"><div class="m-icon" style="background:rgba(55,53,47,.06)"><img src="https://cdn.simpleicons.org/apple/000000" alt="Apple"></div> Apple Apps</div>
       <div class="m-chip"><div class="m-icon" style="background:rgba(0,122,204,.06)"><svg width="14" height="14" viewBox="0 0 256 254"><defs><linearGradient id="vscGrad" x1="50%" x2="50%" y1="0%" y2="100%"><stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/></linearGradient><path id="vscMask" d="M180.828 252.605a15.87 15.87 0 0 0 12.65-.486l52.501-25.262a15.94 15.94 0 0 0 9.025-14.364V41.197a15.94 15.94 0 0 0-9.025-14.363l-52.5-25.263a15.88 15.88 0 0 0-18.115 3.084L74.857 96.35l-43.78-33.232a10.614 10.614 0 0 0-13.56.603L3.476 76.494c-4.63 4.211-4.635 11.495-.012 15.713l37.967 34.638l-37.967 34.637c-4.623 4.219-4.618 11.502.012 15.714l14.041 12.772a10.614 10.614 0 0 0 13.56.604l43.78-33.233l100.507 91.695a15.85 15.85 0 0 0 5.464 3.571m10.464-183.649l-76.262 57.889l76.262 57.888z"/></defs><mask id="vscClip" fill="#fff"><use href="#vscMask"/></mask><path fill="#0065a9" d="M246.135 26.873L193.593 1.575a15.885 15.885 0 0 0-18.123 3.08L3.466 161.482c-4.626 4.219-4.62 11.502.012 15.714l14.05 12.772a10.625 10.625 0 0 0 13.569.604L238.229 33.436c6.949-5.271 16.93-.315 16.93 8.407v-.61a15.94 15.94 0 0 0-9.024-14.36" mask="url(#vscClip)"/><path fill="#007acc" d="m246.135 226.816l-52.542 25.298a15.89 15.89 0 0 1-18.123-3.08L3.466 92.207c-4.626-4.218-4.62-11.502.012-15.713l14.05-12.773a10.625 10.625 0 0 1 13.569-.603l207.132 157.135c6.949 5.271 16.93.315 16.93-8.408v.611a15.94 15.94 0 0 1-9.024 14.36" mask="url(#vscClip)"/><path fill="#1f9cf0" d="M193.428 252.134a15.89 15.89 0 0 1-18.125-3.083c5.881 5.88 15.938 1.715 15.938-6.603V11.273c0-8.318-10.057-12.483-15.938-6.602a15.89 15.89 0 0 1 18.125-3.084l52.533 25.263a15.94 15.94 0 0 1 9.03 14.363V212.51c0 6.125-3.51 11.709-9.03 14.363z" mask="url(#vscClip)"/><path fill="url(#vscGrad)" fill-opacity=".25" d="M180.828 252.605a15.87 15.87 0 0 0 12.65-.486l52.5-25.263a15.94 15.94 0 0 0 9.026-14.363V41.197a15.94 15.94 0 0 0-9.025-14.363L193.477 1.57a15.88 15.88 0 0 0-18.114 3.084L74.857 96.35l-43.78-33.232a10.614 10.614 0 0 0-13.56.603L3.476 76.494c-4.63 4.211-4.635 11.495-.012 15.713l37.967 34.638l-37.967 34.637c-4.623 4.219-4.618 11.502.012 15.714l14.041 12.772a10.614 10.614 0 0 0 13.56.604l43.78-33.233l100.506 91.695a15.9 15.9 0 0 0 5.465 3.571m10.464-183.65l-76.262 57.89l76.262 57.888z" mask="url(#vscClip)"/></svg></div> VS Code</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(124,58,237,.06)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div> Local Files</div>
-      <div class="m-chip"><div class="m-icon" style="background:rgba(124,58,237,.06)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 8v6m-6-6h6m2 0h6"/><circle cx="12" cy="12" r="3"/></svg></div> Custom API</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(37,99,235,.06)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div> Local Files</div>
+      <div class="m-chip"><div class="m-icon" style="background:rgba(37,99,235,.06)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 8v6m-6-6h6m2 0h6"/><circle cx="12" cy="12" r="3"/></svg></div> Custom API</div>
     </div>
   </div>
 </section>
@@ -619,7 +619,7 @@
   </div>
   <div class="bold-features">
     <div class="bf reveal d1">
-      <div class="bf-icon" style="background:rgba(124,58,237,.12)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+      <div class="bf-icon" style="background:rgba(37,99,235,.12)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60A5FA" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
       <div><h4>Multi-tool in one turn</h4><p>One sentence triggers 3 APIs. No tab-switching, no orchestration.</p></div>
     </div>
     <div class="bf reveal d2">
@@ -717,7 +717,7 @@
       <p>Scan a QR from desktop. Delt opens on your phone — same session, same tools, same history. Walk away and keep going.</p>
       <div class="phone-perks">
         <div class="pp">
-          <div class="pp-icon" style="background:rgba(124,58,237,.07)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg></div>
+          <div class="pp-icon" style="background:rgba(37,99,235,.07)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg></div>
           <div><h4>Scan and go</h4><p>No app install. No login. QR creates a secure tunnel.</p></div>
         </div>
         <div class="pp">

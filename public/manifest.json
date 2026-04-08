@@ -4,7 +4,7 @@
   "description": "Your local AI assistant that connects to your tools. Private, fast, yours.",
   "start_url": "/",
   "display": "standalone",
-  "theme_color": "#6C5CE7",
+  "theme_color": "#2563EB",
   "background_color": "#F7F7F8",
   "orientation": "any",
   "scope": "/",

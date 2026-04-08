@@ -39,8 +39,8 @@
       const raw = localStorage.getItem(SESSION_KEY);
       if (!raw) return false;
       const data = JSON.parse(raw);
-      // Skip if older than 24 hours
-      if (Date.now() - data.ts > 86400000) {
+      // Skip if older than 7 days (was 24h — too aggressive for a persistent assistant)
+      if (Date.now() - data.ts > 7 * 86400000) {
         localStorage.removeItem(SESSION_KEY);
         return false;
       }
@@ -55,6 +55,37 @@
       }
     } catch {}
     return false;
+  }
+
+  // Auto-resume from server history if no local session saved
+  async function autoResumeFromHistory() {
+    try {
+      const resp = await fetch("/history-latest");
+      if (!resp.ok) return false;
+      const { conversation } = await resp.json();
+      if (!conversation || !conversation.messages?.length) return false;
+      sessionId = conversation.sessionId;
+      if (welcome) welcome.classList.add("hidden");
+      // Render past messages — sanitize role to prevent DOM injection
+      const validRoles = new Set(["user", "assistant"]);
+      for (const msg of conversation.messages) {
+        const role = validRoles.has(msg.role) ? msg.role : "assistant";
+        const div = document.createElement("div");
+        div.className = `message ${role}`;
+        const content = document.createElement("div");
+        content.className = "message-content";
+        // Messages in history are truncated to 300 chars — show as-is, user can continue the thread
+        content.innerHTML = typeof DOMPurify !== "undefined"
+          ? DOMPurify.sanitize(typeof marked !== "undefined" ? marked.parse(msg.text || "") : escapeHtml(msg.text || ""))
+          : escapeHtml(msg.text || "");
+        div.appendChild(content);
+        messagesEl.appendChild(div);
+      }
+      messagesEl.querySelectorAll("pre").forEach((pre) => addCopyBtns(pre.closest(".message-content") || pre.parentElement));
+      // Scroll to bottom so user sees latest, not top of old convo
+      if (scrollAnchor) scrollAnchor.scrollIntoView({ behavior: "instant" });
+      return true;
+    } catch { return false; }
   }
 
   function clearSavedSession() {
@@ -74,6 +105,9 @@
   let activeStep = null;
   let recognition = null;
   let micListening = false;
+  let previewOpen = false;
+  let inspectorActive = false;
+  let selectedElement = null;
 
   // --- DOM ---
   const messagesEl = document.getElementById("messages");
@@ -94,6 +128,26 @@
   const logoMark = document.getElementById("logo-mark");
   const logoText = document.getElementById("logo-text");
   const integrationChipsEl = document.getElementById("integration-chips");
+
+  // --- Preview DOM ---
+  const previewPanel = document.getElementById("preview-panel");
+  const previewBtn = document.getElementById("preview-btn");
+  const previewIframe = document.getElementById("preview-iframe");
+  const previewUrlInput = document.getElementById("preview-url-input");
+  const previewGoBtn = document.getElementById("preview-go-btn");
+  const previewInspectorBtn = document.getElementById("preview-inspector-btn");
+  const previewReloadBtn = document.getElementById("preview-reload-btn");
+  const previewCloseBtn = document.getElementById("preview-close-btn");
+  const previewEmpty = document.getElementById("preview-empty");
+  const previewError = document.getElementById("preview-error");
+  const previewErrorText = document.getElementById("preview-error-text");
+  const previewRetryBtn = document.getElementById("preview-retry-btn");
+  const previewPopover = document.getElementById("preview-element-popover");
+  const previewElementTag = document.getElementById("preview-element-tag");
+  const previewElementText = document.getElementById("preview-element-text");
+  const previewElementStyles = document.getElementById("preview-element-styles");
+  const previewEditBtn = document.getElementById("preview-edit-btn");
+  const previewPopoverDismiss = document.getElementById("preview-popover-dismiss");
 
   // --- Integration status chips (header bar) ---
   // Short names for chips to save space
@@ -431,6 +485,11 @@
         break;
       case "cron-result":
         showCronNotification(msg);
+        break;
+      case "preview-reload":
+        if (previewOpen && previewIframe && !previewIframe.classList.contains("hidden")) {
+          previewIframe.src = previewIframe.src; // reload
+        }
         break;
     }
   }
@@ -911,6 +970,164 @@
     },
   };
 
+  // --- Live Preview ---
+  const PREVIEW_URL_KEY = "delt-preview-url";
+
+  function togglePreview() {
+    if (!previewPanel) return;
+    previewOpen = !previewOpen;
+    previewPanel.classList.toggle("hidden", !previewOpen);
+    if (chatColumn) chatColumn.classList.toggle("preview-open", previewOpen);
+    if (previewOpen) {
+      const saved = localStorage.getItem(PREVIEW_URL_KEY);
+      if (saved && previewUrlInput) previewUrlInput.value = saved;
+      previewUrlInput?.focus();
+    } else {
+      setInspector(false);
+      dismissPopover();
+    }
+  }
+
+  function loadPreview(rawUrl) {
+    if (!rawUrl || !previewIframe) return;
+    rawUrl = rawUrl.trim();
+    if (!rawUrl) return;
+
+    localStorage.setItem(PREVIEW_URL_KEY, rawUrl);
+    dismissPopover();
+
+    // Determine mode: URL vs file path
+    const isUrl = /^https?:\/\//i.test(rawUrl);
+    const isPath = rawUrl.startsWith("/") || rawUrl.startsWith("~");
+
+    let src;
+    if (isUrl) {
+      // Proxy mode — inject inspector
+      src = "/preview-proxy?url=" + encodeURIComponent(rawUrl);
+    } else if (isPath) {
+      // File serve mode
+      const dir = rawUrl.replace(/^~/, "");
+      fetch("/preview-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: rawUrl.startsWith("~") ? rawUrl : rawUrl }),
+      }).catch(() => {});
+      src = "/preview-serve/";
+    } else {
+      // Assume URL without protocol
+      src = "/preview-proxy?url=" + encodeURIComponent("http://" + rawUrl);
+    }
+
+    previewIframe.classList.remove("hidden");
+    if (previewEmpty) previewEmpty.style.display = "none";
+    if (previewError) previewError.classList.add("hidden");
+    previewIframe.src = src;
+
+    previewIframe.onerror = () => showPreviewError("Failed to load preview");
+  }
+
+  function showPreviewError(msg) {
+    if (previewError && previewErrorText) {
+      previewErrorText.textContent = msg;
+      previewError.classList.remove("hidden");
+    }
+    previewIframe?.classList.add("hidden");
+  }
+
+  function setInspector(active) {
+    inspectorActive = active;
+    if (previewInspectorBtn) previewInspectorBtn.classList.toggle("active", active);
+    // Tell iframe to enable/disable inspector
+    try {
+      previewIframe?.contentWindow?.postMessage({ type: "delt-inspector-set", active }, "*");
+    } catch {}
+    if (!active) dismissPopover();
+  }
+
+  function dismissPopover() {
+    if (previewPopover) previewPopover.classList.add("hidden");
+    selectedElement = null;
+  }
+
+  function showElementPopover(el) {
+    if (!previewPopover || !el) return;
+    selectedElement = el;
+
+    // Tag label
+    let tagLabel = el.tag;
+    if (el.id) tagLabel += "#" + el.id;
+    if (el.classes && el.classes.length) tagLabel += "." + el.classes.slice(0, 2).join(".");
+    if (previewElementTag) previewElementTag.textContent = tagLabel;
+
+    // Text content
+    if (previewElementText) {
+      const txt = el.text || "";
+      previewElementText.textContent = txt.length > 120 ? txt.slice(0, 120) + "..." : txt;
+      previewElementText.style.display = txt ? "" : "none";
+    }
+
+    // Style chips
+    if (previewElementStyles && el.styles) {
+      const chips = [];
+      if (el.styles.fontSize) chips.push("font: " + el.styles.fontSize);
+      if (el.styles.color && el.styles.color !== "rgba(0, 0, 0, 0)") chips.push("color: " + el.styles.color);
+      if (el.styles.background && el.styles.background !== "rgba(0, 0, 0, 0)") chips.push("bg: " + el.styles.background);
+      if (el.styles.padding && el.styles.padding !== "0px") chips.push("pad: " + el.styles.padding);
+      if (el.styles.borderRadius && el.styles.borderRadius !== "0px") chips.push("radius: " + el.styles.borderRadius);
+      previewElementStyles.innerHTML = chips.map(c =>
+        `<span class="preview-style-chip">${c}</span>`
+      ).join("");
+    }
+
+    previewPopover.classList.remove("hidden");
+  }
+
+  function editSelectedElement() {
+    if (!selectedElement) return;
+    const el = selectedElement;
+    let prompt = `Edit the \`${el.selector}\` element`;
+    if (el.text) {
+      const shortText = el.text.length > 60 ? el.text.slice(0, 60) + "..." : el.text;
+      prompt += ` (currently says "${shortText}")`;
+    }
+    prompt += " \u2014 ";
+
+    // Pre-fill the chat input
+    if (input) {
+      input.value = prompt;
+      input.focus();
+      // Place cursor at end
+      input.setSelectionRange(prompt.length, prompt.length);
+      // Trigger auto-resize
+      input.dispatchEvent(new Event("input"));
+    }
+    dismissPopover();
+  }
+
+  // Listen for element selections from inspector inside iframe
+  window.addEventListener("message", (e) => {
+    if (e.data && e.data.type === "delt-element-selected" && e.data.element) {
+      showElementPopover(e.data.element);
+    }
+  });
+
+  // Preview event listeners
+  if (previewBtn) previewBtn.addEventListener("click", togglePreview);
+  if (previewCloseBtn) previewCloseBtn.addEventListener("click", togglePreview);
+  if (previewGoBtn) previewGoBtn.addEventListener("click", () => loadPreview(previewUrlInput?.value));
+  if (previewUrlInput) previewUrlInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") loadPreview(previewUrlInput.value);
+  });
+  if (previewInspectorBtn) previewInspectorBtn.addEventListener("click", () => setInspector(!inspectorActive));
+  if (previewReloadBtn) previewReloadBtn.addEventListener("click", () => {
+    if (previewIframe && !previewIframe.classList.contains("hidden")) {
+      previewIframe.src = previewIframe.src;
+    }
+  });
+  if (previewEditBtn) previewEditBtn.addEventListener("click", editSelectedElement);
+  if (previewPopoverDismiss) previewPopoverDismiss.addEventListener("click", dismissPopover);
+  if (previewRetryBtn) previewRetryBtn.addEventListener("click", () => loadPreview(previewUrlInput?.value));
+
   function executeAction(actionId, params) {
     const handler = ACTION_HANDLERS[actionId];
     if (handler) {
@@ -938,7 +1155,7 @@
 
   // --- Confetti ---
   function spawnConfetti() {
-    const colors = ["#6C5CE7", "#00CEC9", "#FD79A8", "#FDCB6E", "#55EFC4", "#E17055", "#0984E3"];
+    const colors = ["#2563EB", "#00CEC9", "#FD79A8", "#FDCB6E", "#55EFC4", "#E17055", "#0984E3"];
     const container = document.createElement("div");
     container.className = "delt-confetti-container";
     document.body.appendChild(container);
@@ -2028,7 +2245,7 @@
   // Category metadata for the Command Center
   const CATEGORY_META = {
     system:        { label: "System",        color: "#64748B", icon: "computer" },
-    productivity:  { label: "Productivity",  color: "#6C5CE7", icon: "layers" },
+    productivity:  { label: "Productivity",  color: "#2563EB", icon: "layers" },
     communication: { label: "Communication", color: "#0EA5E9", icon: "message" },
     development:   { label: "Development",   color: "#10B981", icon: "code" },
     commerce:      { label: "Commerce",      color: "#F59E0B", icon: "cart" },
@@ -2094,68 +2311,245 @@
   if (integrationsClose) integrationsClose.addEventListener("click", closeIntegrations);
   if (integrationsOverlay) integrationsOverlay.addEventListener("click", closeIntegrations);
 
-  // --- Memory Profile Panel ---
+  // --- Wiki Knowledge Base Panel ---
   const memoryBtn = document.getElementById("memory-btn");
   const memoryPanel = document.getElementById("memory-panel");
   const memoryOverlay = document.getElementById("memory-overlay");
   const memoryClose = document.getElementById("memory-close");
   const memoryBody = document.getElementById("memory-body");
 
-  function openMemory() { memoryPanel.classList.remove("hidden"); memoryOverlay.classList.remove("hidden"); loadMemory(); }
+  let wikiActiveCategory = "all";
+
+  function openMemory() { memoryPanel.classList.remove("hidden"); memoryOverlay.classList.remove("hidden"); loadWiki(); }
   function closeMemory() { memoryPanel.classList.add("hidden"); memoryOverlay.classList.add("hidden"); }
   if (memoryBtn) memoryBtn.addEventListener("click", openMemory);
   if (memoryClose) memoryClose.addEventListener("click", closeMemory);
   if (memoryOverlay) memoryOverlay.addEventListener("click", closeMemory);
 
-  async function loadMemory() {
+  const wikiCategoryLabels = { user: "You", project: "Projects", decision: "Decisions", preference: "Preferences", reference: "References", fact: "Facts" };
+  const wikiCategoryIcons = {
+    user: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+    project: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
+    decision: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+    preference: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    reference: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+    fact: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+  };
+
+  async function loadWiki() {
     memoryBody.innerHTML = '<div class="integrations-loading">Loading...</div>';
     try {
-      const res = await fetch("/memory");
+      const res = await fetch("/wiki");
       const data = await res.json();
-      renderMemoryPanel(data);
-    } catch { memoryBody.innerHTML = '<div class="integrations-loading">Could not load your profile.</div>'; }
+      renderWikiPanel(data.pages || [], data.stats || {});
+    } catch { memoryBody.innerHTML = '<div class="integrations-loading">Could not load knowledge base.</div>'; }
   }
 
-  function renderMemoryPanel(data) {
-    const userContent = data.user || "";
-    const meta = data.meta || {};
-    const lastExtracted = meta.lastExtraction ? new Date(meta.lastExtraction).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Never";
-    const extractCount = meta.exchangeCount || 0;
-    const isEmpty = !userContent.trim();
-    memoryBody.innerHTML =
-      '<div class="memory-profile-section">' +
-        '<div class="memory-profile-header">' +
-          '<div class="memory-profile-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>' +
-          '<div class="memory-profile-meta"><span class="memory-meta-item">Updated: ' + escapeHtml(lastExtracted) + '</span><span class="memory-meta-item">' + extractCount + ' learning' + (extractCount !== 1 ? 's' : '') + ' so far</span></div>' +
-        '</div>' +
-        (isEmpty ?
-          '<div class="memory-empty"><div class="memory-empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></div><p class="memory-empty-title">No profile yet</p><p class="memory-empty-sub">The more you chat, the more Delt learns about you. This builds up naturally over time.</p></div>' :
-          '<div class="memory-content-display" id="memory-content-display">' + renderMd(userContent) + '</div>'
-        ) +
-        '<div class="memory-actions"><button class="memory-edit-btn" id="memory-edit-btn">' + (isEmpty ? 'Add something about yourself' : 'Edit your profile') + '</button>' +
-        (!isEmpty ? '<button class="memory-clear-btn" id="memory-clear-btn">Clear profile</button>' : '') + '</div>' +
-        '<div class="memory-editor hidden" id="memory-editor"><textarea class="memory-textarea" id="memory-textarea" rows="12" placeholder="Tell Delt about yourself — role, preferences, projects, style...">' + escapeHtml(userContent) + '</textarea>' +
-        '<div class="memory-editor-actions"><button class="memory-save-btn" id="memory-save-btn">Save changes</button><button class="memory-cancel-btn" id="memory-cancel-btn">Cancel</button></div></div>' +
-      '</div>' +
-      '<div class="memory-info-section"><div class="memory-info-card"><strong>How does this work?</strong><p>After conversations, Delt reviews what it learned about you and saves it here. This profile is included at the start of every new chat so Delt remembers you across sessions.</p><p style="margin-top:8px;"><strong>This data never leaves your computer.</strong> Stored at <code>~/.delt/memory/user.md</code>.</p></div></div>';
+  function renderWikiPanel(pages, stats) {
+    const totalPages = stats.totalPages || 0;
+    const byCategory = stats.byCategory || {};
 
-    const editBtn = memoryBody.querySelector("#memory-edit-btn");
-    const clearBtn = memoryBody.querySelector("#memory-clear-btn");
-    const editor = memoryBody.querySelector("#memory-editor");
-    const display = memoryBody.querySelector("#memory-content-display");
-    const textarea = memoryBody.querySelector("#memory-textarea");
-    const saveBtn = memoryBody.querySelector("#memory-save-btn");
-    const cancelBtn = memoryBody.querySelector("#memory-cancel-btn");
-    if (editBtn) editBtn.addEventListener("click", () => { editor.classList.remove("hidden"); if (display) display.classList.add("hidden"); editBtn.classList.add("hidden"); if (clearBtn) clearBtn.classList.add("hidden"); textarea.focus(); });
-    if (cancelBtn) cancelBtn.addEventListener("click", () => { editor.classList.add("hidden"); if (display) display.classList.remove("hidden"); if (editBtn) editBtn.classList.remove("hidden"); if (clearBtn) clearBtn.classList.remove("hidden"); });
-    if (saveBtn) saveBtn.addEventListener("click", async () => {
-      saveBtn.textContent = "Saving..."; saveBtn.disabled = true;
-      try { await fetch("/memory", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: textarea.value }) }); loadMemory(); }
-      catch { saveBtn.textContent = "Failed — try again"; saveBtn.disabled = false; }
+    // Category tabs
+    let tabsHtml = '<div class="wiki-tabs"><button class="wiki-tab' + (wikiActiveCategory === "all" ? " active" : "") + '" data-cat="all">All <span class="wiki-tab-count">' + totalPages + '</span></button>';
+    for (const cat of ["user", "project", "decision", "preference", "reference", "fact"]) {
+      const count = byCategory[cat] || 0;
+      if (count > 0 || cat === "user") {
+        tabsHtml += '<button class="wiki-tab' + (wikiActiveCategory === cat ? " active" : "") + '" data-cat="' + cat + '">' + (wikiCategoryIcons[cat] || "") + ' ' + wikiCategoryLabels[cat] + ' <span class="wiki-tab-count">' + count + '</span></button>';
+      }
+    }
+    tabsHtml += '</div>';
+
+    // Filter pages
+    const filtered = wikiActiveCategory === "all" ? pages : pages.filter(p => p.category === wikiActiveCategory);
+    // Sort: most recently updated first
+    filtered.sort((a, b) => new Date(b.updated || 0) - new Date(a.updated || 0));
+
+    // Page cards
+    let cardsHtml = "";
+    if (!filtered.length) {
+      cardsHtml = '<div class="wiki-empty">' +
+        '<div class="wiki-empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>' +
+        '<p class="wiki-empty-title">No pages yet</p>' +
+        '<p class="wiki-empty-sub">Delt learns from your conversations and saves lasting facts here. The more you chat, the smarter it gets.</p>' +
+        '</div>';
+    } else {
+      cardsHtml = '<div class="wiki-cards">';
+      for (const page of filtered) {
+        const catIcon = wikiCategoryIcons[page.category] || "";
+        const catLabel = wikiCategoryLabels[page.category] || page.category;
+        const updated = page.updated ? new Date(page.updated).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+        const tags = (page.tags || []).map(t => '<span class="wiki-tag">' + escapeHtml(t) + '</span>').join("");
+        cardsHtml += '<div class="wiki-card" data-page-id="' + escapeHtml(page.id) + '">' +
+          '<div class="wiki-card-header">' +
+            '<span class="wiki-card-category">' + catIcon + ' ' + escapeHtml(catLabel) + '</span>' +
+            '<span class="wiki-card-date">' + escapeHtml(updated) + '</span>' +
+          '</div>' +
+          '<div class="wiki-card-title">' + escapeHtml(page.title) + '</div>' +
+          '<div class="wiki-card-summary">' + escapeHtml(page.summary || "") + '</div>' +
+          (tags ? '<div class="wiki-card-tags">' + tags + '</div>' : "") +
+        '</div>';
+      }
+      cardsHtml += '</div>';
+    }
+
+    // Add page button + info
+    const addBtn = '<div class="wiki-actions"><button class="memory-edit-btn" id="wiki-add-btn">Add a page</button></div>';
+    const infoHtml = '<div class="memory-info-section"><div class="memory-info-card"><strong>How does this work?</strong><p>After each conversation, Delt extracts lasting facts into wiki pages organized by topic. This knowledge base is loaded into every new chat so Delt remembers you across sessions.</p><p style="margin-top:8px;"><strong>This data never leaves your computer.</strong> Stored at <code>~/.delt/wiki/</code>.</p></div></div>';
+
+    memoryBody.innerHTML = tabsHtml + cardsHtml + addBtn + infoHtml;
+
+    // Tab click handlers
+    memoryBody.querySelectorAll(".wiki-tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        wikiActiveCategory = tab.dataset.cat;
+        renderWikiPanel(pages, stats);
+      });
     });
-    if (clearBtn) clearBtn.addEventListener("click", async () => {
-      if (!confirm("Clear your profile? Delt will start learning about you from scratch.")) return;
-      try { await fetch("/memory", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: "" }) }); loadMemory(); } catch {}
+
+    // Card click → expand page
+    memoryBody.querySelectorAll(".wiki-card").forEach(card => {
+      card.addEventListener("click", () => openWikiPage(card.dataset.pageId));
+    });
+
+    // Add page button
+    const addBtnEl = memoryBody.querySelector("#wiki-add-btn");
+    if (addBtnEl) addBtnEl.addEventListener("click", () => showWikiEditor(null));
+  }
+
+  async function openWikiPage(pageId) {
+    memoryBody.innerHTML = '<div class="integrations-loading">Loading...</div>';
+    try {
+      const parts = pageId.split("/");
+      const res = await fetch("/wiki/page/" + encodeURIComponent(parts[0]) + "/" + encodeURIComponent(parts[1]));
+      const page = await res.json();
+      renderWikiPageView(page);
+    } catch { memoryBody.innerHTML = '<div class="integrations-loading">Could not load page.</div>'; }
+  }
+
+  function renderWikiPageView(page) {
+    const catIcon = wikiCategoryIcons[page.category] || "";
+    const catLabel = wikiCategoryLabels[page.category] || page.category;
+    const updated = page.updated ? new Date(page.updated).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+    const created = page.created ? new Date(page.created).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+    const tags = (page.tags || []).map(t => '<span class="wiki-tag">' + escapeHtml(t) + '</span>').join("");
+
+    memoryBody.innerHTML =
+      '<div class="wiki-page-view">' +
+        '<button class="wiki-back-btn" id="wiki-back-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg> Back</button>' +
+        '<div class="wiki-page-header">' +
+          '<span class="wiki-card-category">' + catIcon + ' ' + escapeHtml(catLabel) + '</span>' +
+          '<h3 class="wiki-page-title">' + escapeHtml(page.title) + '</h3>' +
+          '<div class="wiki-page-meta">' +
+            (created ? '<span>Created ' + escapeHtml(created) + '</span>' : '') +
+            (updated ? '<span>Updated ' + escapeHtml(updated) + '</span>' : '') +
+          '</div>' +
+          (tags ? '<div class="wiki-card-tags">' + tags + '</div>' : '') +
+        '</div>' +
+        '<div class="memory-content-display">' + renderMd(page.content || "") + '</div>' +
+        '<div class="wiki-page-actions">' +
+          '<button class="memory-edit-btn" id="wiki-edit-page-btn">Edit</button>' +
+          '<button class="memory-clear-btn" id="wiki-delete-page-btn">Delete</button>' +
+        '</div>' +
+        '<div class="memory-editor hidden" id="wiki-page-editor">' +
+          '<textarea class="memory-textarea" id="wiki-page-textarea" rows="12">' + escapeHtml(page.content || "") + '</textarea>' +
+          '<div class="memory-editor-actions">' +
+            '<button class="memory-save-btn" id="wiki-page-save">Save</button>' +
+            '<button class="memory-cancel-btn" id="wiki-page-cancel">Cancel</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    memoryBody.querySelector("#wiki-back-btn").addEventListener("click", loadWiki);
+
+    const editBtn = memoryBody.querySelector("#wiki-edit-page-btn");
+    const deleteBtn = memoryBody.querySelector("#wiki-delete-page-btn");
+    const editor = memoryBody.querySelector("#wiki-page-editor");
+    const display = memoryBody.querySelector(".memory-content-display");
+    const textarea = memoryBody.querySelector("#wiki-page-textarea");
+    const saveBtn = memoryBody.querySelector("#wiki-page-save");
+    const cancelBtn = memoryBody.querySelector("#wiki-page-cancel");
+
+    editBtn.addEventListener("click", () => {
+      editor.classList.remove("hidden");
+      display.classList.add("hidden");
+      editBtn.classList.add("hidden");
+      deleteBtn.classList.add("hidden");
+      textarea.focus();
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      editor.classList.add("hidden");
+      display.classList.remove("hidden");
+      editBtn.classList.remove("hidden");
+      deleteBtn.classList.remove("hidden");
+    });
+
+    saveBtn.addEventListener("click", async () => {
+      saveBtn.textContent = "Saving..."; saveBtn.disabled = true;
+      try {
+        const parts = page.id.split("/");
+        await fetch("/wiki/page/" + encodeURIComponent(parts[0]) + "/" + encodeURIComponent(parts[1]), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: textarea.value }),
+        });
+        openWikiPage(page.id);
+      } catch { saveBtn.textContent = "Failed"; saveBtn.disabled = false; }
+    });
+
+    deleteBtn.addEventListener("click", async () => {
+      if (!confirm("Delete this page? This can't be undone.")) return;
+      try {
+        const parts = page.id.split("/");
+        await fetch("/wiki/page/" + encodeURIComponent(parts[0]) + "/" + encodeURIComponent(parts[1]), { method: "DELETE" });
+        loadWiki();
+      } catch {}
+    });
+  }
+
+  function showWikiEditor(page) {
+    const isNew = !page;
+    memoryBody.innerHTML =
+      '<div class="wiki-page-view">' +
+        '<button class="wiki-back-btn" id="wiki-back-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg> Back</button>' +
+        '<h3 class="wiki-page-title" style="margin:12px 0 16px">' + (isNew ? "New Page" : "Edit Page") + '</h3>' +
+        '<div class="wiki-editor-form">' +
+          '<input class="wiki-input" id="wiki-new-title" placeholder="Page title" value="' + escapeHtml(page ? page.title : "") + '" />' +
+          '<select class="wiki-input" id="wiki-new-category">' +
+            '<option value="user"' + (!page || page.category === "user" ? " selected" : "") + '>You</option>' +
+            '<option value="project"' + (page && page.category === "project" ? " selected" : "") + '>Project</option>' +
+            '<option value="decision"' + (page && page.category === "decision" ? " selected" : "") + '>Decision</option>' +
+            '<option value="preference"' + (page && page.category === "preference" ? " selected" : "") + '>Preference</option>' +
+            '<option value="reference"' + (page && page.category === "reference" ? " selected" : "") + '>Reference</option>' +
+            '<option value="fact"' + (page && page.category === "fact" ? " selected" : "") + '>Fact</option>' +
+          '</select>' +
+          '<input class="wiki-input" id="wiki-new-tags" placeholder="Tags (comma separated)" value="' + escapeHtml(page ? (page.tags || []).join(", ") : "") + '" />' +
+          '<textarea class="memory-textarea" id="wiki-new-content" rows="10" placeholder="What should Delt remember?">' + escapeHtml(page ? page.content : "") + '</textarea>' +
+          '<div class="memory-editor-actions">' +
+            '<button class="memory-save-btn" id="wiki-new-save">Save</button>' +
+            '<button class="memory-cancel-btn" id="wiki-new-cancel">Cancel</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    memoryBody.querySelector("#wiki-back-btn").addEventListener("click", loadWiki);
+    memoryBody.querySelector("#wiki-new-cancel").addEventListener("click", loadWiki);
+    memoryBody.querySelector("#wiki-new-save").addEventListener("click", async () => {
+      const title = memoryBody.querySelector("#wiki-new-title").value.trim();
+      const category = memoryBody.querySelector("#wiki-new-category").value;
+      const tags = memoryBody.querySelector("#wiki-new-tags").value.split(",").map(t => t.trim()).filter(Boolean);
+      const content = memoryBody.querySelector("#wiki-new-content").value.trim();
+      if (!title || !content) return;
+      const saveBtn = memoryBody.querySelector("#wiki-new-save");
+      saveBtn.textContent = "Saving..."; saveBtn.disabled = true;
+      try {
+        await fetch("/wiki/page", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category, title, content, tags }),
+        });
+        loadWiki();
+      } catch { saveBtn.textContent = "Failed"; saveBtn.disabled = false; }
     });
   }
 
@@ -4073,7 +4467,7 @@
       const res = await fetch("/install-silent", { method: "POST" });
       const data = await res.json();
       if (data.error === "node_required") {
-        if (obInstallLabel) obInstallLabel.innerHTML = 'Node.js required — <a href="https://nodejs.org" target="_blank" style="color:#6C5CE7">install it</a>, then refresh';
+        if (obInstallLabel) obInstallLabel.innerHTML = 'Node.js required — <a href="https://nodejs.org" target="_blank" style="color:#2563EB">install it</a>, then refresh';
         if (obInstallBar) obInstallBar.classList.add("error");
         return;
       }
@@ -4114,7 +4508,7 @@
           clearInterval(installPollTimer);
           if (obInstallFill) obInstallFill.classList.remove("indeterminate");
           if (obInstallBar) obInstallBar.classList.add("error");
-          if (obInstallLabel) obInstallLabel.innerHTML = 'Install failed — <button onclick="retryInstall()" style="background:none;border:none;color:#6C5CE7;cursor:pointer;text-decoration:underline;font:inherit">try again</button>';
+          if (obInstallLabel) obInstallLabel.innerHTML = 'Install failed — <button onclick="retryInstall()" style="background:none;border:none;color:#2563EB;cursor:pointer;text-decoration:underline;font:inherit">try again</button>';
         }
       } catch {}
     }, 2000);
@@ -4175,7 +4569,7 @@
         } else if (s.status === "failed") {
           clearInterval(waitTimer);
           if (obInstallBar) obInstallBar.classList.add("error");
-          if (obInstallLabel) obInstallLabel.innerHTML = 'Install failed — <button onclick="retryInstall()" style="background:none;border:none;color:#6C5CE7;cursor:pointer;text-decoration:underline;font:inherit">try again</button>';
+          if (obInstallLabel) obInstallLabel.innerHTML = 'Install failed — <button onclick="retryInstall()" style="background:none;border:none;color:#2563EB;cursor:pointer;text-decoration:underline;font:inherit">try again</button>';
         }
       } catch {}
     }, 1500);
@@ -4187,11 +4581,16 @@
     if (installPollTimer) clearInterval(installPollTimer);
     if (authPollTimer) clearInterval(authPollTimer);
 
-    const restored = restoreSession();
+    let restored = restoreSession();
 
-    loadConfig().then(() => {
+    loadConfig().then(async () => {
       checkOnboarding();
       wsConnect();
+
+      // If no local session, try auto-resuming the last conversation from server
+      if (!restored) {
+        restored = await autoResumeFromHistory();
+      }
 
       // Auto-detect and connect integrations on first load
       fetch("/integrations/auto-detect-all", { method: "POST" })
