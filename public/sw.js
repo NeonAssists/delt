@@ -1,6 +1,6 @@
 // Delt — Service Worker (PWA offline fallback only)
 // Strategy: ALWAYS use network. Cache is ONLY for offline fallback.
-const CACHE_NAME = "delt-v8";
+const CACHE_NAME = "delt-v9";
 const OFFLINE_URL = "/offline.html";
 const SHELL_URLS = [
   "/",
@@ -50,7 +50,10 @@ self.addEventListener("fetch", (event) => {
       url.pathname.startsWith("/upload") ||
       url.pathname.startsWith("/oauth") ||
       url.pathname.startsWith("/setup") ||
-      url.pathname.startsWith("/api")) {
+      url.pathname.startsWith("/api") ||
+      url.pathname.startsWith("/preview-proxy") ||
+      url.pathname.startsWith("/preview-serve") ||
+      url.pathname.startsWith("/preview-config")) {
     return;
   }
 
