@@ -16,7 +16,7 @@ NC='\033[0m'
 INSTALL_DIR="$HOME/Delt"
 DELT_DATA="$HOME/.delt"
 PORT_FILE="$DELT_DATA/port"
-DOWNLOAD_URL="https://delt.vercel.app/public/delt-latest.tar.gz"
+DOWNLOAD_URL="https://delt-marketing.vercel.app/public/delt-latest.tar.gz"
 PLIST_LABEL="com.neonotics.delt"
 PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 

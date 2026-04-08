@@ -2925,7 +2925,7 @@ server.on("error", (err) => {
 // ============================================
 const CURRENT_VERSION = require("./package.json").version;
 const UPDATE_URL = "https://delt-marketing.vercel.app/api/version";
-const DOWNLOAD_BASE = "https://delt.vercel.app";
+const DOWNLOAD_BASE = "https://delt-marketing.vercel.app";
 
 function compareVersions(a, b) {
   const pa = a.split(".").map(Number);
