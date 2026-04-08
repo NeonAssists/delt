@@ -13,3 +13,4 @@ memory/
 .env
 signups.json
 service-account.json
+.vercel

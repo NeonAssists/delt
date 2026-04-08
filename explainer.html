@@ -592,7 +592,7 @@
             <div>
               <h4>Open Terminal and run this</h4>
               <p>Installs Node.js (if needed), Claude Code, and Delt. Takes about 2 minutes.</p>
-              <code id="install-cmd">curl -fsSL https://raw.githubusercontent.com/NeonAssists/delt/main/install.sh | bash</code>
+              <code id="install-cmd">curl -fsSL https://delt.vercel.app/install.sh | bash</code>
             </div>
           </div>
           <div class="install-cta">
@@ -681,7 +681,7 @@
 
     // Copy install command
     function copyInstall() {
-      const cmd = 'curl -fsSL https://raw.githubusercontent.com/NeonAssists/delt/main/install.sh | bash';
+      const cmd = 'curl -fsSL https://delt.vercel.app/install.sh | bash';
       navigator.clipboard.writeText(cmd).then(() => {
         const btn = document.getElementById('copy-btn');
         btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!';

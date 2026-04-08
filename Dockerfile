@@ -7,7 +7,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY marketing-server.js ./
-COPY demo.html install.html delt-installer.html ./
+COPY demo.html explainer.html install.html delt-installer.html install.sh uninstall.sh ./
 COPY public/ ./public/
 
 EXPOSE 3000

@@ -8,7 +8,6 @@ demo-captures
 .env
 *.mp4
 *.pkg
-*.zip
 config.json
 config.json.bak
 credentials.json
@@ -17,8 +16,6 @@ service-account.json
 signups.json
 server.js
 build-installer.sh
-install.sh
-uninstall.sh
 test
 lib
 SETUP.md

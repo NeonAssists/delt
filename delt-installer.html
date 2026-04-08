@@ -75,10 +75,10 @@ h1{font-size:24px;font-weight:800;letter-spacing:-.04em;margin-bottom:6px}
 
   <div class="screen" id="screen-install">
     <h1>Install Delt</h1>
-    <p class="sub">Double-click <strong>Delt.pkg</strong> from this folder. Standard Mac installer &mdash; click Install and Delt opens automatically.</p>
-    <a class="btn" href="Delt.pkg" style="color:#FFF">
+    <p class="sub">Download <strong>Delt-v2.0.0.zip</strong>, unzip, and run the installer. Delt opens automatically.</p>
+    <a class="btn" href="/public/Delt-v2.0.0.zip" style="color:#FFF">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Open Delt.pkg
+      Download Delt-v2.0.0.zip
     </a>
     <p class="step-hint">Same as installing Zoom, Slack, or any other Mac app.</p>
     <button class="link-btn" onclick="showScreen('screen-account')">&larr; Back</button>
@@ -137,7 +137,7 @@ function pollForServer() {
       }
     } catch {}
     if (pollCount === 5) showScreen('screen-waiting');
-    if (pollCount > 90) { clearInterval(timer); document.getElementById('wait-status').innerHTML = 'Make sure you opened <strong>Delt.pkg</strong> and clicked Install.'; }
+    if (pollCount > 90) { clearInterval(timer); document.getElementById('wait-status').innerHTML = 'Make sure you downloaded and unzipped <strong>Delt-v2.0.0.zip</strong> and ran the installer.'; }
   }, 2000);
 }
 </script>
