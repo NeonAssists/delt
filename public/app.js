@@ -187,6 +187,83 @@
         if (tool) sendMessage(tool.prompt);
       });
     });
+
+    // Add integration-aware quick suggestions
+    addIntegrationSuggestions();
+  }
+
+  // Dynamic suggestions based on connected integrations
+  const INTEGRATION_SUGGESTIONS = {
+    "google-workspace": [
+      { icon: "mail", name: "Check email", prompt: "Summarize my unread emails" },
+      { icon: "calendar", name: "Today's schedule", prompt: "What's on my calendar today?" },
+    ],
+    "github": [
+      { icon: "chart", name: "PR status", prompt: "Show my open pull requests" },
+    ],
+    "slack": [
+      { icon: "chat", name: "Slack catch-up", prompt: "What's the latest in my Slack channels?" },
+    ],
+    "stripe": [
+      { icon: "dollar", name: "Revenue check", prompt: "Show my recent Stripe payments" },
+    ],
+    "notion": [
+      { icon: "document", name: "Search Notion", prompt: "Search my Notion workspace" },
+    ],
+    "todoist": [
+      { icon: "edit", name: "My tasks", prompt: "Show my Todoist tasks for today" },
+    ],
+    "linear": [
+      { icon: "chart", name: "My issues", prompt: "Show my assigned Linear issues" },
+    ],
+    "jira": [
+      { icon: "chart", name: "Sprint status", prompt: "Show my Jira sprint tickets" },
+    ],
+  };
+
+  async function addIntegrationSuggestions() {
+    try {
+      const res = await fetch("/integrations");
+      const data = await res.json();
+      const connected = (data.integrations || []).filter(i => i.connected);
+      if (!connected.length) return;
+
+      const suggestions = [];
+      for (const int of connected) {
+        const items = INTEGRATION_SUGGESTIONS[int.id];
+        if (items) suggestions.push(...items);
+      }
+      if (!suggestions.length) return;
+
+      // Build a "Your tools" row below the main tools grid
+      const existingRow = document.getElementById("integration-suggestions");
+      if (existingRow) existingRow.remove();
+
+      const row = document.createElement("div");
+      row.id = "integration-suggestions";
+      row.className = "integration-suggestions";
+      row.innerHTML = `
+        <div class="int-suggestions-label">From your connected apps</div>
+        <div class="int-suggestions-grid">
+          ${suggestions.slice(0, 4).map(s => `
+            <button class="int-suggestion-chip" data-prompt="${escapeHtml(s.prompt)}">
+              <span class="int-suggestion-icon">${ICONS[s.icon] || ""}</span>
+              ${escapeHtml(s.name)}
+            </button>
+          `).join("")}
+        </div>
+      `;
+
+      // Insert after tools grid
+      toolsGrid.parentElement.insertBefore(row, toolsGrid.nextSibling);
+
+      // Bind clicks
+      row.querySelectorAll(".int-suggestion-chip").forEach(chip => {
+        chip.addEventListener("click", () => {
+          sendMessage(chip.dataset.prompt);
+        });
+      });
+    } catch {}
   }
 
   // --- Markdown ---
@@ -327,6 +404,10 @@
         // Message sent from another device on this session
         addMessage("user", msg.message);
         break;
+      case "action":
+        // Server-triggered UI action (Claude decided to do something)
+        executeAction(msg.action, msg.params);
+        break;
     }
   }
 
@@ -353,9 +434,14 @@
 
       if (text && text !== lastTextContent) {
         lastTextContent = text;
+        // Strip action markers so user doesn't see raw [DELT_DO:...] or [DELT_HTML]...[/DELT_HTML]
+        const displayText = text
+          .replace(/\s*\[DELT_DO:\{[^[\]]*\}\]\s*/g, " ")
+          .replace(/\s*\[DELT_HTML\][\s\S]*?\[\/DELT_HTML\]\s*/g, " ")
+          .trim();
         const el = currentAssistantEl.querySelector(".message-content");
-        if (el) {
-          el.innerHTML = renderMd(text);
+        if (el && displayText) {
+          el.innerHTML = renderMd(displayText);
           addCopyBtns(el);
         }
         scrollDown();
@@ -672,6 +758,172 @@
     }
   });
 
+  // ============================================
+  // Delt Action Engine
+  // Claude is the brain. The UI is the body.
+  // Claude emits [DELT_DO:{...}] → server detects → client executes.
+  // Fast-path catches obvious commands client-side for zero latency.
+  // ============================================
+
+  // --- Action handlers (parameterized) ---
+  const ACTION_HANDLERS = {
+    "clear-chat": () => {
+      clearChat();
+      if (ws && connected) ws.send(JSON.stringify({ type: "new-chat" }));
+    },
+    "dark-mode": () => {
+      document.documentElement.setAttribute("data-theme", "dark");
+      localStorage.setItem("delt-theme", "dark");
+    },
+    "light-mode": () => {
+      document.documentElement.setAttribute("data-theme", "light");
+      localStorage.setItem("delt-theme", "light");
+    },
+    "set-font-size": (params) => {
+      const size = Math.max(12, Math.min(32, Number(params.size) || 15));
+      document.documentElement.style.setProperty("--msg-font-size", size + "px");
+      localStorage.setItem("delt-font-size", size);
+    },
+    "set-accent-color": (params) => {
+      if (params.color && /^#[0-9a-f]{3,8}$/i.test(params.color)) {
+        document.documentElement.style.setProperty("--accent", params.color);
+        // Derive hover and soft variants
+        document.documentElement.style.setProperty("--accent-hover", params.color + "dd");
+        document.documentElement.style.setProperty("--accent-soft", params.color + "14");
+        document.documentElement.style.setProperty("--accent-softer", params.color + "0a");
+        localStorage.setItem("delt-accent", params.color);
+      }
+    },
+    "set-bg-color": (params) => {
+      if (params.color) {
+        document.documentElement.style.setProperty("--bg-page", params.color);
+        localStorage.setItem("delt-bg", params.color);
+      }
+    },
+    "fullscreen": () => {
+      if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+    },
+    "exit-fullscreen": () => {
+      if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+    },
+    "scroll-top": () => { messagesEl.scrollTop = 0; },
+    "scroll-bottom": () => { scrollDown(); },
+    "stop": () => {
+      if (busy && ws && connected) ws.send(JSON.stringify({ type: "stop" }));
+    },
+    "confetti": () => { spawnConfetti(); },
+    "shake": () => {
+      document.body.classList.add("delt-shake");
+      setTimeout(() => document.body.classList.remove("delt-shake"), 600);
+    },
+    "notification": (params) => {
+      showToast(params.text || "Hey!");
+    },
+    "show-html": (params) => {
+      if (params.html) renderHtmlBlock(params.html);
+    },
+  };
+
+  function executeAction(actionId, params) {
+    const handler = ACTION_HANDLERS[actionId];
+    if (handler) {
+      try { handler(params || {}); } catch (e) { console.warn("Action failed:", actionId, e); }
+      return true;
+    }
+    return false;
+  }
+
+  // --- Fast-path: obvious commands, zero latency ---
+  // Only for things so obvious you shouldn't wait 2 seconds for Claude.
+  const FAST_ACTIONS = [
+    { test: /^(clear|reset|wipe|erase)\b/i, action: "clear-chat" },
+    { test: /^start\s*(over|fresh)/i, action: "clear-chat" },
+    { test: /^(stop|cancel|nevermind|never\s*mind|shut\s*up)$/i, action: "stop" },
+  ];
+
+  function fastMatch(text) {
+    const t = text.trim();
+    for (const f of FAST_ACTIONS) {
+      if (f.test.test(t)) return f.action;
+    }
+    return null;
+  }
+
+  // --- Confetti ---
+  function spawnConfetti() {
+    const colors = ["#6C5CE7", "#00CEC9", "#FD79A8", "#FDCB6E", "#55EFC4", "#E17055", "#0984E3"];
+    const container = document.createElement("div");
+    container.className = "delt-confetti-container";
+    document.body.appendChild(container);
+    for (let i = 0; i < 60; i++) {
+      const piece = document.createElement("div");
+      piece.className = "delt-confetti";
+      piece.style.left = Math.random() * 100 + "%";
+      piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+      piece.style.animationDelay = Math.random() * 0.5 + "s";
+      piece.style.animationDuration = (1.5 + Math.random() * 1.5) + "s";
+      container.appendChild(piece);
+    }
+    setTimeout(() => container.remove(), 3500);
+  }
+
+  // --- Toast notification ---
+  function showToast(text) {
+    const toast = document.createElement("div");
+    toast.className = "delt-toast";
+    toast.textContent = text;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add("visible"));
+    setTimeout(() => {
+      toast.classList.remove("visible");
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
+  // --- HTML sandbox renderer ---
+  function renderHtmlBlock(html) {
+    if (!currentAssistantEl) currentAssistantEl = addMessage("assistant", "");
+    const wrapper = document.createElement("div");
+    wrapper.className = "delt-html-block";
+    const iframe = document.createElement("iframe");
+    iframe.sandbox = "allow-scripts allow-same-origin";
+    iframe.srcdoc = html;
+    iframe.style.width = "100%";
+    iframe.style.border = "none";
+    iframe.style.borderRadius = "12px";
+    iframe.style.minHeight = "200px";
+    iframe.style.background = "#fff";
+    // Auto-resize iframe to fit content
+    iframe.onload = () => {
+      try {
+        const h = iframe.contentDocument.documentElement.scrollHeight;
+        iframe.style.height = Math.min(h + 20, 600) + "px";
+      } catch {}
+    };
+    wrapper.appendChild(iframe);
+    const body = currentAssistantEl.querySelector(".message-body");
+    if (body) body.appendChild(wrapper);
+    scrollDown();
+  }
+
+  // --- Restore persisted UI preferences ---
+  function restoreUiPrefs() {
+    const theme = localStorage.getItem("delt-theme");
+    if (theme) document.documentElement.setAttribute("data-theme", theme);
+    const fontSize = localStorage.getItem("delt-font-size");
+    if (fontSize) document.documentElement.style.setProperty("--msg-font-size", fontSize + "px");
+    const accent = localStorage.getItem("delt-accent");
+    if (accent) {
+      document.documentElement.style.setProperty("--accent", accent);
+      document.documentElement.style.setProperty("--accent-hover", accent + "dd");
+      document.documentElement.style.setProperty("--accent-soft", accent + "14");
+      document.documentElement.style.setProperty("--accent-softer", accent + "0a");
+    }
+    const bg = localStorage.getItem("delt-bg");
+    if (bg) document.documentElement.style.setProperty("--bg-page", bg);
+  }
+  restoreUiPrefs();
+
   // --- Message Queue ---
   const messageQueue = [];
 
@@ -679,6 +931,16 @@
   function sendMessage(text) {
     text = text || input.value.trim();
     if ((!text && !attachedFiles.length) || !connected) return;
+
+    // Fast-path: obvious commands execute instantly, no Claude round-trip
+    const fastAction = fastMatch(text);
+    if (fastAction) {
+      addMessage("user", text);
+      input.value = "";
+      autoResize();
+      executeAction(fastAction);
+      return;
+    }
 
     if (!text && attachedFiles.length) {
       text = "Take a look at what I uploaded and tell me what you see.";
@@ -1424,6 +1686,20 @@
   const integrationsClose = document.getElementById("integrations-close");
   const integrationsBody = document.getElementById("integrations-body");
 
+  // Category metadata for the Command Center
+  const CATEGORY_META = {
+    system:        { label: "System",        color: "#64748B", icon: "computer" },
+    productivity:  { label: "Productivity",  color: "#6C5CE7", icon: "layers" },
+    communication: { label: "Communication", color: "#0EA5E9", icon: "message" },
+    development:   { label: "Development",   color: "#10B981", icon: "code" },
+    commerce:      { label: "Commerce",      color: "#F59E0B", icon: "cart" },
+    finance:       { label: "Finance",       color: "#8B5CF6", icon: "dollar" },
+    crm:           { label: "CRM",           color: "#EC4899", icon: "users" },
+    design:        { label: "Design",        color: "#F43F5E", icon: "palette" },
+    storage:       { label: "Storage",       color: "#0891B2", icon: "folder" },
+    support:       { label: "Support",       color: "#14B8A6", icon: "headset" },
+  };
+
   const INTEGRATION_ICONS = {
     google: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>`,
     github: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#181717"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6.1-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.3 2.8.2 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.2.9 2.4v3.5c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/></svg>`,
@@ -1450,6 +1726,18 @@
     vscode: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M17.58 2L7.72 10.16 3.87 7.17 2 8.04v7.92l1.87.87 3.85-2.99L17.58 22 22 20.08V3.92L17.58 2zM7.72 14.17L5.04 12l2.68-2.17v4.34zm9.86 3.93L12.7 12l4.88-6.1v12.2z" fill="#007ACC"/></svg>`,
     computer: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
     api: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
+    todoist: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#E44332"><path d="M21 4.5H3c-.6 0-1 .4-1 1v13c0 .6.4 1 1 1h18c.6 0 1-.4 1-1v-13c0-.6-.4-1-1-1zM7 15l-2-2 1.4-1.4L7 12.2l3.6-3.6L12 10 7 15zm10-4H13v-1h4v1zm0-3H13V7h4v1z"/></svg>`,
+    jira: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84a.84.84 0 0 0-.84-.84H11.53z" fill="#2684FF"/><path d="M8.77 4.79c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V5.63a.84.84 0 0 0-.84-.84H8.77z" fill="url(#jg1)" opacity=".7"/><path d="M6 7.57c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.35 4.34 4.35V8.41a.84.84 0 0 0-.84-.84H6z" fill="url(#jg2)" opacity=".5"/><defs><linearGradient id="jg1" x1="12" y1="5" x2="16" y2="15"><stop stop-color="#0052CC"/><stop offset="1" stop-color="#2684FF"/></linearGradient><linearGradient id="jg2" x1="9" y1="8" x2="14" y2="18"><stop stop-color="#0052CC"/><stop offset="1" stop-color="#2684FF"/></linearGradient></defs></svg>`,
+    discord: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#5865F2"><path d="M19.27 5.33C17.94 4.71 16.5 4.26 15 4a.09.09 0 0 0-.07.03c-.18.33-.39.76-.53 1.09a16.09 16.09 0 0 0-4.8 0c-.14-.34-.36-.76-.54-1.09-.01-.02-.04-.03-.07-.03-1.5.26-2.93.71-4.27 1.33-.01 0-.02.01-.03.02-2.72 4.07-3.47 8.03-3.1 11.95 0 .02.01.04.03.05 1.8 1.32 3.53 2.12 5.24 2.65.03.01.06 0 .07-.02.4-.55.76-1.13 1.07-1.74.02-.04 0-.08-.04-.09-.57-.22-1.11-.48-1.64-.78-.04-.02-.04-.08-.01-.11.11-.08.22-.17.33-.25.02-.02.05-.02.07-.01 3.44 1.57 7.15 1.57 10.55 0 .02-.01.05-.01.07.01.11.09.22.17.33.26.04.03.04.09-.01.11-.52.31-1.07.56-1.64.78-.04.01-.05.06-.04.09.32.61.68 1.19 1.07 1.74.03.01.06.02.09.01 1.72-.53 3.45-1.33 5.25-2.65.02-.01.03-.03.03-.05.44-4.53-.73-8.46-3.1-11.95-.01-.01-.02-.02-.04-.02zM8.52 14.91c-1.03 0-1.89-.95-1.89-2.12s.84-2.12 1.89-2.12c1.06 0 1.9.96 1.89 2.12 0 1.17-.84 2.12-1.89 2.12zm6.97 0c-1.03 0-1.89-.95-1.89-2.12s.84-2.12 1.89-2.12c1.06 0 1.9.96 1.89 2.12 0 1.17-.83 2.12-1.89 2.12z"/></svg>`,
+    calendly: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#006BFF"><rect x="2" y="3" width="20" height="19" rx="3"/><path d="M2 8h20" stroke="white" stroke-width="1.5"/><circle cx="8" cy="13" r="1.5" fill="white"/><circle cx="12" cy="13" r="1.5" fill="white"/><circle cx="16" cy="13" r="1.5" fill="white"/><circle cx="8" cy="17.5" r="1.5" fill="white"/><circle cx="12" cy="17.5" r="1.5" fill="white"/></svg>`,
+    intercom: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#1F8DED"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M7 8v5M10 7v7M13.5 7v7M17 8v5" stroke="white" stroke-width="1.8" stroke-linecap="round"/><path d="M7 16s2 2 5 2 5-2 5-2" stroke="white" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>`,
+    confluence: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M3.3 16.5c-.3.5-.6 1-.8 1.4-.2.3-.1.8.3 1l3.6 2.1c.4.2.8.1 1-.2.2-.4.5-.9.8-1.4 1.9-3.2 3.9-2.8 7.6-1.1l3.4 1.5c.4.2.8 0 1-.4l1.6-3.8c.2-.4 0-.8-.4-1l-3.2-1.5C12.1 10.7 7.7 9.7 3.3 16.5z" fill="#1868DB"/><path d="M20.7 7.5c.3-.5.6-1 .8-1.4.2-.3.1-.8-.3-1L17.6 3c-.4-.2-.8-.1-1 .2-.2.4-.5.9-.8 1.4-1.9 3.2-3.9 2.8-7.6 1.1L4.8 4.2c-.4-.2-.8 0-1 .4L2.2 8.4c-.2.4 0 .8.4 1l3.2 1.5c6.1 2.4 10.5 3.4 14.9-3.4z" fill="#205DC5"/></svg>`,
+    supabase: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M13.7 21.8c-.4.5-1.3.2-1.3-.5V13h8.6c.9 0 1.4 1 .8 1.7l-8.1 7.1z" fill="#3ECF8E"/><path d="M13.7 21.8c-.4.5-1.3.2-1.3-.5V13h8.6c.9 0 1.4 1 .8 1.7l-8.1 7.1z" fill="url(#sg)" fill-opacity=".2"/><path d="M10.3 2.2c.4-.5 1.3-.2 1.3.5V11H3c-.9 0-1.4-1-.8-1.7l8.1-7.1z" fill="#3ECF8E"/><defs><linearGradient id="sg" x1="12.5" y1="14" x2="19" y2="22"><stop stop-color="#249361"/><stop offset="1" stop-color="#3ECF8E" stop-opacity="0"/></linearGradient></defs></svg>`,
+    vercel: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#000"><path d="M12 2L2 20h20L12 2z"/></svg>`,
+    database: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>`,
+    zendesk: `<svg width="20" height="20" viewBox="0 0 24 24" fill="#03363D"><path d="M11 6v14l-9-14h9zm2 0c0 2.76 2.24 5 5 5s5-2.24 5-5H13zm0 4v10h9L13 10z"/></svg>`,
+    clickup: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M4 16.5l3.6-2.8c1.8 2.3 3 3 4.4 3 1.4 0 2.6-.8 4.4-3l3.6 2.8c-2.4 3.2-4.8 4.7-8 4.7s-5.6-1.5-8-4.7z" fill="#8930FD"/><path d="M12 7.5l-6.5 5.3-2.5-3L12 3l9 6.8-2.5 3L12 7.5z" fill="#49CCF9"/></svg>`,
+    monday: `<svg width="20" height="20" viewBox="0 0 24 24"><circle cx="5" cy="15" r="3" fill="#FF3D57"/><circle cx="12" cy="12" r="3" fill="#FFCB00"/><circle cx="19" cy="9" r="3" fill="#00D647"/><rect x="3" y="15" width="4" height="5" rx="2" fill="#FF3D57"/><rect x="10" y="12" width="4" height="8" rx="2" fill="#FFCB00"/><rect x="17" y="9" width="4" height="11" rx="2" fill="#00D647"/></svg>`,
   };
 
   function openIntegrations() {
@@ -1480,52 +1768,155 @@
     refreshIntegrationChips();
   }
 
+  // Integration search state
+  let integrationSearchQuery = "";
+
   function renderIntegrations(integrations) {
+    const allItems = integrations.filter(i => i.id !== "custom-api");
+    const connected = allItems.filter(i => i.connected);
+    const total = allItems.length;
+    const connectedCount = connected.length;
+    const pct = total ? Math.round((connectedCount / total) * 100) : 0;
+
     // Group by category
-    const categories = {};
-    for (const i of integrations) {
+    const byCategory = {};
+    for (const i of allItems) {
       const cat = i.category || "other";
-      if (!categories[cat]) categories[cat] = [];
-      categories[cat].push(i);
+      if (!byCategory[cat]) byCategory[cat] = [];
+      byCategory[cat].push(i);
     }
 
-    // Connected first
-    const connected = integrations.filter((i) => i.connected);
-    const disconnected = integrations.filter((i) => !i.connected);
+    // Category display order
+    const catOrder = ["system", "productivity", "communication", "development", "commerce", "finance", "crm", "design", "storage", "support"];
 
     let html = "";
 
-    if (connected.length) {
-      html += '<div class="integration-category-label">Connected</div>';
-      html += '<div class="integrations-grid">';
-      html += connected.map(renderIntegrationCard).join("");
-      html += '</div>';
+    // --- Progress header ---
+    html += `<div class="cc-progress-bar">
+      <div class="cc-progress-info">
+        <span class="cc-progress-count">${connectedCount} of ${total} connected</span>
+        <span class="cc-progress-pct">${pct}%</span>
+      </div>
+      <div class="cc-progress-track"><div class="cc-progress-fill" style="width:${pct}%"></div></div>
+    </div>`;
+
+    // --- Search ---
+    html += `<div class="cc-search-wrap">
+      <svg class="cc-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input class="cc-search" id="cc-search" type="text" placeholder="Search integrations..." autocomplete="off" value="${escapeHtml(integrationSearchQuery)}">
+      ${integrationSearchQuery ? '<button class="cc-search-clear" id="cc-search-clear" title="Clear">&times;</button>' : ""}
+    </div>`;
+
+    // --- Category filter pills ---
+    html += `<div class="cc-category-pills" id="cc-category-pills">
+      <button class="cc-pill active" data-cat="all">All</button>
+      <button class="cc-pill" data-cat="connected">Connected (${connectedCount})</button>
+      ${catOrder.filter(c => byCategory[c]).map(c => {
+        const meta = CATEGORY_META[c] || { label: c, color: "#888" };
+        return `<button class="cc-pill" data-cat="${c}"><span class="cc-pill-dot" style="background:${meta.color}"></span>${meta.label}</button>`;
+      }).join("")}
+    </div>`;
+
+    // --- Integration cards by category ---
+    for (const cat of catOrder) {
+      if (!byCategory[cat]) continue;
+      const meta = CATEGORY_META[cat] || { label: cat, color: "#888" };
+      const items = byCategory[cat];
+      const catConnected = items.filter(i => i.connected).length;
+
+      html += `<div class="cc-category" data-category="${cat}">
+        <div class="cc-category-header">
+          <span class="cc-category-dot" style="background:${meta.color}"></span>
+          <span class="cc-category-name">${meta.label}</span>
+          <span class="cc-category-count">${catConnected}/${items.length}</span>
+        </div>
+        <div class="cc-category-grid">
+          ${items.map(i => renderIntegrationCard(i, meta.color)).join("")}
+        </div>
+      </div>`;
     }
 
-    if (disconnected.length) {
-      html += '<div class="integration-category-label">Available</div>';
-      html += '<div class="integrations-grid">';
-      html += disconnected.map(renderIntegrationCard).join("");
-      html += '</div>';
-    }
-
-    // Custom APIs section
-    html += '<div class="integration-category-label" style="margin-top:16px;">Custom APIs <button id="add-custom-api-btn" style="margin-left:8px;padding:2px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--accent);font-size:11px;cursor:pointer;font-weight:600;">+ Add API</button></div>';
-    html += '<div id="custom-apis-list"></div>';
-    html += '<div id="custom-api-form-container"></div>';
+    // --- Custom APIs ---
+    html += `<div class="cc-category" data-category="custom">
+      <div class="cc-category-header">
+        <span class="cc-category-dot" style="background:#6366F1"></span>
+        <span class="cc-category-name">Custom APIs</span>
+        <button id="add-custom-api-btn" class="cc-add-api-btn">+ Add</button>
+      </div>
+      <div id="custom-apis-list"></div>
+      <div id="custom-api-form-container"></div>
+    </div>`;
 
     integrationsBody.innerHTML = html;
 
-    // Bind events via delegation — remove old listener first to prevent leak
+    // --- Bind search ---
+    const searchEl = document.getElementById("cc-search");
+    if (searchEl) {
+      searchEl.addEventListener("input", (e) => {
+        integrationSearchQuery = e.target.value;
+        filterIntegrations();
+      });
+      if (integrationSearchQuery) filterIntegrations();
+    }
+    const clearBtn = document.getElementById("cc-search-clear");
+    if (clearBtn) clearBtn.addEventListener("click", () => {
+      integrationSearchQuery = "";
+      if (searchEl) searchEl.value = "";
+      filterIntegrations();
+      clearBtn.remove();
+    });
+
+    // --- Bind category pills ---
+    const pills = document.querySelectorAll(".cc-pill");
+    pills.forEach(pill => {
+      pill.addEventListener("click", () => {
+        pills.forEach(p => p.classList.remove("active"));
+        pill.classList.add("active");
+        const cat = pill.dataset.cat;
+        document.querySelectorAll(".cc-category").forEach(el => {
+          if (cat === "all") {
+            el.style.display = "";
+          } else if (cat === "connected") {
+            // Show categories that have connected items, hide cards that aren't connected
+            const cards = el.querySelectorAll(".cc-card");
+            let hasVisible = false;
+            cards.forEach(c => {
+              if (c.classList.contains("connected")) { c.style.display = ""; hasVisible = true; }
+              else c.style.display = "none";
+            });
+            el.style.display = hasVisible ? "" : "none";
+          } else {
+            el.style.display = el.dataset.category === cat || el.dataset.category === "custom" ? "" : "none";
+          }
+        });
+      });
+    });
+
+    // Bind events via delegation
     integrationsBody.removeEventListener("click", handleIntegrationClick);
     integrationsBody.addEventListener("click", handleIntegrationClick);
 
-    // Load custom APIs list
+    // Load custom APIs
     loadCustomApis();
-
-    // Add API button
     const addBtn = document.getElementById("add-custom-api-btn");
     if (addBtn) addBtn.addEventListener("click", showAddCustomApiForm);
+  }
+
+  function filterIntegrations() {
+    const q = integrationSearchQuery.toLowerCase().trim();
+    document.querySelectorAll(".cc-card").forEach(card => {
+      if (!q) { card.style.display = ""; return; }
+      const name = (card.dataset.name || "").toLowerCase();
+      const desc = (card.dataset.desc || "").toLowerCase();
+      card.style.display = (name.includes(q) || desc.includes(q)) ? "" : "none";
+    });
+    // Hide empty categories
+    document.querySelectorAll(".cc-category").forEach(cat => {
+      const visibleCards = cat.querySelectorAll('.cc-card:not([style*="display: none"])');
+      // Don't hide custom category
+      if (cat.dataset.category === "custom") return;
+      cat.style.display = visibleCards.length ? "" : "none";
+    });
   }
 
   // --- Custom API Hub ---
@@ -1604,6 +1995,7 @@
           ${templates.map(t => `<option value="${escapeHtml(JSON.stringify(t))}">${escapeHtml(t.name)} — ${escapeHtml(t.description)}</option>`).join("")}
         </select>
       ` : ""}
+      <div id="capi-setup-guide" style="display:none;"></div>
       <input class="capi-input" id="capi-name" type="text" placeholder="Name (e.g. Stripe, My CRM)" autocomplete="off">
       <input class="capi-input" id="capi-url" type="url" placeholder="Base URL (e.g. https://api.example.com/v1)" autocomplete="off">
       <select class="capi-input" id="capi-auth" style="padding:8px;">
@@ -1634,9 +2026,13 @@
     const templateSelect = form.querySelector("#api-template-select");
 
     // Template selector
+    const guideEl = form.querySelector("#capi-setup-guide");
     if (templateSelect) {
       templateSelect.addEventListener("change", () => {
-        if (!templateSelect.value) return;
+        if (!templateSelect.value) {
+          if (guideEl) { guideEl.style.display = "none"; guideEl.innerHTML = ""; }
+          return;
+        }
         try {
           const t = JSON.parse(templateSelect.value);
           nameEl.value = t.name || "";
@@ -1650,7 +2046,29 @@
           }
           updateAuthFields();
           checkValid();
-          keyEl.focus();
+
+          // Show setup guide if available
+          if (guideEl && t.setupGuide) {
+            const g = t.setupGuide;
+            const stepsHtml = (g.steps || []).map((s, i) => `<li>${escapeHtml(s)}</li>`).join("");
+            guideEl.innerHTML = `
+              <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                  <span style="font-weight:600;font-size:12px;color:var(--text-primary);">How to get your ${escapeHtml(t.name)} key</span>
+                  ${g.time ? `<span style="font-size:11px;color:var(--text-faint);">${escapeHtml(g.time)}</span>` : ""}
+                </div>
+                <ol style="margin:0;padding-left:20px;font-size:12px;color:var(--text-muted);line-height:1.7;">${stepsHtml}</ol>
+                ${g.helpUrl ? `<a href="${g.helpUrl}" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;font-size:12px;color:var(--accent);text-decoration:none;font-weight:500;">Open ${escapeHtml(t.name)} settings &rarr;</a>` : ""}
+              </div>
+            `;
+            guideEl.style.display = "block";
+          } else if (guideEl) {
+            guideEl.style.display = "none";
+            guideEl.innerHTML = "";
+          }
+
+          const firstKey = form.querySelector("#capi-key");
+          if (firstKey) firstKey.focus(); else nameEl.focus();
         } catch {}
       });
     }
@@ -1722,48 +2140,50 @@
     nameEl.focus();
   }
 
-  function renderIntegrationCard(i) {
+  function renderIntegrationCard(i, catColor) {
     const icon = INTEGRATION_ICONS[i.icon] || i.name.charAt(0);
+    const authType = i.effectiveAuthType || i.authType;
+
+    // Button label
+    let btnLabel = "Connect";
+    if (i.authType === "local-access") btnLabel = "Configure";
+    else if (authType === "oauth2") btnLabel = "Sign in";
+    else if (authType === "enable") btnLabel = "Enable";
+    else if (authType === "unavailable") btnLabel = "Coming soon";
+
     if (i.connected) {
-      // Build capabilities summary
-      const caps = i.capabilities || {};
-      let capsHtml = "";
-      if (caps.creates && caps.creates.length) {
-        capsHtml += `<span class="integration-caps">Can create: ${caps.creates.join(", ")}</span>`;
-      }
-      if (caps.limitations && caps.limitations.length) {
-        capsHtml += `<span class="integration-caps limitation">${caps.limitations[0]}</span>`;
-      }
+      const statusLabel = i.authType === "local-access"
+        ? (i.accessLevel === "full" ? "Full Access" : "Limited")
+        : "Connected";
       return `
-        <div class="integration-card connected" data-id="${i.id}">
-          <div class="integration-icon-box">${icon}</div>
-          <div class="integration-info">
-            <span class="integration-name">${escapeHtml(i.name)}</span>
-            <span class="integration-desc">${escapeHtml(i.description)}</span>
-            ${capsHtml}
-            ${i.tryIt ? `<span class="integration-tryit">Try: &ldquo;${escapeHtml(i.tryIt)}&rdquo;</span>` : ""}
+        <div class="cc-card connected" data-id="${i.id}" data-name="${escapeHtml(i.name)}" data-desc="${escapeHtml(i.description)}">
+          <div class="cc-card-top">
+            <div class="cc-card-icon" style="background:${catColor}15;color:${catColor}">${icon}</div>
+            <div class="cc-card-status connected">
+              <span class="cc-status-dot"></span>${statusLabel}
+            </div>
           </div>
-          <div class="integration-actions">
-            <span class="integration-status"><span class="integration-status-dot"></span> ${i.authType === "local-access" ? (i.accessLevel === "full" ? "Full Access" : "Limited Access") : "Connected"}</span>
-            <button class="integration-verify-btn" data-action="verify" data-id="${i.id}" style="font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;">Verify</button>
-            ${i.authType === "local-access"
-              ? `<button class="integration-connect-btn" data-action="connect" data-id="${i.id}" data-auth="local-access" style="font-size:12px">Change</button>`
-              : ""}
-            <button class="integration-disconnect-btn" data-action="disconnect" data-id="${i.id}">Remove</button>
+          <div class="cc-card-name">${escapeHtml(i.name)}</div>
+          <div class="cc-card-desc">${escapeHtml(i.description)}</div>
+          ${i.tryIt ? `<button class="cc-tryit" data-action="tryit" data-prompt="${escapeHtml(i.tryIt)}">Try it</button>` : ""}
+          <div class="cc-card-actions">
+            <button class="cc-action-btn" data-action="verify" data-id="${i.id}">Test</button>
+            ${i.authType === "local-access" ? `<button class="cc-action-btn" data-action="connect" data-id="${i.id}" data-auth="local-access">Edit</button>` : ""}
+            <button class="cc-action-btn danger" data-action="disconnect" data-id="${i.id}">Remove</button>
           </div>
+          <div class="cc-card-expand" id="cc-expand-${i.id}"></div>
         </div>`;
     }
+
     return `
-      <div class="integration-card" data-id="${i.id}">
-        <div class="integration-icon-box">${icon}</div>
-        <div class="integration-info">
-          <span class="integration-name">${escapeHtml(i.name)}</span>
-          <span class="integration-desc">${escapeHtml(i.description)}</span>
+      <div class="cc-card" data-id="${i.id}" data-name="${escapeHtml(i.name)}" data-desc="${escapeHtml(i.description)}">
+        <div class="cc-card-top">
+          <div class="cc-card-icon" style="background:${catColor}15;color:${catColor}">${icon}</div>
         </div>
-        <div class="integration-actions">
-          ${i.setupTime ? `<span class="integration-setup-time">${escapeHtml(i.setupTime)}</span>` : ""}
-          <button class="integration-connect-btn" data-action="connect" data-id="${i.id}" data-auth="${i.authType}">${i.authType === "oauth2" ? (i.oauthConfigured ? "Sign in" : "Set up") : i.authType === "enable" ? "Enable" : i.authType === "local-access" ? "Configure" : "Connect"}</button>
-        </div>
+        <div class="cc-card-name">${escapeHtml(i.name)}</div>
+        <div class="cc-card-desc">${escapeHtml(i.description)}</div>
+        <button class="cc-connect-btn" data-action="connect" data-id="${i.id}" data-auth="${authType}" style="--cat-color:${catColor}">${btnLabel}</button>
+        <div class="cc-card-expand" id="cc-expand-${i.id}"></div>
       </div>`;
   }
 
@@ -1774,6 +2194,16 @@
     const id = btn.dataset.id;
     const action = btn.dataset.action;
 
+    // "Try it" — inject prompt and close panel
+    if (action === "tryit") {
+      const prompt = btn.dataset.prompt;
+      if (prompt) {
+        closeIntegrations();
+        sendMessage(prompt);
+      }
+      return;
+    }
+
     if (action === "verify") {
       btn.textContent = "Testing...";
       btn.disabled = true;
@@ -1781,25 +2211,23 @@
         const res = await fetch(`/integrations/${id}/test`, { method: "POST" });
         const data = await res.json();
         if (data.ok) {
-          btn.textContent = "Working ✓";
-          btn.style.color = "var(--success)";
-          btn.style.borderColor = "var(--success)";
+          btn.textContent = "OK";
+          btn.classList.add("success");
         } else {
-          btn.textContent = "Failed ✗";
-          btn.style.color = "var(--error)";
-          btn.style.borderColor = "var(--error)";
+          btn.textContent = "Fail";
+          btn.classList.add("error");
           btn.title = data.error || "MCP server failed to start";
         }
       } catch {
-        btn.textContent = "Error";
-        btn.style.color = "var(--error)";
+        btn.textContent = "Err";
+        btn.classList.add("error");
       }
-      setTimeout(() => { btn.textContent = "Verify"; btn.disabled = false; btn.style.color = ""; btn.style.borderColor = ""; btn.title = ""; }, 3000);
+      setTimeout(() => { btn.textContent = "Test"; btn.disabled = false; btn.classList.remove("success", "error"); btn.title = ""; }, 3000);
       return;
     }
 
     if (action === "disconnect") {
-      btn.textContent = "Removing...";
+      btn.textContent = "...";
       try {
         await fetch(`/integrations/${id}/disconnect`, { method: "POST" });
         loadIntegrations();
@@ -1809,6 +2237,8 @@
 
     if (action === "connect") {
       const authType = btn.dataset.auth;
+      const card = btn.closest(".cc-card");
+
       if (authType === "enable") {
         btn.textContent = "Enabling...";
         btn.disabled = true;
@@ -1820,7 +2250,7 @@
           });
           const enableData = await enableRes.json();
           if (enableData.warning) {
-            btn.textContent = "Enabled (check setup)";
+            btn.textContent = "Check setup";
             btn.style.background = "#f59e0b";
             btn.title = enableData.warning;
             setTimeout(() => loadIntegrations(), 2000);
@@ -1828,12 +2258,15 @@
             loadIntegrations();
           }
         } catch { btn.textContent = "Failed"; btn.disabled = false; }
+
       } else if (authType === "local-access") {
-        showLocalAccessWizard(id, btn.closest(".integration-card"));
+        showLocalAccessWizard(id, card || btn.closest(".cc-card"));
+
       } else if (authType === "oauth2") {
         startOAuthFlow(id);
-      } else {
-        // Try auto-detect first (e.g., gh CLI for GitHub)
+
+      } else if (authType === "token") {
+        // Try auto-detect first
         btn.textContent = "Detecting...";
         btn.disabled = true;
         try {
@@ -1844,193 +2277,410 @@
             return;
           }
         } catch {}
-        // Auto-detect failed — fall back to manual token wizard
         btn.textContent = "Connect";
         btn.disabled = false;
-        showTokenWizard(id, btn.closest(".integration-card"));
+
+        // Show inline expansion instead of modal popup
+        showInlineConnect(id, card);
+
+      } else {
+        alert("This integration isn't available yet.");
       }
     }
   }
 
+  // --- Inline Connect (replaces modal popup) ---
+  async function showInlineConnect(integrationId, cardEl) {
+    const expandEl = document.getElementById(`cc-expand-${integrationId}`);
+    if (!expandEl) {
+      // Fallback to old modal if no expand area
+      showTokenWizard(integrationId, cardEl);
+      return;
+    }
+    // Toggle off if already open
+    if (expandEl.classList.contains("open")) {
+      expandEl.classList.remove("open");
+      expandEl.innerHTML = "";
+      return;
+    }
+
+    // Fetch integration details
+    const intData = await fetch("/integrations").then(r => r.json());
+    const integration = (intData.integrations || []).find(i => i.id === integrationId);
+    if (!integration) return;
+
+    const tc = integration.tokenConfig || {};
+    const hasFields = tc.fields && tc.fields.length > 0;
+    const helpUrl = tc.helpUrl;
+
+    // Open the help URL automatically
+    if (helpUrl) window.open(helpUrl, "_blank");
+
+    // Build inline form
+    const inputsHtml = hasFields
+      ? tc.fields.map(f => `
+        <div class="cc-inline-field">
+          <label>${escapeHtml(f.label)}</label>
+          <div class="cc-inline-input-wrap">
+            <input class="cc-inline-input" data-key="${escapeHtml(f.key)}" type="password" placeholder="${escapeHtml(f.placeholder || '')}" autocomplete="off" spellcheck="false">
+            <button type="button" class="cc-inline-toggle" tabindex="-1">Show</button>
+          </div>
+        </div>`).join("")
+      : `<div class="cc-inline-field">
+          <label>${escapeHtml(tc.label || "API Key")}</label>
+          <div class="cc-inline-input-wrap">
+            <input class="cc-inline-input" type="password" placeholder="${escapeHtml(tc.placeholder || 'Paste your token here')}" autocomplete="off" spellcheck="false">
+            <button type="button" class="cc-inline-toggle" tabindex="-1">Show</button>
+          </div>
+        </div>`;
+
+    expandEl.innerHTML = `
+      <div class="cc-inline-connect">
+        ${helpUrl ? `<div class="cc-inline-hint">A tab opened to <strong>${escapeHtml(integration.name)}</strong>. Grab your key and paste it here.</div>` : ""}
+        ${helpUrl ? `<a class="cc-inline-reopen" href="${escapeHtml(helpUrl)}" target="_blank">Didn't open? Click here</a>` : ""}
+        ${inputsHtml}
+        <div class="cc-inline-actions">
+          <button class="cc-inline-submit" disabled>Connect</button>
+          <button class="cc-inline-cancel">Cancel</button>
+        </div>
+        <div class="cc-inline-error" style="display:none"></div>
+      </div>
+    `;
+    expandEl.classList.add("open");
+
+    // Bind show/hide toggles
+    expandEl.querySelectorAll(".cc-inline-toggle").forEach(btn => {
+      btn.onclick = () => {
+        const inp = btn.parentElement.querySelector("input");
+        if (inp.type === "password") { inp.type = "text"; btn.textContent = "Hide"; }
+        else { inp.type = "password"; btn.textContent = "Show"; }
+      };
+    });
+
+    const inputs = expandEl.querySelectorAll(".cc-inline-input");
+    const submit = expandEl.querySelector(".cc-inline-submit");
+    const cancel = expandEl.querySelector(".cc-inline-cancel");
+    const errorEl = expandEl.querySelector(".cc-inline-error");
+
+    function checkFilled() {
+      submit.disabled = ![...inputs].every(inp => inp.value.trim());
+    }
+    inputs.forEach(inp => {
+      inp.addEventListener("input", () => { errorEl.style.display = "none"; checkFilled(); });
+      inp.addEventListener("keydown", e => { if (e.key === "Enter" && !submit.disabled) doConnect(); });
+    });
+
+    cancel.addEventListener("click", () => {
+      expandEl.classList.remove("open");
+      expandEl.innerHTML = "";
+    });
+
+    submit.addEventListener("click", doConnect);
+
+    async function doConnect() {
+      submit.disabled = true;
+      submit.textContent = "Connecting...";
+      errorEl.style.display = "none";
+      let body;
+      if (hasFields) {
+        const fields = {};
+        inputs.forEach(inp => { fields[inp.dataset.key] = inp.value.trim(); });
+        body = { fields };
+      } else {
+        body = { token: inputs[0].value.trim() };
+      }
+      try {
+        const res = await fetch(`/integrations/${integrationId}/connect`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const result = await res.json();
+        if (result.ok) {
+          submit.textContent = "Connected!";
+          submit.classList.add("success");
+          setTimeout(() => loadIntegrations(), 600);
+        } else {
+          errorEl.textContent = result.error || "Connection failed. Check your credentials.";
+          errorEl.style.display = "block";
+          submit.textContent = "Connect";
+          submit.disabled = false;
+        }
+      } catch {
+        errorEl.textContent = "Network error. Try again.";
+        errorEl.style.display = "block";
+        submit.textContent = "Connect";
+        submit.disabled = false;
+      }
+    }
+
+    // Focus first input
+    inputs[0]?.focus();
+    // Scroll card into view
+    expandEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
   // OAuth flow — open popup + poll fallback for PWA/desktop
+  // Unverified OAuth apps that need the "Advanced" bypass guidance
+  const UNVERIFIED_OAUTH_IDS = new Set(["google-workspace"]);
+
   async function startOAuthFlow(integrationId) {
     try {
       const res = await fetch(`/integrations/${integrationId}/auth-url`);
       const data = await res.json();
-      if (data.url) {
-        const popup = window.open(data.url, "oauth", "width=500,height=700,left=200,top=100");
-
-        // If popup was blocked, open in current tab as fallback
-        if (!popup || popup.closed) {
-          window.location.href = data.url;
-          return;
-        }
-
-        let resolved = false;
-        function done() {
-          if (resolved) return;
-          resolved = true;
-          loadIntegrations();
-        }
-
-        // Method 1: postMessage from popup (works in regular browser)
-        window.addEventListener("message", function handler(e) {
-          if (e.data?.type === "oauth-complete" && e.data?.integrationId === integrationId) {
-            window.removeEventListener("message", handler);
-            done();
-          }
-        });
-
-        // Method 2: poll server for connection status (works in PWA/desktop where window.opener is null)
-        let attempts = 0;
-        const poll = setInterval(async () => {
-          if (resolved) { clearInterval(poll); return; }
-          attempts++;
-          try {
-            const check = await fetch("/integrations");
-            const status = await check.json();
-            const integration = (status.integrations || []).find((i) => i.id === integrationId);
-            if (integration && integration.connected) {
-              clearInterval(poll);
-              done();
-            }
-          } catch {}
-          if (attempts > 120) { // 2 min timeout
-            clearInterval(poll);
-          }
-        }, 2000);
-      } else if (data.needsSetup) {
-        // OAuth not configured — show setup wizard on the card
-        const card = document.querySelector(`.integration-card[data-id="${integrationId}"]`);
-        if (card) showOAuthSetupWizard(integrationId, card);
-      } else {
+      if (!data.url) {
         alert(data.error || "OAuth not available for this service yet.");
+        return;
+      }
+
+      // For unverified OAuth apps, show guidance before opening the popup
+      if (UNVERIFIED_OAUTH_IDS.has(integrationId)) {
+        showOAuthGuidance(integrationId, data.url);
+      } else {
+        openOAuthPopup(integrationId, data.url);
       }
     } catch {
       alert("Failed to start authentication.");
     }
   }
 
-  // OAuth setup wizard — shown when OAuth client isn't configured yet
-  function showOAuthSetupWizard(integrationId, cardEl) {
-    const existing = cardEl.querySelector(".oauth-setup-wizard");
-    if (existing) { existing.remove(); return; }
+  function showOAuthGuidance(integrationId, authUrl) {
+    // Remove any existing guidance overlay
+    document.querySelectorAll(".oauth-guidance-overlay").forEach((el) => el.remove());
 
-    const wizard = document.createElement("div");
-    wizard.className = "oauth-setup-wizard token-wizard";
-    wizard.innerHTML = `
-      <div class="token-wizard-header">
-        <div class="token-wizard-title">Connect Google Account</div>
-        <span class="token-wizard-time">One-time setup</span>
+    const overlay = document.createElement("div");
+    overlay.className = "oauth-guidance-overlay";
+    overlay.innerHTML = `
+      <div class="oauth-guidance-card">
+        <div class="oauth-guidance-header">
+          <span style="font-size:20px;">&#x1f512;</span>
+          <h3>Quick heads-up before you sign in</h3>
+        </div>
+        <p class="oauth-guidance-subtitle">Google will show a security warning because Delt is a new app that hasn't been verified yet. Your data stays 100% on your computer — nothing is sent to any server.</p>
+        <div class="oauth-guidance-steps">
+          <div class="oauth-guidance-step">
+            <span class="oauth-guidance-step-num">1</span>
+            <div>
+              <strong>Choose your Google account</strong>
+              <span class="oauth-guidance-step-detail">Pick the account you want to connect</span>
+            </div>
+          </div>
+          <div class="oauth-guidance-step">
+            <span class="oauth-guidance-step-num">2</span>
+            <div>
+              <strong>Click "Advanced"</strong>
+              <span class="oauth-guidance-step-detail">It's the small text at the bottom left of the warning screen</span>
+            </div>
+          </div>
+          <div class="oauth-guidance-step">
+            <span class="oauth-guidance-step-num">3</span>
+            <div>
+              <strong>Click "Go to Delt (unsafe)"</strong>
+              <span class="oauth-guidance-step-detail">This just means Google hasn't reviewed the app yet — it's safe</span>
+            </div>
+          </div>
+          <div class="oauth-guidance-step">
+            <span class="oauth-guidance-step-num">4</span>
+            <div>
+              <strong>Allow access</strong>
+              <span class="oauth-guidance-step-detail">Review the permissions and click "Continue"</span>
+            </div>
+          </div>
+        </div>
+        <div class="oauth-guidance-actions">
+          <button class="oauth-guidance-continue">Continue to Google Sign-in</button>
+          <button class="oauth-guidance-cancel">Cancel</button>
+        </div>
+        <p class="oauth-guidance-footer">Delt runs entirely on your machine. Your tokens are encrypted and stored locally in <code>~/.delt/</code></p>
       </div>
-      <div class="oauth-setup-explainer" style="font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.5;">
-        Delt needs a Google API key to access Gmail, Calendar, and Sheets on your behalf. This is a one-time setup — you won't need to do this again.
-      </div>
-      <ol class="token-wizard-steps">
-        <li data-step="1"><a href="https://console.cloud.google.com/apis/credentials/oauthclient?previousPage=%2Fapis%2Fcredentials" target="_blank" rel="noopener"><strong>Click here</strong></a> to open Google's credential page</li>
-        <li data-step="2">Select <strong>Desktop app</strong> as the type, name it <strong>Delt</strong>, then click Create</li>
-        <li data-step="3">Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> shown and paste them below</li>
-      </ol>
-      <input class="token-wizard-input" data-key="clientId" type="text" placeholder="Client ID (xxxxx.apps.googleusercontent.com)" autocomplete="off">
-      <input class="token-wizard-input" data-key="clientSecret" type="password" placeholder="Client Secret" autocomplete="off">
-      <div style="display:flex;gap:8px;margin-top:4px;">
-        <button class="token-wizard-submit" disabled style="flex:1">Save & Sign in</button>
-        <button class="oauth-skip-btn" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;">Skip for now</button>
-      </div>
-      <div class="token-wizard-troubleshoot">First time? You may need to <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">create a Google Cloud project</a> first (free, takes 10 seconds), then enable the <a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noopener">Gmail</a>, <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noopener">Calendar</a>, and <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener">Sheets</a> APIs.</div>
     `;
 
-    // Skip button
-    const skipBtn = wizard.querySelector(".oauth-skip-btn");
-    if (skipBtn) skipBtn.addEventListener("click", () => wizard.remove());
-
-    const inputs = wizard.querySelectorAll(".token-wizard-input");
-    const submit = wizard.querySelector(".token-wizard-submit");
-
-    function checkFilled() {
-      submit.disabled = ![...inputs].every((inp) => inp.value.trim());
-    }
-    inputs.forEach((inp) => {
-      inp.addEventListener("input", checkFilled);
-      inp.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !submit.disabled) doSetup();
-      });
+    overlay.querySelector(".oauth-guidance-cancel").onclick = () => overlay.remove();
+    overlay.querySelector(".oauth-guidance-continue").onclick = () => {
+      overlay.remove();
+      openOAuthPopup(integrationId, authUrl);
+    };
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) overlay.remove();
     });
 
-    async function doSetup() {
-      submit.disabled = true;
-      submit.textContent = "Saving...";
-      try {
-        const setupRes = await fetch(`/integrations/${integrationId}/oauth-setup`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            clientId: inputs[0].value.trim(),
-            clientSecret: inputs[1].value.trim(),
-          }),
-        });
-        const result = await setupRes.json();
-        if (result.ok) {
-          wizard.remove();
-          startOAuthFlow(integrationId);
-        } else {
-          submit.textContent = result.error || "Failed";
-          submit.disabled = false;
-        }
-      } catch {
-        submit.textContent = "Failed — try again";
-        submit.disabled = false;
-      }
-    }
-
-    submit.addEventListener("click", doSetup);
-    cardEl.appendChild(wizard);
-    inputs[0].focus();
+    document.body.appendChild(overlay);
   }
 
-  // Token wizard — show inline form
-  function showTokenWizard(integrationId, cardEl) {
-    // Fetch integration details from the card's data
-    const existingWizard = cardEl.querySelector(".token-wizard");
-    if (existingWizard) { existingWizard.remove(); return; }
+  function openOAuthPopup(integrationId, authUrl) {
+    const popup = window.open(authUrl, "oauth", "width=500,height=700,left=200,top=100");
 
-    // Find integration in the last loaded data
+    // If popup was blocked, open in current tab as fallback
+    if (!popup || popup.closed) {
+      window.location.href = authUrl;
+      return;
+    }
+
+    let resolved = false;
+    function done() {
+      if (resolved) return;
+      resolved = true;
+      // Remove waiting indicator if present
+      document.querySelectorAll(".oauth-waiting-indicator").forEach((el) => el.remove());
+      loadIntegrations();
+    }
+
+    // Show a subtle waiting indicator in the main window
+    showOAuthWaitingIndicator();
+
+    // Method 1: postMessage from popup (works in regular browser)
+    window.addEventListener("message", function handler(e) {
+      if (e.data?.type === "oauth-complete" && e.data?.integrationId === integrationId) {
+        window.removeEventListener("message", handler);
+        done();
+      }
+    });
+
+    // Method 2: poll server for connection status (works in PWA/desktop where window.opener is null)
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      if (resolved) { clearInterval(poll); return; }
+      attempts++;
+      try {
+        const check = await fetch("/integrations");
+        const status = await check.json();
+        const integration = (status.integrations || []).find((i) => i.id === integrationId);
+        if (integration && integration.connected) {
+          clearInterval(poll);
+          done();
+        }
+      } catch {}
+      if (attempts > 120) { // 2 min timeout
+        clearInterval(poll);
+        document.querySelectorAll(".oauth-waiting-indicator").forEach((el) => el.remove());
+      }
+    }, 2000);
+  }
+
+  function showOAuthWaitingIndicator() {
+    document.querySelectorAll(".oauth-waiting-indicator").forEach((el) => el.remove());
+    const indicator = document.createElement("div");
+    indicator.className = "oauth-waiting-indicator";
+    indicator.innerHTML = `
+      <div class="oauth-waiting-content">
+        <div class="oauth-waiting-dot"></div>
+        <span>Waiting for Google sign-in to complete...</span>
+      </div>
+      <span class="oauth-waiting-hint">Remember: click <strong>Advanced</strong> → <strong>Go to Delt (unsafe)</strong> if you see a warning</span>
+      <button class="oauth-waiting-dismiss" title="Dismiss">&times;</button>
+    `;
+    indicator.querySelector(".oauth-waiting-dismiss").onclick = () => indicator.remove();
+    document.body.appendChild(indicator);
+  }
+
+
+  // "Requires setup" message for OAuth services without credentials
+  function showSetupRequiredMessage(integrationId, cardEl, integration) {
+    const existing = document.querySelector(".connect-modal-overlay");
+    if (existing) existing.remove();
+    const icon = INTEGRATION_ICONS[integration.icon] || integration.name.charAt(0);
+    const overlay = document.createElement("div");
+    overlay.className = "connect-modal-overlay";
+    overlay.innerHTML = `
+      <div class="connect-modal-card" style="text-align:center;">
+        <button class="connect-modal-close" title="Close">&times;</button>
+        <div class="connect-modal-header">
+          <div class="connect-modal-icon">${icon}</div>
+          <div class="connect-modal-name">${escapeHtml(integration.name)}</div>
+        </div>
+        <p style="color:var(--text-secondary);font-size:14px;line-height:1.6;margin:16px 0 0;">
+          ${escapeHtml(integration.name)} sign-in is being set up. Once it's ready, you'll just click <strong>Sign in</strong> and you're connected — no keys or setup needed.
+        </p>
+        <p style="color:var(--text-faint);font-size:12px;margin-top:12px;">
+          If you're the admin, set the OAuth credentials via environment variables to enable this.
+        </p>
+      </div>
+    `;
+    overlay.querySelector(".connect-modal-close").onclick = () => overlay.remove();
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  }
+
+  // Token wizard — full-screen modal for connecting integrations
+  function showTokenWizard(integrationId, cardEl) {
+    // Remove any existing modal
+    const existing = document.querySelector(".connect-modal-overlay");
+    if (existing) existing.remove();
+
     fetch("/integrations").then((r) => r.json()).then((data) => {
       const integration = (data.integrations || []).find((i) => i.id === integrationId);
       if (!integration) return;
 
       const tc = integration.tokenConfig || {};
-      const steps = (integration.setupSteps || []).map((s, i) =>
-        `<li data-step="${i + 1}">${escapeHtml(s)}</li>`
-      ).join("");
-
-      const wizard = document.createElement("div");
-      wizard.className = "token-wizard";
+      const icon = INTEGRATION_ICONS[integration.icon] || integration.name.charAt(0);
       const hasFields = tc.fields && tc.fields.length > 0;
-      const inputsHtml = hasFields
-        ? tc.fields.map((f) => `<input class="token-wizard-input" data-key="${escapeHtml(f.key)}" type="password" placeholder="${escapeHtml(f.placeholder || f.label)}" autocomplete="off" aria-label="${escapeHtml(f.label)}">`).join("")
-        : `<input class="token-wizard-input" type="password" placeholder="${escapeHtml(tc.placeholder || 'Paste your token here')}" autocomplete="off">`;
 
-      wizard.innerHTML = `
-        <div class="token-wizard-header">
-          <div class="token-wizard-title">How to get your ${escapeHtml(hasFields ? integration.name + " credentials" : tc.label || "API key")}</div>
-          ${integration.setupTime ? `<span class="token-wizard-time">${escapeHtml(integration.setupTime)}</span>` : ""}
+      // Build labeled inputs with show/hide toggles
+      const inputsHtml = hasFields
+        ? tc.fields.map((f) => `
+          <div class="connect-field">
+            <label class="connect-field-label">${escapeHtml(f.label)}</label>
+            <div class="connect-field-wrap">
+              <input class="connect-field-input" data-key="${escapeHtml(f.key)}" type="password" placeholder="${escapeHtml(f.placeholder || '')}" autocomplete="off" spellcheck="false">
+              <button type="button" class="connect-field-toggle" tabindex="-1">Show</button>
+            </div>
+          </div>`).join("")
+        : `
+          <div class="connect-field">
+            <label class="connect-field-label">${escapeHtml(tc.label || "API Key")}</label>
+            <div class="connect-field-wrap">
+              <input class="connect-field-input" type="password" placeholder="${escapeHtml(tc.placeholder || 'Paste your token here')}" autocomplete="off" spellcheck="false">
+              <button type="button" class="connect-field-toggle" tabindex="-1">Show</button>
+            </div>
+          </div>`;
+
+      // Simple prompt — browser already opened to the right page
+      const helpUrl = tc.helpUrl;
+      const promptText = helpUrl
+        ? `A browser tab opened to <strong>${escapeHtml(integration.name)}</strong>. Create your token there, then paste it here.`
+        : `Paste your <strong>${escapeHtml(integration.name)}</strong> token below.`;
+
+      const overlay = document.createElement("div");
+      overlay.className = "connect-modal-overlay";
+      overlay.innerHTML = `
+        <div class="connect-modal-card">
+          <button class="connect-modal-close" title="Close">&times;</button>
+          <div class="connect-modal-header">
+            <div class="connect-modal-icon">${icon}</div>
+            <div class="connect-modal-name">${escapeHtml(integration.name)}</div>
+          </div>
+          <p class="connect-modal-prompt">${promptText}</p>
+          ${helpUrl ? `<a class="connect-modal-reopen" href="${escapeHtml(helpUrl)}" target="_blank">Didn't open? Click here.</a>` : ""}
+          <div class="connect-modal-fields">
+            ${inputsHtml}
+          </div>
+          <button class="connect-modal-submit" disabled>Connect</button>
+          <div class="connect-modal-error" style="display:none"></div>
         </div>
-        ${steps ? `<ol class="token-wizard-steps">${steps}</ol>` : ""}
-        ${tc.helpUrl ? `<a class="token-wizard-link" href="${tc.helpUrl}" target="_blank" rel="noopener">Open ${escapeHtml(integration.name)} settings &rarr;</a>` : ""}
-        ${inputsHtml}
-        <button class="token-wizard-submit" disabled>Connect ${escapeHtml(integration.name)}</button>
-        ${integration.troubleshooting ? `<div class="token-wizard-troubleshoot">${escapeHtml(integration.troubleshooting)}</div>` : ""}
       `;
 
-      const inputs = wizard.querySelectorAll(".token-wizard-input");
-      const submit = wizard.querySelector(".token-wizard-submit");
+      // Close handlers
+      overlay.querySelector(".connect-modal-close").onclick = () => overlay.remove();
+      overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+
+      // Show/hide toggle
+      overlay.querySelectorAll(".connect-field-toggle").forEach((btn) => {
+        btn.onclick = () => {
+          const inp = btn.parentElement.querySelector("input");
+          if (inp.type === "password") { inp.type = "text"; btn.textContent = "Hide"; }
+          else { inp.type = "password"; btn.textContent = "Show"; }
+        };
+      });
+
+      const inputs = overlay.querySelectorAll(".connect-field-input");
+      const submit = overlay.querySelector(".connect-modal-submit");
+      const errorEl = overlay.querySelector(".connect-modal-error");
 
       function checkAllFilled() {
         submit.disabled = ![...inputs].every((inp) => inp.value.trim());
       }
       inputs.forEach((inp) => {
-        inp.addEventListener("input", checkAllFilled);
+        inp.addEventListener("input", () => { errorEl.style.display = "none"; checkAllFilled(); });
         inp.addEventListener("keydown", (e) => {
           if (e.key === "Enter" && !submit.disabled) doConnect();
         });
@@ -2040,6 +2690,7 @@
       async function doConnect() {
         submit.disabled = true;
         submit.textContent = "Connecting...";
+        errorEl.style.display = "none";
         let body;
         if (hasFields) {
           const fields = {};
@@ -2056,25 +2707,24 @@
           });
           const result = await res.json();
           if (result.ok) {
-            if (result.warning) {
-              submit.textContent = "Connected (with warning)";
-              submit.style.background = "#f59e0b";
-              submit.title = result.warning;
-              setTimeout(() => loadIntegrations(), 1500);
-            } else {
-              loadIntegrations();
-            }
+            submit.textContent = "Connected";
+            submit.style.background = "#10b981";
+            setTimeout(() => { overlay.remove(); loadIntegrations(); }, 800);
           } else {
-            submit.textContent = result.error || "Failed. Try again.";
+            errorEl.textContent = result.error || "Connection failed. Check your credentials.";
+            errorEl.style.display = "block";
+            submit.textContent = "Connect";
             submit.disabled = false;
           }
         } catch {
-          submit.textContent = "Connection failed. Try again.";
+          errorEl.textContent = "Network error. Try again.";
+          errorEl.style.display = "block";
+          submit.textContent = "Connect";
           submit.disabled = false;
         }
       }
 
-      cardEl.appendChild(wizard);
+      document.body.appendChild(overlay);
       inputs[0].focus();
     });
   }
@@ -2539,10 +3189,14 @@
         qrImage.classList.remove("hidden");
       }
       if (qrLoading) qrLoading.classList.add("hidden");
-      if (qrStatusText) qrStatusText.textContent = "Scan with your phone camera";
+      if (qrStatusText) {
+        qrStatusText.textContent = data.mode === "lan"
+          ? "Scan with your phone (same WiFi network)"
+          : "Scan with your phone camera";
+      }
       if (qrUrlRow) qrUrlRow.classList.remove("hidden");
       if (qrUrlInput) qrUrlInput.value = data.qrData;
-      if (qrStopBtn) qrStopBtn.classList.remove("hidden");
+      if (qrStopBtn && data.mode !== "lan") qrStopBtn.classList.remove("hidden");
     } catch (err) {
       if (qrLoading) qrLoading.classList.add("hidden");
       if (qrStatusText) qrStatusText.textContent = "Failed to start tunnel. Is cloudflared installed?";
@@ -2932,21 +3586,22 @@
   }
 
   // --- Boot ---
+  // install-gate is visible by default (no blank page ever).
+  // If user is fully authed, we hide it and show the app.
   (async () => {
-    const health = await checkClaude();
-    if (health.installed && health.authed) {
-      showApp();
-    } else {
-      if (installGate) installGate.classList.remove("hidden");
-      if (health.installed && !health.authed) {
-        // Claude installed but not signed in — go straight to signin
+    try {
+      const health = await checkClaude();
+      if (health.installed && health.authed) {
+        showApp();
+      } else if (health.installed && !health.authed) {
         showObStep(obSignin);
         startAuthPoll();
-      } else if (!health.installed) {
-        // Claude not installed — trigger silent install immediately, skip to account step
+      } else {
         showObStep(obAccount);
         startSilentInstall();
       }
+    } catch (e) {
+      showObStep(obWelcome);
     }
   })();
 })();

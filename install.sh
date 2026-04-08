@@ -4,22 +4,23 @@
 # Works locally or piped: curl -fsSL <url>/install.sh | bash
 # ============================================
 
-set -e
-
+# Do NOT use set -e — we handle errors ourselves so the script never dies silently
 BOLD='\033[1m'
 DIM='\033[2m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 RED='\033[0;31m'
-BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
 INSTALL_DIR="$HOME/Delt"
 DELT_DATA="$HOME/.delt"
 PORT_FILE="$DELT_DATA/port"
+DOWNLOAD_URL="https://claude-code-ui-six.vercel.app/public/delt-latest.tar.gz"
+PLIST_LABEL="com.neonotics.delt"
+PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 
-# Each install gets a unique random port — saved to ~/.delt/port
+# Port — reuse existing or generate new
 if [ -n "$DELT_PORT" ]; then
   PORT="$DELT_PORT"
 elif [ -f "$PORT_FILE" ]; then
@@ -30,15 +31,6 @@ else
   echo "$PORT" > "$PORT_FILE"
   chmod 600 "$PORT_FILE"
 fi
-REPO_URL="https://github.com/neonotics/delt"
-PLIST_LABEL="com.neonotics.delt"
-PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
-
-# ---- Silent mode (--silent flag skips prompts, used by HTML installer) ----
-SILENT=false
-for arg in "$@"; do
-  [ "$arg" = "--silent" ] && SILENT=true
-done
 
 # ---- Header ----
 clear 2>/dev/null || true
@@ -55,108 +47,119 @@ echo ""
 
 # ---- Helpers ----
 step=0
-total=6
-
-progress() {
-  step=$((step + 1))
-  echo -e "${BOLD}[${step}/${total}]${NC} $1"
-}
-
-ok() { echo -e "  ${GREEN}✓${NC} $1"; }
+total=5
+progress() { step=$((step + 1)); echo -e "${BOLD}[${step}/${total}]${NC} $1"; }
+ok()   { echo -e "  ${GREEN}✓${NC} $1"; }
 warn() { echo -e "  ${YELLOW}!${NC} $1"; }
-fail() { echo -e "  ${RED}✗${NC} $1"; exit 1; }
+fail() { echo -e "  ${RED}✗${NC} $1"; }
 
 # ---- Detect OS ----
 OS="unknown"
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  OS="macos"
-elif [[ "$OSTYPE" == "linux"* ]]; then
-  OS="linux"
-elif [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* ]]; then
-  OS="windows"
-fi
+case "$OSTYPE" in
+  darwin*)  OS="macos" ;;
+  linux*)   OS="linux" ;;
+  msys*|cygwin*) echo -e "  ${RED}✗${NC} Windows is not yet supported. Use WSL."; exit 1 ;;
+esac
 
-if [ "$OS" = "windows" ]; then
-  fail "Windows is not yet supported. Use WSL: https://learn.microsoft.com/en-us/windows/wsl/install"
-fi
+# ---- Find node across common locations ----
+find_node() {
+  for p in "$(command -v node 2>/dev/null)" /opt/homebrew/bin/node /usr/local/bin/node; do
+    if [ -n "$p" ] && [ -x "$p" ]; then
+      echo "$p"
+      return 0
+    fi
+  done
+  return 1
+}
 
-# ---- Step 1: Node.js ----
+find_npm() {
+  for p in "$(command -v npm 2>/dev/null)" /opt/homebrew/bin/npm /usr/local/bin/npm; do
+    if [ -n "$p" ] && [ -x "$p" ]; then
+      echo "$p"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# ============================================
+# Step 1: Node.js
+# ============================================
 progress "Checking Node.js..."
-if command -v node &>/dev/null; then
-  NODE_VER=$(node -v)
+NODE_BIN=$(find_node)
+
+if [ -n "$NODE_BIN" ]; then
+  NODE_VER=$("$NODE_BIN" -v 2>/dev/null)
   NODE_MAJOR=$(echo "$NODE_VER" | sed 's/v//' | cut -d. -f1)
-  if [ "$NODE_MAJOR" -ge 18 ]; then
+  if [ "$NODE_MAJOR" -ge 18 ] 2>/dev/null; then
     ok "Node.js $NODE_VER"
   else
     warn "Node.js $NODE_VER is too old (need v18+)"
     if [ "$OS" = "macos" ] && command -v brew &>/dev/null; then
-      echo -e "  Upgrading via Homebrew..."
-      brew upgrade node 2>/dev/null || brew install node
-      ok "Node.js $(node -v)"
+      brew upgrade node 2>/dev/null || brew install node 2>/dev/null
+      NODE_BIN=$(find_node)
+      ok "Node.js $("$NODE_BIN" -v) upgraded"
     else
       fail "Please upgrade Node.js to v18+: https://nodejs.org"
+      exit 1
     fi
   fi
 else
   warn "Node.js not found — installing..."
   if [ "$OS" = "macos" ]; then
     if command -v brew &>/dev/null; then
-      brew install node
-      ok "Node.js $(node -v) installed via Homebrew"
+      brew install node 2>/dev/null
     else
-      echo -e "  Installing Homebrew first..."
-      NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-      eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv 2>/dev/null)"
-      brew install node
-      ok "Node.js $(node -v) installed"
+      echo -e "  Installing Homebrew first (this may take a minute)..."
+      NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" 2>/dev/null
+      # Add Homebrew to PATH for this session
+      eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv 2>/dev/null)" 2>/dev/null
+      export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+      brew install node 2>/dev/null
     fi
   elif [ "$OS" = "linux" ]; then
     if command -v apt-get &>/dev/null; then
       curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - 2>/dev/null
       sudo apt-get install -y nodejs 2>/dev/null
-      ok "Node.js $(node -v) installed via apt"
     elif command -v dnf &>/dev/null; then
       sudo dnf install -y nodejs 2>/dev/null
-      ok "Node.js $(node -v) installed via dnf"
-    else
-      fail "Install Node.js v18+ manually: https://nodejs.org"
     fi
   fi
+
+  NODE_BIN=$(find_node)
+  if [ -z "$NODE_BIN" ]; then
+    fail "Could not install Node.js. Please install it from https://nodejs.org and re-run this script."
+    exit 1
+  fi
+  ok "Node.js $("$NODE_BIN" -v) installed"
 fi
 
-# ---- Step 2: Download Delt ----
-progress "Installing Delt..."
+NPM_BIN=$(find_npm)
+
+# ============================================
+# Step 2: Download Delt
+# ============================================
+progress "Downloading Delt..."
 mkdir -p "$INSTALL_DIR" "$DELT_DATA"
 
 # If running from within the project directory (local install), copy files
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" 2>/dev/null || echo ".")" && pwd)"
-if [ -f "$SCRIPT_DIR/server.js" ] && [ -f "$SCRIPT_DIR/package.json" ]; then
-  # Local install — copy from source
-  if [ "$SCRIPT_DIR" != "$INSTALL_DIR" ]; then
-    rsync -a --exclude node_modules --exclude logs --exclude history --exclude .git \
-      --exclude credentials.json --exclude "*.zip" --exclude "*.mp4" \
-      --exclude demo-captures --exclude signups.json \
-      "$SCRIPT_DIR/" "$INSTALL_DIR/"
-    ok "Copied from local source"
-  else
-    ok "Already installed"
-  fi
-elif command -v git &>/dev/null; then
-  # Remote install — clone repo
-  if [ -d "$INSTALL_DIR/.git" ]; then
-    cd "$INSTALL_DIR" && git pull --ff-only 2>/dev/null
-    ok "Updated from git"
-  else
-    rm -rf "$INSTALL_DIR"
-    git clone --depth 1 "$REPO_URL" "$INSTALL_DIR" 2>/dev/null
-    ok "Cloned from GitHub"
-  fi
+if [ -f "$SCRIPT_DIR/server.js" ] && [ -f "$SCRIPT_DIR/package.json" ] && [ "$SCRIPT_DIR" != "$INSTALL_DIR" ]; then
+  rsync -a --exclude node_modules --exclude logs --exclude history --exclude .git \
+    --exclude credentials.json --exclude "*.zip" --exclude "*.mp4" \
+    --exclude demo-captures --exclude signups.json \
+    "$SCRIPT_DIR/" "$INSTALL_DIR/" 2>/dev/null
+  ok "Copied from local source"
 else
-  # No git — download tarball
-  curl -fsSL "$REPO_URL/archive/refs/heads/main.tar.gz" | tar xz -C /tmp
-  cp -R /tmp/delt-main/* "$INSTALL_DIR/" 2>/dev/null || cp -R /tmp/claude-code-ui-main/* "$INSTALL_DIR/"
-  rm -rf /tmp/delt-main /tmp/claude-code-ui-main
-  ok "Downloaded from GitHub"
+  curl -fsSL "$DOWNLOAD_URL" -o /tmp/delt-latest.tar.gz 2>/dev/null
+  if [ -s /tmp/delt-latest.tar.gz ]; then
+    tar xzf /tmp/delt-latest.tar.gz -C "$INSTALL_DIR" 2>/dev/null
+    rm -f /tmp/delt-latest.tar.gz
+    ok "Downloaded"
+  else
+    fail "Download failed. Check your internet connection and try again."
+    exit 1
+  fi
 fi
 
 # Ensure default config exists
@@ -164,95 +167,80 @@ if [ ! -f "$INSTALL_DIR/config.json" ] && [ -f "$INSTALL_DIR/config.default.json
   cp "$INSTALL_DIR/config.default.json" "$INSTALL_DIR/config.json"
 fi
 
-# Write Google OAuth credentials to .env if provided
-if [ -n "$GOOGLE_CLIENT_ID" ] && [ -n "$GOOGLE_CLIENT_SECRET" ]; then
-  ENV_FILE="$INSTALL_DIR/.env"
-  # Append if .env exists, create if not — avoid duplicates
-  grep -q "GOOGLE_CLIENT_ID" "$ENV_FILE" 2>/dev/null || {
-    echo "" >> "$ENV_FILE"
-    echo "# Google OAuth (auto-provisioned by installer)" >> "$ENV_FILE"
-    echo "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" >> "$ENV_FILE"
-    echo "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" >> "$ENV_FILE"
-  }
-  chmod 600 "$ENV_FILE"
-  ok "Google OAuth configured"
-fi
-
-# ---- Step 3: Dependencies ----
+# ============================================
+# Step 3: Install dependencies
+# ============================================
 progress "Installing dependencies..."
 cd "$INSTALL_DIR"
-npm install --production --silent 2>&1 | tail -1
-ok "Dependencies ready"
-
-# ---- Step 4: Claude Code CLI ----
-progress "Checking Claude Code CLI..."
-if command -v claude &>/dev/null; then
-  CLAUDE_VER=$(claude --version 2>/dev/null || echo "installed")
-  ok "Claude CLI ($CLAUDE_VER)"
+if [ -d "$INSTALL_DIR/node_modules" ]; then
+  ok "Dependencies ready (bundled)"
 else
-  warn "Claude CLI not found — installing..."
-  npm install -g @anthropic-ai/claude-code 2>/dev/null || {
-    warn "Global install failed, trying with sudo..."
-    sudo npm install -g @anthropic-ai/claude-code 2>/dev/null || true
-  }
-  if command -v claude &>/dev/null; then
-    ok "Claude CLI installed"
+  "$NPM_BIN" install --production 2>&1 | tail -5
+  if [ -d "$INSTALL_DIR/node_modules" ]; then
+    ok "Dependencies installed"
   else
-    warn "Claude CLI will be installed on first launch via the browser"
+    fail "npm install failed. Try running: cd ~/Delt && npm install"
+    exit 1
   fi
 fi
 
-# ---- Step 5: Create launcher + auto-start ----
-progress "Setting up launcher..."
+# ============================================
+# Step 4: Install Claude Code CLI
+# ============================================
+progress "Installing Claude Code..."
 
-# Create start script
-cat > "$INSTALL_DIR/start.sh" << 'LAUNCHER'
-#!/bin/bash
-cd "$(dirname "$0")"
-PORT_FILE="$HOME/.delt/port"
-if [ -f "$PORT_FILE" ]; then
-  PORT=$(cat "$PORT_FILE")
+# Use the official Anthropic installer — handles PATH correctly
+CLAUDE_BIN=""
+for p in "$HOME/.local/bin/claude" /opt/homebrew/bin/claude /usr/local/bin/claude; do
+  if [ -x "$p" ]; then CLAUDE_BIN="$p"; break; fi
+done
+if command -v claude &>/dev/null; then CLAUDE_BIN="$(command -v claude)"; fi
+
+if [ -n "$CLAUDE_BIN" ]; then
+  ok "Claude Code already installed"
 else
-  PORT=$((10000 + RANDOM % 50000))
-  mkdir -p "$HOME/.delt"
-  echo "$PORT" > "$PORT_FILE"
-  chmod 600 "$PORT_FILE"
+  # Official one-liner — installs to ~/.local/bin, handles PATH
+  curl -fsSL https://claude.ai/install.sh | sh 2>/dev/null
+
+  # Re-check
+  export PATH="$HOME/.local/bin:$PATH"
+  for p in "$HOME/.local/bin/claude" /opt/homebrew/bin/claude /usr/local/bin/claude; do
+    if [ -x "$p" ]; then CLAUDE_BIN="$p"; break; fi
+  done
+
+  if [ -n "$CLAUDE_BIN" ]; then
+    ok "Claude Code installed"
+  else
+    warn "Claude Code will be installed when you first open Delt"
+  fi
 fi
 
-# Kill any existing instance on the port
-lsof -ti:$PORT 2>/dev/null | xargs kill -9 2>/dev/null || true
+# ============================================
+# Step 5: Start Delt and open browser
+# ============================================
+progress "Starting Delt..."
+
+# Create launcher scripts
+cat > "$INSTALL_DIR/start.sh" << LAUNCHER
+#!/bin/bash
+cd "\$(dirname "\$0")"
+PORT=\$(cat "$PORT_FILE" 2>/dev/null || echo "$PORT")
+lsof -ti:\$PORT 2>/dev/null | xargs kill -9 2>/dev/null || true
 sleep 0.3
-
-# Start server
-node server.js &
-SERVER_PID=$!
-
-# Wait for server
-for i in {1..15}; do
-  if curl -sf -o /dev/null http://localhost:$PORT/health 2>/dev/null; then
-    break
-  fi
+$NODE_BIN server.js &
+PID=\$!
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+  curl -sf -o /dev/null http://localhost:\$PORT/health 2>/dev/null && break
   sleep 0.5
 done
-
-# Open browser
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  open "http://localhost:$PORT"
-elif command -v xdg-open &>/dev/null; then
-  xdg-open "http://localhost:$PORT"
-fi
-
-echo ""
-echo "  Delt is running at http://localhost:$PORT"
+if [ "\$OSTYPE" = "darwin"* ]; then open "http://localhost:\$PORT"; fi
+echo "  Delt is running at http://localhost:\$PORT"
 echo "  Press Ctrl+C to stop"
-echo ""
-
-trap "kill $SERVER_PID 2>/dev/null; exit 0" INT TERM
-wait $SERVER_PID
+trap "kill \$PID 2>/dev/null; exit 0" INT TERM
+wait \$PID
 LAUNCHER
 chmod +x "$INSTALL_DIR/start.sh"
 
-# macOS: double-clickable .command file
 if [ "$OS" = "macos" ]; then
   cat > "$INSTALL_DIR/Delt.command" << 'COMMAND'
 #!/bin/bash
@@ -262,51 +250,34 @@ COMMAND
   chmod +x "$INSTALL_DIR/Delt.command"
 fi
 
-# ---- Step 6: Auto-start service ----
-progress "Configuring auto-start..."
-
+# Set up auto-start service
 if [ "$OS" = "macos" ]; then
-  # Stop existing service if running
   launchctl bootout "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
-
   mkdir -p "$HOME/Library/LaunchAgents"
   cat > "$PLIST_PATH" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key>
-  <string>${PLIST_LABEL}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>$(which node)</string>
+  <key>Label</key><string>${PLIST_LABEL}</string>
+  <key>ProgramArguments</key><array>
+    <string>${NODE_BIN}</string>
     <string>${INSTALL_DIR}/server.js</string>
   </array>
-  <key>WorkingDirectory</key>
-  <string>${INSTALL_DIR}</string>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>PATH</key>
-    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+  <key>WorkingDirectory</key><string>${INSTALL_DIR}</string>
+  <key>EnvironmentVariables</key><dict>
+    <key>PATH</key><string>${HOME}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
   </dict>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-  <key>StandardOutPath</key>
-  <string>${DELT_DATA}/delt.log</string>
-  <key>StandardErrorPath</key>
-  <string>${DELT_DATA}/delt.err</string>
-  <key>ThrottleInterval</key>
-  <integer>10</integer>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>${DELT_DATA}/delt.log</string>
+  <key>StandardErrorPath</key><string>${DELT_DATA}/delt.err</string>
+  <key>ThrottleInterval</key><integer>10</integer>
 </dict>
 </plist>
 PLIST
-
   launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || \
     launchctl load "$PLIST_PATH" 2>/dev/null || true
-  ok "Auto-start enabled (launchd)"
-
 elif [ "$OS" = "linux" ]; then
   SYSTEMD_DIR="$HOME/.config/systemd/user"
   mkdir -p "$SYSTEMD_DIR"
@@ -314,56 +285,68 @@ elif [ "$OS" = "linux" ]; then
 [Unit]
 Description=Delt AI Assistant
 After=network.target
-
 [Service]
 Type=simple
 WorkingDirectory=${INSTALL_DIR}
-ExecStart=$(which node) ${INSTALL_DIR}/server.js
+ExecStart=${NODE_BIN} ${INSTALL_DIR}/server.js
+Environment=PATH=${HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin
 Restart=always
 RestartSec=5
-StartLimitIntervalSec=60
-StartLimitBurst=5
-
 [Install]
 WantedBy=default.target
 SERVICE
-
   systemctl --user daemon-reload 2>/dev/null || true
   systemctl --user enable delt 2>/dev/null || true
   systemctl --user start delt 2>/dev/null || true
-  ok "Auto-start enabled (systemd)"
 fi
 
-# ---- Wait for server ----
-echo ""
-echo -e "${DIM}  Starting Delt...${NC}"
-for i in {1..20}; do
+# Wait for server — try launchd first, fallback to direct start
+SERVER_UP=false
+TRIES=0
+while [ "$TRIES" -lt 10 ]; do
   if curl -sf -o /dev/null "http://localhost:$PORT/health" 2>/dev/null; then
+    SERVER_UP=true
     break
   fi
-  sleep 0.5
+  TRIES=$((TRIES + 1))
+  sleep 1
 done
 
-# ---- Open browser ----
-if curl -sf -o /dev/null "http://localhost:$PORT/health" 2>/dev/null; then
+if [ "$SERVER_UP" = "false" ]; then
+  # Launchd didn't start it — start directly
+  cd "$INSTALL_DIR"
+  nohup "$NODE_BIN" server.js > "$DELT_DATA/delt.log" 2> "$DELT_DATA/delt.err" &
+  TRIES=0
+  while [ "$TRIES" -lt 15 ]; do
+    if curl -sf -o /dev/null "http://localhost:$PORT/health" 2>/dev/null; then
+      SERVER_UP=true
+      break
+    fi
+    TRIES=$((TRIES + 1))
+    sleep 1
+  done
+fi
+
+# Open browser
+if [ "$SERVER_UP" = "true" ]; then
+  ok "Running on http://localhost:$PORT"
   if [ "$OS" = "macos" ]; then
     open "http://localhost:$PORT"
   elif command -v xdg-open &>/dev/null; then
     xdg-open "http://localhost:$PORT"
   fi
+else
+  warn "Server took too long to start."
+  echo -e "  Run manually: ${BOLD}cd ~/Delt && node server.js${NC}"
 fi
 
 # ---- Done ----
 echo ""
-echo -e "${GREEN}${BOLD}  Delt is installed and running!${NC}"
+echo -e "${GREEN}${BOLD}  Delt is installed!${NC}"
 echo ""
 echo -e "  ${BOLD}Open:${NC}        http://localhost:${PORT}"
-echo -e "  ${BOLD}Auto-start:${NC}  Delt launches when you log in"
-echo -e "  ${BOLD}Stop:${NC}        launchctl bootout gui/$(id -u)/${PLIST_LABEL}"
-echo -e "  ${BOLD}Logs:${NC}        ${DELT_DATA}/delt.log"
+echo -e "  ${BOLD}Auto-start:${NC}  Launches when you log in"
 if [ "$OS" = "macos" ]; then
-  echo -e "  ${BOLD}Desktop:${NC}     Open Chrome → ⋮ → Install Delt"
+  echo -e "  ${BOLD}Desktop app:${NC} Open Chrome → ⋮ → Install Delt"
 fi
-echo ""
-echo -e "  ${DIM}Tip: Install as a desktop app from Chrome for the best experience.${NC}"
 echo ""

@@ -55,12 +55,43 @@ setInterval(() => {
 // Static files
 app.use("/public", express.static(path.join(__dirname, "public")));
 
+// Version check — clients poll this to auto-update
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
+app.get("/api/version", (req, res) => {
+  res.json({ version: pkg.version, download: "/public/delt-latest.tar.gz" });
+});
+
 // Routes
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "demo.html")));
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "explainer.html")));
 app.get("/install", (req, res) => res.sendFile(path.join(__dirname, "install.html")));
 app.get("/installer", (req, res) => res.sendFile(path.join(__dirname, "delt-installer.html")));
 app.get("/privacy", (req, res) => res.sendFile(path.join(__dirname, "public", "privacy.html")));
 app.get("/showcase", (req, res) => res.sendFile(path.join(__dirname, "public", "showcase.html")));
+// OAuth relay — Google redirects here, we bounce the code to the user's localhost
+app.get("/oauth/callback", (req, res) => {
+  const { code, state, error } = req.query;
+  if (error) {
+    return res.send(`<html><body style="font-family:system-ui;text-align:center;padding:60px"><h2>Authorization failed</h2><p>${error}</p></body></html>`);
+  }
+  // State format: "uuid:port"
+  const parts = (state || "").split(":");
+  const port = parts[1];
+  if (!port || isNaN(port)) {
+    return res.status(400).send(`<html><body style="font-family:system-ui;text-align:center;padding:60px"><h2>Invalid callback</h2><p>Missing port in state parameter.</p></body></html>`);
+  }
+  // Redirect to user's local Delt instance
+  const localUrl = `http://localhost:${port}/oauth/callback?${new URLSearchParams({ code, state }).toString()}`;
+  res.redirect(localUrl);
+});
+
+app.get("/install.sh", (req, res) => {
+  res.set("Content-Type", "text/plain; charset=utf-8");
+  res.sendFile(path.join(__dirname, "install.sh"));
+});
+app.get("/uninstall.sh", (req, res) => {
+  res.set("Content-Type", "text/plain; charset=utf-8");
+  res.sendFile(path.join(__dirname, "uninstall.sh"));
+});
 
 // Health check
 app.get("/health", (req, res) => res.json({ ok: true, version: "2.0.0" }));
@@ -204,4 +235,10 @@ app.post("/api/signup", rateLimit(60000, 5), async (req, res) => {
 // 404
 app.use((req, res) => res.status(404).sendFile(path.join(__dirname, "demo.html")));
 
-app.listen(PORT, () => console.log(`Delt marketing site live on port ${PORT}`));
+// Local dev / Fly.io — listen directly
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => console.log(`Delt marketing site live on port ${PORT}`));
+}
+
+// Vercel serverless — export the Express app
+module.exports = app;

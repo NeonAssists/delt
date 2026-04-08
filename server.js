@@ -154,17 +154,58 @@ try {
   integrationsRegistry = JSON.parse(fs.readFileSync(integrationsPath, "utf-8"));
 } catch {}
 
-// OAuth clients — load from encrypted store, migrate from plaintext, or env vars
+// Built-in OAuth credentials — Delt ships with pre-registered apps so users just click "Sign in"
+// Each service identifies Delt as an app. User data stays local.
+const BUILTIN_OAUTH = {
+  "google-workspace": {
+    clientId: "22854524406-rae3nei2e92ts14b0du6s8nujec7ging.apps.googleusercontent.com",
+    clientSecret: "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",
+  },
+  // Register at: https://github.com/settings/applications/new
+  // Homepage URL: http://localhost   Callback URL: http://localhost
+  "github": process.env.DELT_GITHUB_CLIENT_ID ? {
+    clientId: process.env.DELT_GITHUB_CLIENT_ID,
+    clientSecret: process.env.DELT_GITHUB_CLIENT_SECRET,
+  } : null,
+  // Register at: https://api.slack.com/apps → Create New App → From Manifest
+  "slack": process.env.DELT_SLACK_CLIENT_ID ? {
+    clientId: process.env.DELT_SLACK_CLIENT_ID,
+    clientSecret: process.env.DELT_SLACK_CLIENT_SECRET,
+  } : null,
+  // Register at: https://www.notion.so/profile/integrations (set as Public integration)
+  "notion": process.env.DELT_NOTION_CLIENT_ID ? {
+    clientId: process.env.DELT_NOTION_CLIENT_ID,
+    clientSecret: process.env.DELT_NOTION_CLIENT_SECRET,
+  } : null,
+  // Register at: https://www.figma.com/developers/apps
+  "figma": process.env.DELT_FIGMA_CLIENT_ID ? {
+    clientId: process.env.DELT_FIGMA_CLIENT_ID,
+    clientSecret: process.env.DELT_FIGMA_CLIENT_SECRET,
+  } : null,
+  // Register at: https://developers.hubspot.com/
+  "hubspot": process.env.DELT_HUBSPOT_CLIENT_ID ? {
+    clientId: process.env.DELT_HUBSPOT_CLIENT_ID,
+    clientSecret: process.env.DELT_HUBSPOT_CLIENT_SECRET,
+  } : null,
+};
+
+// OAuth clients — built-in + encrypted store + legacy migration
 let oauthClients = {};
+// Load built-in credentials (skip nulls)
+for (const [id, cred] of Object.entries(BUILTIN_OAUTH)) {
+  if (cred) oauthClients[id] = cred;
+}
 try {
   // Try encrypted store first
   const encRaw = JSON.parse(fs.readFileSync(encryptedOauthPath, "utf-8"));
-  oauthClients = cryptoLib.decryptData(encRaw);
+  const stored = cryptoLib.decryptData(encRaw);
+  oauthClients = { ...stored, ...oauthClients }; // built-in overrides stored
 } catch {
   // Fall back to plaintext file and migrate
   try {
-    oauthClients = JSON.parse(fs.readFileSync(oauthClientsPath, "utf-8"));
-    if (Object.keys(oauthClients).length > 0) {
+    const stored = JSON.parse(fs.readFileSync(oauthClientsPath, "utf-8"));
+    if (Object.keys(stored).length > 0) {
+      oauthClients = { ...stored, ...oauthClients }; // built-in overrides stored
       // Migrate: encrypt and save to ~/.delt/, then remove plaintext
       const deltDir = path.join(os.homedir(), ".delt");
       if (!fs.existsSync(deltDir)) fs.mkdirSync(deltDir, { recursive: true, mode: 0o700 });
@@ -174,22 +215,6 @@ try {
       try { fs.unlinkSync(oauthClientsPath); } catch {}
       console.log("[Security] Migrated oauth-clients.json to encrypted store at ~/.delt/");
     }
-  } catch {}
-}
-
-// Auto-provision Google OAuth from env vars (first-install support)
-if (!oauthClients["google-workspace"] && process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  oauthClients["google-workspace"] = {
-    clientId: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  };
-  // Persist so it survives restarts without env vars
-  try {
-    const deltDir = path.join(os.homedir(), ".delt");
-    if (!fs.existsSync(deltDir)) fs.mkdirSync(deltDir, { recursive: true, mode: 0o700 });
-    const encrypted = cryptoLib.encryptData(oauthClients);
-    fs.writeFileSync(encryptedOauthPath, JSON.stringify(encrypted), { mode: 0o600 });
-    console.log("[Setup] Google OAuth provisioned from environment variables");
   } catch {}
 }
 
@@ -266,7 +291,7 @@ memoryLib.initDirs(__dirname, logging.todayStr);
 
 // Re-export frequently used functions for local convenience
 const { loadCredentials, saveCredentials, getCredential, saveCredential, deleteCredential } = cryptoLib;
-const { isLocalRequest, parseCookies, validateMobileToken, createMobileSession, validateMobileSession, generateMobileToken, startTunnel, stopTunnel, cleanupTunnel, getTunnelState, touchTunnelActivity, mobileAuthPage, MOBILE_SESSION_TTL } = tunnel;
+const { isLocalRequest, parseCookies, validateMobileToken, createMobileSession, validateMobileSession, generateMobileToken, startTunnel, stopTunnel, cleanupTunnel, getTunnelState, getLocalNetworkUrl, touchTunnelActivity, mobileAuthPage, MOBILE_SESSION_TTL } = tunnel;
 const { todayStr, weekStr, logConversation, readLogFile, safeName, escapeHtml, listLogFiles } = logging;
 const { safeRead, safeWrite, getStateContext, persistExchange, flushMemoryExtraction, buildSystemPrefix, appendSessionLog } = memoryLib;
 const { buildMcpConfig, writeMcpConfigFile, invalidateMcpCache, buildClaudeArgs } = mcpLib;
@@ -292,7 +317,24 @@ function attachStreamHandlers(proc, ws, { streamType, errorType, onText, onCost,
 
         if (obj.type === "assistant" && obj.message?.content) {
           for (const b of obj.message.content) {
-            if (b.type === "text" && onText) onText(b.text);
+            if (b.type === "text") {
+              if (onText) onText(b.text);
+              // Detect [DELT_DO:{...}] action markers from Claude
+              const doMatches = b.text.matchAll(/\[DELT_DO:(\{[^[\]]*\})\]/g);
+              for (const m of doMatches) {
+                try {
+                  const payload = JSON.parse(m[1]);
+                  if (payload.action) {
+                    safeSend(ws, { type: "action", action: payload.action, params: payload });
+                  }
+                } catch {}
+              }
+              // Detect [DELT_HTML]...[/DELT_HTML] blocks
+              const htmlMatches = b.text.matchAll(/\[DELT_HTML\]([\s\S]*?)\[\/DELT_HTML\]/g);
+              for (const m of htmlMatches) {
+                safeSend(ws, { type: "action", action: "show-html", params: { html: m[1] } });
+              }
+            }
             if (b.type === "tool_use" && onText) onText(null, b.name || "unknown");
           }
         }
@@ -403,7 +445,9 @@ server.on("upgrade", (req, socket, head) => {
     // Origin check — block cross-site WebSocket hijacking
     const origin = req.headers.origin;
     const { tunnelUrl } = getTunnelState();
-    if (origin && tunnelUrl && !origin.startsWith(tunnelUrl)) {
+    const lanUrl = getLocalNetworkUrl(PORT);
+    const allowedOrigins = [tunnelUrl, lanUrl].filter(Boolean);
+    if (origin && allowedOrigins.length && !allowedOrigins.some((u) => origin.startsWith(u))) {
       socket.destroy();
       return;
     }
@@ -594,28 +638,16 @@ function findClaudePath() {
 app.post("/run-auth", localOnly, (req, res) => {
   try {
     const claudePath = findClaudePath();
-    const platform = process.platform;
-    if (platform === "darwin") {
-      spawn("osascript", ["-e", `tell application "Terminal" to do script "${claudePath}"`], { detached: true, stdio: "ignore" }).unref();
-    } else if (platform === "win32") {
-      spawn("cmd", ["/c", "start", "cmd", "/k", claudePath], { detached: true, stdio: "ignore" }).unref();
-    } else {
-      const terminals = ["gnome-terminal", "konsole", "xfce4-terminal", "xterm"];
-      let launched = false;
-      for (const term of terminals) {
-        try {
-          if (term === "gnome-terminal") {
-            spawn(term, ["--", "bash", "-c", `${claudePath}; read`], { detached: true, stdio: "ignore" }).unref();
-          } else {
-            spawn(term, ["-e", `bash -c '${claudePath}; read'`], { detached: true, stdio: "ignore" }).unref();
-          }
-          launched = true;
-          break;
-        } catch {}
-      }
-      if (!launched) return res.json({ ok: false, error: "no_terminal", platform });
-    }
-    res.json({ ok: true, platform });
+    // Run "claude auth login" directly — it opens the browser to the OAuth page.
+    // No Terminal window, no confusion. The browser opens, user signs in, done.
+    const proc = spawn(claudePath, ["auth", "login", "--claudeai"], {
+      cwd: os.homedir(),
+      env: { ...process.env },
+      detached: true,
+      stdio: "ignore",
+    });
+    proc.unref();
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -829,11 +861,34 @@ app.post("/setup", localOnly, (req, res) => {
 // Integration API Endpoints
 // ============================================
 
+// Map of integration IDs → CLI detection commands
+const AUTO_DETECTORS = {
+  github: { cmd: "gh", args: ["auth", "token"], validate: (t) => t.startsWith("gh") || t.startsWith("github_pat_") },
+  slack: { cmd: "slack", args: ["auth", "token"], validate: (t) => t.startsWith("xoxb-") || t.startsWith("xoxp-") },
+};
+
+// Services that can be auto-detected from config files on disk
+const FILE_DETECTABLE = new Set(["github", "linear", "stripe"]);
+
 // List all integrations with connection status
 app.get("/integrations", (req, res) => {
   const creds = loadCredentials();
   const result = integrationsRegistry.integrations.map((i) => {
     const cred = creds[i.id];
+    // Compute what the user will actually experience
+    let effectiveAuthType = i.authType;
+    if (i.authType === "oauth2" && !oauthClients[i.id]?.clientId && i.tokenConfig) {
+      effectiveAuthType = "token"; // OAuth not configured, fall back to token
+    } else if (i.authType === "oauth2" && !oauthClients[i.id]?.clientId && !i.tokenConfig) {
+      effectiveAuthType = "unavailable";
+    }
+    // Token-primary services with oauthAvailable: use OAuth if configured, otherwise token
+    if (i.oauthAvailable && oauthClients[i.id]?.clientId) {
+      effectiveAuthType = "oauth2";
+    }
+
+    const hasAutoDetect = !!(AUTO_DETECTORS[i.id] || FILE_DETECTABLE.has(i.id));
+
     const entry = {
       id: i.id,
       name: i.name,
@@ -841,17 +896,23 @@ app.get("/integrations", (req, res) => {
       icon: i.icon,
       category: i.category,
       authType: i.authType,
-      setupSteps: i.setupSteps || [],
+      effectiveAuthType,
+      hasAutoDetect,
+      oauthAvailable: !!i.oauthAvailable,
+      setupSteps: (effectiveAuthType === "token" && i.tokenSteps?.length) ? i.tokenSteps : (i.setupSteps || []),
       tokenConfig: i.tokenConfig || null,
       capabilities: i.capabilities || null,
       connected: !!(cred && cred.enabled),
       connectedAt: cred?.updatedAt || null,
+      setupTime: i.setupTime || null,
+      troubleshooting: i.troubleshooting || null,
+      tryIt: i.tryIt || null,
     };
     if (i.authType === "local-access" && cred && cred.enabled) {
       entry.accessLevel = cred.level || "none";
       entry.directories = cred.directories || [];
     }
-    if (i.authType === "oauth2") {
+    if (i.authType === "oauth2" || i.oauthAvailable) {
       entry.oauthConfigured = !!(oauthClients[i.id]?.clientId);
     }
     return entry;
@@ -859,20 +920,13 @@ app.get("/integrations", (req, res) => {
   res.json({ integrations: result });
 });
 
-// Map of integration IDs → CLI detection commands
-const AUTO_DETECTORS = {
-  github: { cmd: "gh", args: ["auth", "token"], validate: (t) => t.startsWith("gh") || t.startsWith("github_pat_") },
-  // Slack CLI — newer workspaces may have it
-  slack: { cmd: "slack", args: ["auth", "token"], validate: (t) => t.startsWith("xoxb-") || t.startsWith("xoxp-") },
-};
-
 // File-based token detection — check known config files
 function detectFromFiles(integrationId) {
   const home = os.homedir();
   try {
     switch (integrationId) {
       case "github": {
-        // Also check ~/.config/gh/hosts.yml
+        // Check ~/.config/gh/hosts.yml (gh CLI config)
         const hostsPath = path.join(home, ".config", "gh", "hosts.yml");
         if (fs.existsSync(hostsPath)) {
           const content = fs.readFileSync(hostsPath, "utf-8");
@@ -887,6 +941,16 @@ function detectFromFiles(integrationId) {
         if (fs.existsSync(linearPath)) {
           const cfg = JSON.parse(fs.readFileSync(linearPath, "utf-8"));
           if (cfg.apiKey) return { token: cfg.apiKey, source: "~/.linear/config.json" };
+        }
+        break;
+      }
+      case "stripe": {
+        // Stripe CLI stores config in ~/.config/stripe/config.toml
+        const stripePath = path.join(home, ".config", "stripe", "config.toml");
+        if (fs.existsSync(stripePath)) {
+          const content = fs.readFileSync(stripePath, "utf-8");
+          const match = content.match(/test_mode_api_key\s*=\s*"?([^"\s]+)"?/);
+          if (match) return { token: match[1].trim(), source: "~/.config/stripe/config.toml" };
         }
         break;
       }
@@ -943,8 +1007,8 @@ app.post("/integrations/auto-detect-all", localOnly, async (req, res) => {
   const creds = loadCredentials();
   const detected = [];
 
-  // Token-based integrations that support auto-detect
-  const detectableIds = [...Object.keys(AUTO_DETECTORS), "linear"];
+  // Token-based integrations that support auto-detect (CLI + file-based)
+  const detectableIds = [...new Set([...Object.keys(AUTO_DETECTORS), ...FILE_DETECTABLE])];
 
   for (const id of detectableIds) {
     if (creds[id]?.enabled) continue; // already connected
@@ -1263,26 +1327,46 @@ app.get("/custom-apis/templates", (req, res) => {
 });
 
 const API_TEMPLATES = [
-  { name: "OpenAI", baseUrl: "https://api.openai.com/v1", authType: "bearer", description: "GPT models, DALL-E, embeddings, fine-tuning" },
-  { name: "Anthropic", baseUrl: "https://api.anthropic.com/v1", authType: "api-key", headerName: "x-api-key", description: "Claude models, messages, completions" },
-  { name: "Replicate", baseUrl: "https://api.replicate.com/v1", authType: "bearer", description: "Run ML models — image gen, video, audio, LLMs" },
-  { name: "ElevenLabs", baseUrl: "https://api.elevenlabs.io/v1", authType: "api-key", headerName: "xi-api-key", description: "Text-to-speech, voice cloning, audio generation" },
-  { name: "Resend", baseUrl: "https://api.resend.com", authType: "bearer", description: "Transactional email API — send, track, manage domains" },
-  { name: "Supabase", baseUrl: "https://your-project.supabase.co/rest/v1", authType: "api-key", headerName: "apikey", description: "Postgres database, auth, storage, realtime" },
-  { name: "Vercel", baseUrl: "https://api.vercel.com", authType: "bearer", description: "Deployments, domains, environment variables, projects" },
-  { name: "Cloudflare", baseUrl: "https://api.cloudflare.com/client/v4", authType: "bearer", description: "DNS, Workers, R2 storage, security, analytics" },
-  { name: "Render", baseUrl: "https://api.render.com/v1", authType: "bearer", description: "Deploys, services, databases, environment" },
-  { name: "Railway", baseUrl: "https://backboard.railway.app/graphql/v2", authType: "bearer", description: "Projects, deployments, services, databases" },
-  { name: "Fly.io", baseUrl: "https://api.machines.dev/v1", authType: "bearer", description: "Apps, machines, volumes, secrets" },
-  { name: "Postmark", baseUrl: "https://api.postmarkapp.com", authType: "api-key", headerName: "X-Postmark-Server-Token", description: "Transactional email, templates, inbound processing" },
-  { name: "Plaid", baseUrl: "https://production.plaid.com", authType: "api-key", headerName: "PLAID-SECRET", description: "Banking data, transactions, balances, identity" },
-  { name: "Twitch", baseUrl: "https://api.twitch.tv/helix", authType: "bearer", description: "Streams, users, clips, chat, subscriptions" },
-  { name: "Spotify", baseUrl: "https://api.spotify.com/v1", authType: "bearer", description: "Search, playlists, tracks, albums, user library" },
-  { name: "Discord", baseUrl: "https://discord.com/api/v10", authType: "api-key", headerName: "Authorization", description: "Guilds, channels, messages, members, webhooks" },
-  { name: "Notion (REST)", baseUrl: "https://api.notion.com/v1", authType: "bearer", description: "Pages, databases, blocks, search — direct REST access" },
-  { name: "Airtable (REST)", baseUrl: "https://api.airtable.com/v0", authType: "bearer", description: "Bases, tables, records — direct REST access" },
-  { name: "Lemon Squeezy", baseUrl: "https://api.lemonsqueezy.com/v1", authType: "bearer", description: "Products, orders, subscriptions, license keys" },
-  { name: "Cal.com", baseUrl: "https://api.cal.com/v1", authType: "api-key", headerName: "cal-api-key", description: "Bookings, event types, availability, schedules" },
+  { name: "OpenAI", baseUrl: "https://api.openai.com/v1", authType: "bearer", description: "GPT models, DALL-E, embeddings, fine-tuning",
+    setupGuide: { steps: ["Go to platform.openai.com and sign in", "Click your profile → API keys", "Click 'Create new secret key' and name it 'Delt'", "Copy the key (it won't be shown again)"], helpUrl: "https://platform.openai.com/api-keys", time: "~1 min" } },
+  { name: "Anthropic", baseUrl: "https://api.anthropic.com/v1", authType: "api-key", headerName: "x-api-key", description: "Claude models, messages, completions",
+    setupGuide: { steps: ["Go to console.anthropic.com and sign in", "Click Settings → API Keys", "Click 'Create Key', name it 'Delt'", "Copy the key immediately"], helpUrl: "https://console.anthropic.com/settings/keys", time: "~1 min" } },
+  { name: "Replicate", baseUrl: "https://api.replicate.com/v1", authType: "bearer", description: "Run ML models — image gen, video, audio, LLMs",
+    setupGuide: { steps: ["Go to replicate.com and sign in", "Click your avatar → API tokens", "Copy your default token or create a new one"], helpUrl: "https://replicate.com/account/api-tokens", time: "~1 min" } },
+  { name: "ElevenLabs", baseUrl: "https://api.elevenlabs.io/v1", authType: "api-key", headerName: "xi-api-key", description: "Text-to-speech, voice cloning, audio generation",
+    setupGuide: { steps: ["Go to elevenlabs.io and sign in", "Click your profile icon → Profile + API key", "Copy your API key from the page"], helpUrl: "https://elevenlabs.io/app/settings/api-keys", time: "~1 min" } },
+  { name: "Resend", baseUrl: "https://api.resend.com", authType: "bearer", description: "Transactional email API — send, track, manage domains",
+    setupGuide: { steps: ["Go to resend.com and sign in", "Go to API Keys in the sidebar", "Click 'Create API Key', name it 'Delt'", "Set permission to 'Full access' and copy the key"], helpUrl: "https://resend.com/api-keys", time: "~1 min" } },
+  { name: "Supabase", baseUrl: "https://your-project.supabase.co/rest/v1", authType: "api-key", headerName: "apikey", description: "Postgres database, auth, storage, realtime",
+    setupGuide: { steps: ["Go to supabase.com and open your project", "Go to Settings → API", "Copy your project URL (replace the base URL above)", "Copy the anon or service-role credential from the page"], helpUrl: "https://supabase.com/dashboard/project/_/settings/api", time: "~2 min" } },
+  { name: "Vercel", baseUrl: "https://api.vercel.com", authType: "bearer", description: "Deployments, domains, environment variables, projects",
+    setupGuide: { steps: ["Go to vercel.com → Settings → Tokens", "Click 'Create Token', name it 'Delt'", "Set scope (full account or specific team)", "Copy the token"], helpUrl: "https://vercel.com/account/tokens", time: "~1 min" } },
+  { name: "Cloudflare", baseUrl: "https://api.cloudflare.com/client/v4", authType: "bearer", description: "DNS, Workers, R2 storage, security, analytics",
+    setupGuide: { steps: ["Go to dash.cloudflare.com → My Profile → API Tokens", "Click 'Create Token'", "Use a template or create custom with the permissions you need", "Copy the token"], helpUrl: "https://dash.cloudflare.com/profile/api-tokens", time: "~2 min" } },
+  { name: "Render", baseUrl: "https://api.render.com/v1", authType: "bearer", description: "Deploys, services, databases, environment",
+    setupGuide: { steps: ["Go to dashboard.render.com → Account Settings", "Scroll to API Keys", "Click 'Create API Key' and copy it"], helpUrl: "https://dashboard.render.com/settings#api-keys", time: "~1 min" } },
+  { name: "Railway", baseUrl: "https://backboard.railway.app/graphql/v2", authType: "bearer", description: "Projects, deployments, services, databases",
+    setupGuide: { steps: ["Go to railway.app → Account Settings → Tokens", "Click 'Create Token', name it 'Delt'", "Copy the token"], helpUrl: "https://railway.app/account/tokens", time: "~1 min" } },
+  { name: "Fly.io", baseUrl: "https://api.machines.dev/v1", authType: "bearer", description: "Apps, machines, volumes, secrets",
+    setupGuide: { steps: ["Open terminal and run: fly tokens create deploy", "Or go to fly.io dashboard → Account → Access Tokens", "Create a new token and copy it"], helpUrl: "https://fly.io/dashboard/personal/tokens", time: "~1 min" } },
+  { name: "Postmark", baseUrl: "https://api.postmarkapp.com", authType: "api-key", headerName: "X-Postmark-Server-Token", description: "Transactional email, templates, inbound processing",
+    setupGuide: { steps: ["Go to account.postmarkapp.com and sign in", "Select your server", "Go to Settings → API Tokens", "Copy the Server API Token"], helpUrl: "https://account.postmarkapp.com/servers", time: "~1 min" } },
+  { name: "Plaid", baseUrl: "https://production.plaid.com", authType: "api-key", headerName: "PLAID-SECRET", description: "Banking data, transactions, balances, identity",
+    setupGuide: { steps: ["Go to dashboard.plaid.com and sign in", "Go to Team Settings → Keys", "Copy your client_id and secret for the environment you need", "Use sandbox (sandbox.plaid.com) for testing"], helpUrl: "https://dashboard.plaid.com/team/keys", time: "~2 min" } },
+  { name: "Twitch", baseUrl: "https://api.twitch.tv/helix", authType: "bearer", description: "Streams, users, clips, chat, subscriptions",
+    setupGuide: { steps: ["Go to dev.twitch.tv/console and sign in", "Register a new application", "Set OAuth Redirect URL to http://localhost", "Copy the Client ID, then generate a Client Secret"], helpUrl: "https://dev.twitch.tv/console/apps", time: "~3 min" } },
+  { name: "Spotify", baseUrl: "https://api.spotify.com/v1", authType: "bearer", description: "Search, playlists, tracks, albums, user library",
+    setupGuide: { steps: ["Go to developer.spotify.com/dashboard and sign in", "Create a new app, set redirect URI to http://localhost", "Copy Client ID and Client Secret from the app settings", "Generate an access token via the OAuth flow"], helpUrl: "https://developer.spotify.com/dashboard", time: "~3 min" } },
+  { name: "Discord", baseUrl: "https://discord.com/api/v10", authType: "api-key", headerName: "Authorization", description: "Guilds, channels, messages, members, webhooks",
+    setupGuide: { steps: ["Go to discord.com/developers/applications", "Create a new application (or select existing)", "Go to Bot → click 'Reset Token'", "Copy the bot token — prefix it with 'Bot ' when pasting"], helpUrl: "https://discord.com/developers/applications", time: "~2 min" } },
+  { name: "Notion (REST)", baseUrl: "https://api.notion.com/v1", authType: "bearer", description: "Pages, databases, blocks, search — direct REST access",
+    setupGuide: { steps: ["Go to notion.so/my-integrations", "Click 'New integration' and name it 'Delt'", "Select the workspace you want to connect", "Copy the Internal Integration Secret", "Share specific pages/databases with your integration in Notion"], helpUrl: "https://www.notion.so/my-integrations", time: "~2 min" } },
+  { name: "Airtable (REST)", baseUrl: "https://api.airtable.com/v0", authType: "bearer", description: "Bases, tables, records — direct REST access",
+    setupGuide: { steps: ["Go to airtable.com/create/tokens", "Click 'Create new token', name it 'Delt'", "Add scopes: data.records:read and data.records:write at minimum", "Select which bases to grant access to", "Copy the token"], helpUrl: "https://airtable.com/create/tokens", time: "~2 min" } },
+  { name: "Lemon Squeezy", baseUrl: "https://api.lemonsqueezy.com/v1", authType: "bearer", description: "Products, orders, subscriptions, license keys",
+    setupGuide: { steps: ["Go to app.lemonsqueezy.com → Settings → API", "Click 'Create API Key'", "Name it 'Delt' and copy the key"], helpUrl: "https://app.lemonsqueezy.com/settings/api", time: "~1 min" } },
+  { name: "Cal.com", baseUrl: "https://api.cal.com/v1", authType: "api-key", headerName: "cal-api-key", description: "Bookings, event types, availability, schedules",
+    setupGuide: { steps: ["Go to app.cal.com → Settings → Developer → API Keys", "Click 'Create API Key'", "Set an expiry or leave blank for no expiry", "Copy the key"], helpUrl: "https://app.cal.com/settings/developer/api-keys", time: "~1 min" } },
 ];
 
 // Configure OAuth client credentials (first-install setup)
@@ -1291,8 +1375,8 @@ app.post("/integrations/:id/oauth-setup", localOnly, rateLimit(60000, 5), (req, 
   if (!clientId || !clientSecret) return res.status(400).json({ error: "Client ID and Client Secret required" });
 
   const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
-  if (!integration || integration.authType !== "oauth2") {
-    return res.status(400).json({ error: "Not an OAuth integration" });
+  if (!integration || (integration.authType !== "oauth2" && !integration.oauthAvailable)) {
+    return res.status(400).json({ error: "Not an OAuth-capable integration" });
   }
 
   oauthClients[integration.id] = { clientId: clientId.trim(), clientSecret: clientSecret.trim() };
@@ -1311,8 +1395,11 @@ app.get("/integrations/:id/oauth-status", (req, res) => {
 // Get OAuth authorization URL
 app.get("/integrations/:id/auth-url", rateLimit(60000, 5), (req, res) => {
   const integration = integrationsRegistry.integrations.find((i) => i.id === req.params.id);
-  if (!integration || integration.authType !== "oauth2") {
-    return res.status(400).json({ error: "Not an OAuth integration" });
+  if (!integration || (integration.authType !== "oauth2" && !integration.oauthAvailable)) {
+    return res.status(400).json({ error: "Not an OAuth-capable integration" });
+  }
+  if (!integration.oauth) {
+    return res.status(400).json({ error: "No OAuth configuration for this integration" });
   }
 
   const clientId = oauthClients[integration.id]?.clientId;
@@ -1507,11 +1594,28 @@ app.post("/upload", rateLimit(60000, 20), upload.array("files", 10), (req, res) 
 // Mobile QR Handoff API
 // ============================================
 
-// Start tunnel, generate token + QR
+// Start tunnel (or LAN fallback), generate token + QR
 app.post("/mobile/start", localOnly, rateLimit(60000, 3), async (req, res) => {
   try {
     const activeSessionId = req.body?.sessionId || null;
-    const url = await startTunnel(PORT);
+    let url;
+    let mode = "tunnel";
+
+    // Try cloudflared tunnel first, fall back to LAN IP
+    try {
+      url = await startTunnel(PORT);
+    } catch (tunnelErr) {
+      // cloudflared not installed or failed — use local network IP
+      url = getLocalNetworkUrl(PORT);
+      mode = "lan";
+      if (!url) {
+        return res.status(500).json({
+          error: "No network interface found. Connect to WiFi and try again.",
+          status: "error",
+        });
+      }
+    }
+
     const token = generateMobileToken(activeSessionId);
     const authUrl = `${url}/mobile/auth?token=${token}`;
 
@@ -1529,6 +1633,7 @@ app.post("/mobile/start", localOnly, rateLimit(60000, 3), async (req, res) => {
       qrData: authUrl,
       qrImage: qrDataUrl,
       status: "running",
+      mode,
     });
   } catch (err) {
     res.status(500).json({ error: err.message, status: "error" });
@@ -2620,7 +2725,58 @@ server.on("error", (err) => {
   console.error("Server error:", err);
 });
 
-server.listen(PORT, "127.0.0.1", () => {
+// ============================================
+// Auto-update — check marketing site for newer version
+// ============================================
+const CURRENT_VERSION = require("./package.json").version;
+const UPDATE_URL = "https://claude-code-ui-six.vercel.app/api/version";
+const DOWNLOAD_BASE = "https://claude-code-ui-six.vercel.app";
+
+function compareVersions(a, b) {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+  }
+  return 0;
+}
+
+async function checkForUpdates() {
+  try {
+    const res = await fetch(UPDATE_URL, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.version || compareVersions(data.version, CURRENT_VERSION) <= 0) return;
+
+    console.log(`[Update] New version available: ${data.version} (current: ${CURRENT_VERSION})`);
+
+    // Download the tarball
+    const dlUrl = `${DOWNLOAD_BASE}${data.download}`;
+    const dlRes = await fetch(dlUrl, { signal: AbortSignal.timeout(60000) });
+    if (!dlRes.ok) { console.log("[Update] Download failed:", dlRes.status); return; }
+
+    const tmpTar = path.join(os.tmpdir(), "delt-update.tar.gz");
+    const buffer = Buffer.from(await dlRes.arrayBuffer());
+    fs.writeFileSync(tmpTar, buffer);
+
+    // Extract over current install (preserves config, logs, history)
+    const { execSync: exec } = require("child_process");
+    exec(`tar xzf ${JSON.stringify(tmpTar)} -C ${JSON.stringify(__dirname)} --exclude node_modules 2>/dev/null`, { timeout: 30000 });
+    fs.unlinkSync(tmpTar);
+
+    console.log(`[Update] Updated to ${data.version}. Restarting...`);
+    // Exit with 0 — launchd KeepAlive will restart with new code
+    process.exit(0);
+  } catch (err) {
+    // Silent fail — updates are best-effort
+    if (err.name !== "AbortError") {
+      console.log("[Update] Check failed:", err.message);
+    }
+  }
+}
+
+server.listen(PORT, "0.0.0.0", () => {
   const proto = useHttps ? "https" : "http";
   console.log(`\n  ${config.business?.name || "Delt"} is running!`);
   console.log(`  ${proto}://localhost:${PORT}`);
@@ -2641,7 +2797,9 @@ server.listen(PORT, "127.0.0.1", () => {
   if (useHttps) {
     console.log(`  HTTPS enabled (self-signed cert at ~/.delt/certs/)`);
   }
-  console.log(`  Bound to localhost only — not accessible from other devices.\n`);
+  const lanUrl = getLocalNetworkUrl(PORT);
+  console.log(`  Phone access via LAN: ${lanUrl || "no network"}`);
+  console.log(`  Remote access requires authentication.\n`);
 
   // Discovery beacon — fixed port so installer/demo pages can find the real server
   // Only responds to local origins (file://, localhost, 127.0.0.1) — prevents
@@ -2664,4 +2822,8 @@ server.listen(PORT, "127.0.0.1", () => {
     res.end(JSON.stringify({ port: PORT, url: `${proto}://localhost:${PORT}` }));
   });
   discoveryServer.listen(DISCOVERY_PORT, "127.0.0.1", () => {}).on("error", () => {});
+
+  // Auto-update check — pull latest from marketing site if newer version exists
+  checkForUpdates();
+  setInterval(checkForUpdates, 6 * 60 * 60 * 1000); // every 6 hours
 });
