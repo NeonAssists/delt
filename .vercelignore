@@ -3,7 +3,7 @@ logs
 history
 credentials.json
 .git
-*.zip
+Desktop/*.zip
 *.mp4
 demo-captures
 signups.json

@@ -188,7 +188,7 @@ CONCLUSION
 pkgbuild \
   --nopayload \
   --identifier com.neonotics.delt \
-  --version 2.0 \
+  --version 2.0.1 \
   --scripts "$PKG_SCRIPTS" \
   /tmp/delt-component.pkg >/dev/null 2>&1
 
@@ -250,7 +250,7 @@ echo "  HTML: $(wc -c < delt-installer.html | xargs) bytes"
 echo "[4/4] Packaging..."
 cp /tmp/Delt.pkg "$PROJECT_DIR/Delt.pkg"
 cd "$PROJECT_DIR"
-zip -j ~/Desktop/Delt-v2.0.0.zip Delt.pkg delt-installer.html install.html uninstall.sh 2>/dev/null
+zip -j ~/Desktop/Delt-v2.0.1.zip Delt.pkg delt-installer.html install.html uninstall.sh 2>/dev/null
 rm -f "$PROJECT_DIR/Delt.pkg"
 
 # Cleanup temp files
