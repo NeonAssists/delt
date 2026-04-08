@@ -103,9 +103,9 @@
 
     /* ---- HERO ---- */
     .hero {
-      min-height: 100vh; display: flex; flex-direction: column;
+      display: flex; flex-direction: column;
       align-items: center; justify-content: center; text-align: center;
-      padding: 120px 32px 80px; position: relative;
+      padding: 120px 32px 60px; position: relative;
     }
     .hero-bg {
       position: absolute; inset: 0; z-index: 0;
@@ -241,7 +241,7 @@
       transition: border-color .2s;
     }
     .integ-chip:hover { border-color: rgba(124,58,237,.25); }
-    .integ-chip .ic-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+    .integ-chip .ic-dot { width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; font-weight: 700; }
     .integ-more {
       font-size: 13px; color: var(--text-3); font-weight: 500;
       text-align: center; margin-top: 12px;
@@ -411,7 +411,7 @@
         <!-- Main layout: chat + integrations drawer -->
         <div class="d-layout">
           <div class="d-main">
-            <div class="d-greet">Hey Nate</div>
+            <div class="d-greet">Hey there</div>
             <div class="d-sub">What are we working on?</div>
             <div class="d-actions">
               <div class="d-action"><div class="d-action-icon">&#9993;</div><div class="d-action-text"><h4>Write an Email</h4><p>Draft, reply, or follow up</p></div></div>
@@ -479,20 +479,19 @@
 
         <div class="example-card r d2">
           <div class="example-head">
-            <div class="example-icon" style="background: rgba(124,58,237,.08);">&#128187;</div>
+            <div class="example-icon" style="background: rgba(6,182,212,.08);">&#128197;</div>
             <div>
-              <h3>Code &amp; GitHub</h3>
-              <span>GitHub connected</span>
+              <h3>Calendar &amp; scheduling</h3>
+              <span>Google Calendar connected</span>
             </div>
           </div>
           <div class="example-chat">
-            <div class="ex-msg ex-user">Review my open PRs and merge anything that's approved</div>
+            <div class="ex-msg ex-user">What does my week look like? Block off Friday afternoon for deep work.</div>
             <div class="ex-msg ex-ai">
-              3 open PRs:<br>
-              &#10003; <strong>#142</strong> "Fix auth redirect" &mdash; approved, CI green. <strong>Merged.</strong><br>
-              &#10003; <strong>#139</strong> "Update deps" &mdash; approved. <strong>Merged.</strong><br>
-              &#9679; <strong>#145</strong> "New dashboard" &mdash; 1 pending review, holding.
-              <span class="tool-badge">GitHub</span>
+              This week: 12 meetings, heaviest on Tuesday (5 meetings).<br><br>
+              Wednesday afternoon and Thursday morning are open.<br><br>
+              <strong>Done</strong> &mdash; blocked "Deep Work" on Friday 1&ndash;5pm. Want me to decline any conflicts?
+              <span class="tool-badge">Calendar</span>
             </div>
           </div>
         </div>
@@ -528,18 +527,18 @@
 
       <!-- Integration strip -->
       <div class="integ-strip r">
-        <div class="integ-chip"><span class="ic-dot" style="background:#4285F4"></span>Google</div>
-        <div class="integ-chip"><span class="ic-dot" style="background:#24292F"></span>GitHub</div>
-        <div class="integ-chip"><span class="ic-dot" style="background:#4A154B"></span>Slack</div>
-        <div class="integ-chip"><span class="ic-dot" style="background:#635BFF"></span>Stripe</div>
-        <div class="integ-chip"><span class="ic-dot" style="background:#000000"></span>Notion</div>
-        <div class="integ-chip"><span class="ic-dot" style="background:#A259FF"></span>Figma</div>
-        <div class="integ-chip"><span class="ic-dot" style="background:#0052CC"></span>Jira</div>
-        <div class="integ-chip"><span class="ic-dot" style="background:#5677FC"></span>Linear</div>
-        <div class="integ-chip"><span class="ic-dot" style="background:#00A1E0"></span>Salesforce</div>
-        <div class="integ-chip"><span class="ic-dot" style="background:#FC4C02"></span>HubSpot</div>
-        <div class="integ-chip"><span class="ic-dot" style="background:#0078D4"></span>Microsoft 365</div>
-        <div class="integ-chip"><span class="ic-dot" style="background:#379A1E"></span>Shopify</div>
+        <div class="integ-chip"><span class="ic-dot" style="background:#4285F4">G</span>Google</div>
+        <div class="integ-chip"><span class="ic-dot" style="background:#24292F">&#9679;</span>GitHub</div>
+        <div class="integ-chip"><span class="ic-dot" style="background:#4A154B">#</span>Slack</div>
+        <div class="integ-chip"><span class="ic-dot" style="background:#635BFF">S</span>Stripe</div>
+        <div class="integ-chip"><span class="ic-dot" style="background:#000000">N</span>Notion</div>
+        <div class="integ-chip"><span class="ic-dot" style="background:#A259FF">F</span>Figma</div>
+        <div class="integ-chip"><span class="ic-dot" style="background:#0052CC">J</span>Jira</div>
+        <div class="integ-chip"><span class="ic-dot" style="background:#5677FC">L</span>Linear</div>
+        <div class="integ-chip"><span class="ic-dot" style="background:#00A1E0">SF</span>Salesforce</div>
+        <div class="integ-chip"><span class="ic-dot" style="background:#FC4C02">H</span>HubSpot</div>
+        <div class="integ-chip"><span class="ic-dot" style="background:#0078D4">M</span>Microsoft 365</div>
+        <div class="integ-chip"><span class="ic-dot" style="background:#379A1E">$</span>Shopify</div>
       </div>
       <p class="integ-more r">33 built-in integrations + Custom API Hub for anything else</p>
     </div>
