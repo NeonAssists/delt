@@ -6,29 +6,29 @@
 <title>Install Delt</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#07070B;color:#F0F0F4;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-.card{max-width:480px;width:100%;background:#0F0F15;border-radius:18px;border:1px solid #1E1E2A;box-shadow:0 8px 32px rgba(0,0,0,.3);padding:40px 36px;text-align:center}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F7F7F8;color:#18182B;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.card{max-width:480px;width:100%;background:#FFF;border-radius:18px;border:1px solid #E3E3E8;box-shadow:0 8px 32px rgba(0,0,0,.06);padding:40px 36px;text-align:center}
 .logo{width:56px;height:56px;border-radius:14px;background:#3B82F6;color:#FFF;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:24px;font-weight:800}
 h1{font-size:24px;font-weight:800;letter-spacing:-.04em;margin-bottom:6px}
-.sub{font-size:15px;color:#A0A0B4;margin-bottom:24px;line-height:1.6}
+.sub{font-size:15px;color:#5C5C72;margin-bottom:24px;line-height:1.6}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 32px;border:none;border-radius:14px;background:#3B82F6;color:#FFF;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;transition:all .15s;letter-spacing:-.01em;width:100%;margin-bottom:10px;text-decoration:none}
-.btn:hover{background:#60A5FA;transform:translateY(-1px);box-shadow:0 6px 20px rgba(59,130,246,.25)}
-.btn-outline{background:transparent;color:#A0A0B4;border:1px solid #1E1E2A}
-.btn-outline:hover{background:#16161F;color:#F0F0F4;transform:none;box-shadow:none}
+.btn:hover{background:#2563EB;transform:translateY(-1px);box-shadow:0 6px 20px rgba(59,130,246,.2)}
+.btn-outline{background:transparent;color:#5C5C72;border:1px solid #E3E3E8}
+.btn-outline:hover{background:#F7F7F8;color:#18182B;transform:none;box-shadow:none}
 .link-btn{background:none;border:none;color:#3B82F6;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;padding:8px 0;text-decoration:underline;text-underline-offset:2px}
-.link-btn:hover{color:#60A5FA}
+.link-btn:hover{color:#2563EB}
 .features{text-align:left;margin:0 0 24px;display:flex;flex-direction:column;gap:12px}
 .feat{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.5}
 .feat-icon{flex-shrink:0;width:20px;height:20px;color:#3B82F6;margin-top:1px}
 .feat strong{font-weight:600}
-.spinner{width:48px;height:48px;margin:0 auto 16px;border:4px solid #1E1E2A;border-top-color:#3B82F6;border-radius:50%;animation:spin .8s linear infinite}
+.spinner{width:48px;height:48px;margin:0 auto 16px;border:4px solid #E3E3E8;border-top-color:#3B82F6;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .check-icon{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;background:#10B981}
-.step-hint{font-size:13px;color:#6B6B80;line-height:1.5;margin-top:8px}
-.priv{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:#6B6B80;margin-top:20px}
+.step-hint{font-size:13px;color:#9494A8;line-height:1.5;margin-top:8px}
+.priv{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:#9494A8;margin-top:20px}
 .screen{display:none}
 .screen.active{display:block}
-.divider{height:1px;background:#1E1E2A;margin:20px 0}
+.divider{height:1px;background:#E3E3E8;margin:20px 0}
 </style>
 </head>
 <body>
@@ -52,7 +52,7 @@ h1{font-size:24px;font-weight:800;letter-spacing:-.04em;margin-bottom:6px}
         <div><strong>Free to use</strong> &mdash; just needs a Claude account</div>
       </div>
     </div>
-    <p class="sub" style="margin-bottom:16px;font-weight:500;color:#F0F0F4;">Do you have a Claude account?</p>
+    <p class="sub" style="margin-bottom:16px;font-weight:500;color:#18182B;">Do you have a Claude account?</p>
     <button class="btn" onclick="showScreen('screen-install')">Yes &mdash; install Delt</button>
     <button class="btn btn-outline" onclick="showScreen('screen-signup')">No &mdash; I need one (free)</button>
     <div class="priv">

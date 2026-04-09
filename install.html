@@ -8,14 +8,14 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: #07070B; color: #F0F0F4;
+    background: #F7F7F8; color: #18182B;
     min-height: 100vh; display: flex; align-items: center; justify-content: center;
     padding: 24px;
   }
   .card {
-    max-width: 520px; width: 100%; background: #0F0F15;
-    border-radius: 18px; border: 1px solid #1E1E2A;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.3); padding: 40px 36px;
+    max-width: 520px; width: 100%; background: #FFF;
+    border-radius: 18px; border: 1px solid #E3E3E8;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.06); padding: 40px 36px;
     text-align: center;
   }
   .icon {
@@ -25,11 +25,11 @@
     margin: 0 auto 20px; font-size: 24px; font-weight: 800;
   }
   h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.04em; margin-bottom: 8px; }
-  .sub { font-size: 15px; color: #A0A0B4; margin-bottom: 28px; line-height: 1.6; }
+  .sub { font-size: 15px; color: #5C5C72; margin-bottom: 28px; line-height: 1.6; }
   .steps { text-align: left; margin-bottom: 28px; }
   .step {
     display: flex; gap: 12px; padding: 14px 0;
-    border-bottom: 1px solid #1E1E2A;
+    border-bottom: 1px solid #EDEDF1;
   }
   .step:last-child { border-bottom: none; }
   .step-num {
@@ -58,10 +58,10 @@
   .copy-btn:hover { color: #DDD; background: #3A3A4A; }
   .privacy {
     display: flex; align-items: center; justify-content: center; gap: 6px;
-    font-size: 12px; color: #6B6B80; margin-top: 20px;
+    font-size: 12px; color: #9494A8; margin-top: 20px;
   }
   .privacy svg { opacity: 0.5; }
-  .alt { font-size: 12px; color: #6B6B80; margin-top: 16px; line-height: 1.5; }
+  .alt { font-size: 12px; color: #9494A8; margin-top: 16px; line-height: 1.5; }
   .alt a { color: #3B82F6; text-decoration: none; }
   .alt a:hover { text-decoration: underline; }
 </style>
@@ -77,7 +77,7 @@
       <div class="step-num">1</div>
       <div class="step-text">
         <strong>Open Terminal</strong><br>
-        Press <kbd style="padding:2px 6px;background:#16161F;border:1px solid #1E1E2A;border-radius:4px;font-size:12px;">&#8984; Space</kbd>, type <strong>Terminal</strong>, hit Enter.
+        Press <kbd style="padding:2px 6px;background:#F0F0F3;border:1px solid #E3E3E8;border-radius:4px;font-size:12px;">&#8984; Space</kbd>, type <strong>Terminal</strong>, hit Enter.
       </div>
     </div>
     <div class="step">
@@ -108,8 +108,8 @@
     100% local. Your data never leaves your computer.
   </div>
 
-  <div style="border-top: 1px solid #1E1E2A; margin-top: 28px; padding-top: 20px;">
-    <p style="font-size: 13px; color: #6B6B80; margin-bottom: 12px;">Need to uninstall?</p>
+  <div style="border-top: 1px solid #E3E3E8; margin-top: 28px; padding-top: 20px;">
+    <p style="font-size: 13px; color: #9494A8; margin-bottom: 12px;">Need to uninstall?</p>
     <div class="cmd-box">
       <code id="uninstall-cmd">curl -fsSL https://delt.vercel.app/uninstall.sh | bash</code>
       <button class="copy-btn" onclick="copyText('uninstall-cmd', this)">Copy</button>

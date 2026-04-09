@@ -3,28 +3,28 @@
    ============================================ */
 
 :root {
-  --bg: #0A0A0F;
-  --bg-page: #07070B;
-  --bg-surface: #0F0F15;
-  --bg-elevated: #16161F;
-  --bg-hover: #1C1C28;
-  --bg-card: #0F0F15;
-  --bg-card-hover: #14141C;
+  --bg: #FFFFFF;
+  --bg-page: #F7F7F8;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #F0F0F3;
+  --bg-hover: #EAEAEF;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #FAFAFC;
 
-  --border: #1E1E2A;
-  --border-light: #181822;
+  --border: #E3E3E8;
+  --border-light: #EDEDF1;
   --border-focus: var(--accent);
 
-  --text-primary: #F0F0F4;
-  --text-secondary: #A0A0B4;
-  --text-muted: #6B6B80;
-  --text-faint: #44444F;
+  --text-primary: #18182B;
+  --text-secondary: #5C5C72;
+  --text-muted: #9494A8;
+  --text-faint: #B8B8C8;
 
   /* Accent — overridden by config via JS */
   --accent: #3B82F6;
-  --accent-hover: #60A5FA;
-  --accent-soft: rgba(59, 130, 246, 0.10);
-  --accent-softer: rgba(59, 130, 246, 0.05);
+  --accent-hover: #2563EB;
+  --accent-soft: rgba(59, 130, 246, 0.08);
+  --accent-softer: rgba(59, 130, 246, 0.04);
   --accent-text: #FFFFFF;
 
   --success: #10B981;
@@ -41,10 +41,10 @@
   --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --mono: 'JetBrains Mono', 'SF Mono', monospace;
 
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
-  --shadow: 0 2px 8px rgba(0,0,0,0.3);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.4);
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.2), 0 0 0 1px var(--border);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow: 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 0 0 1px var(--border);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
