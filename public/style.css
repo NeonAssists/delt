@@ -3,28 +3,28 @@
    ============================================ */
 
 :root {
-  --bg: #FFFFFF;
-  --bg-page: #F7F7F8;
-  --bg-surface: #FFFFFF;
-  --bg-elevated: #F0F0F3;
-  --bg-hover: #EAEAEF;
-  --bg-card: #FFFFFF;
-  --bg-card-hover: #FAFAFC;
+  --bg: #0A0A0F;
+  --bg-page: #07070B;
+  --bg-surface: #0F0F15;
+  --bg-elevated: #16161F;
+  --bg-hover: #1C1C28;
+  --bg-card: #0F0F15;
+  --bg-card-hover: #14141C;
 
-  --border: #E3E3E8;
-  --border-light: #EDEDF1;
+  --border: #1E1E2A;
+  --border-light: #181822;
   --border-focus: var(--accent);
 
-  --text-primary: #18182B;
-  --text-secondary: #5C5C72;
-  --text-muted: #9494A8;
-  --text-faint: #B8B8C8;
+  --text-primary: #F0F0F4;
+  --text-secondary: #A0A0B4;
+  --text-muted: #6B6B80;
+  --text-faint: #44444F;
 
   /* Accent — overridden by config via JS */
-  --accent: #2563EB;
-  --accent-hover: #1D4ED8;
-  --accent-soft: rgba(37, 99, 235, 0.08);
-  --accent-softer: rgba(37, 99, 235, 0.04);
+  --accent: #3B82F6;
+  --accent-hover: #60A5FA;
+  --accent-soft: rgba(59, 130, 246, 0.10);
+  --accent-softer: rgba(59, 130, 246, 0.05);
   --accent-text: #FFFFFF;
 
   --success: #10B981;
@@ -41,10 +41,10 @@
   --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --mono: 'JetBrains Mono', 'SF Mono', monospace;
 
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
-  --shadow: 0 2px 8px rgba(0,0,0,0.06);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 0 0 1px var(--border);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow: 0 2px 8px rgba(0,0,0,0.3);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.4);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.2), 0 0 0 1px var(--border);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -116,7 +116,7 @@ body {
 }
 
 .ob-highlight {
-  background: linear-gradient(135deg, var(--accent), #60A5FA);
+  background: linear-gradient(135deg, #3B82F6, #93C5FD);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -210,7 +210,7 @@ body {
 .ob-btn.primary:hover {
   background: var(--accent-hover);
   transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 8px 28px rgba(59, 130, 246, 0.25);
 }
 
 .ob-hint {
@@ -243,7 +243,7 @@ body {
 }
 
 .ob-icon.accent {
-  background: rgba(37, 99, 235, 0.1);
+  background: rgba(59, 130, 246, 0.12);
 }
 
 .ob-icon.success {
@@ -322,7 +322,7 @@ body {
 .ob-install-fill {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, var(--accent), #60A5FA);
+  background: linear-gradient(90deg, #3B82F6, #60A5FA);
   border-radius: 2px;
   transition: width 0.5s ease;
 }
@@ -602,7 +602,7 @@ body {
 }
 
 .sidebar-tag.multitask {
-  background: rgba(37, 99, 235, 0.1);
+  background: rgba(59, 130, 246, 0.1);
   color: var(--accent);
 }
 
@@ -1445,7 +1445,7 @@ header {
 }
 .cc-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent), #60A5FA);
+  background: linear-gradient(90deg, #3B82F6, #60A5FA);
   border-radius: 4px;
   transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -2208,7 +2208,7 @@ header {
   cursor: pointer; text-align: left; transition: all 0.15s;
 }
 .local-access-btn:hover { border-color: var(--text-faint); background: var(--bg-hover, rgba(0,0,0,0.02)); }
-.local-access-btn.active { border-color: var(--accent); background: rgba(37, 99, 235, 0.06); }
+.local-access-btn.active { border-color: var(--accent); background: rgba(59, 130, 246, 0.06); }
 .local-access-btn-icon {
   flex-shrink: 0; width: 34px; height: 34px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
@@ -2520,7 +2520,7 @@ header {
   padding: 20px 22px;
   width: 340px;
   max-width: 90vw;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(59, 130, 246, 0.25);
   animation: guideSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -2852,7 +2852,7 @@ header {
   background: var(--bg-elevated);
   padding: 2px 7px;
   border-radius: 5px;
-  color: #2563EB;
+  color: #3B82F6;
 }
 
 .message-content pre {
@@ -2951,7 +2951,7 @@ header {
 }
 
 .activity-icon.reading { background: var(--accent-soft); color: var(--accent); }
-.activity-icon.writing { background: rgba(37,99,235,0.08); color: #2563EB; }
+.activity-icon.writing { background: rgba(59,130,246,0.08); color: #3B82F6; }
 .activity-icon.running { background: rgba(16,185,129,0.08); color: var(--success); }
 .activity-icon.searching { background: rgba(245,158,11,0.08); color: var(--warning); }
 
@@ -3680,7 +3680,7 @@ header {
 }
 .wiki-card:hover {
   border-color: var(--accent);
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.08);
   transform: translateY(-1px);
 }
 
@@ -3853,7 +3853,7 @@ header {
 .memory-edit-btn:hover {
   background: var(--accent-hover);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
 }
 
 .memory-edit-btn.hidden { display: none; }
@@ -3955,7 +3955,7 @@ header {
 
 .memory-info-card {
   background: var(--accent-softer);
-  border: 1px solid rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.08);
   border-radius: var(--r);
   padding: 14px 16px;
   font-size: 12.5px;
@@ -3969,7 +3969,7 @@ header {
 }
 
 .memory-info-card code {
-  background: rgba(37, 99, 235, 0.08);
+  background: rgba(59, 130, 246, 0.08);
   padding: 1px 5px;
   border-radius: 4px;
   font-family: var(--mono);
@@ -4071,7 +4071,7 @@ header {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent);
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.12);
 }
 
 .multitask-btn svg {
@@ -4680,7 +4680,7 @@ header {
   font-weight: 600;
   color: var(--accent);
   background: var(--accent-soft);
-  border: 1px solid rgba(37, 99, 235, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.15);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -4688,7 +4688,7 @@ header {
 }
 
 .qr-url-copy:hover {
-  background: rgba(37, 99, 235, 0.12);
+  background: rgba(59, 130, 246, 0.12);
 }
 
 .qr-stop-btn {

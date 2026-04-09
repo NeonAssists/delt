@@ -1,5 +1,6 @@
 <svg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 192 192'>
-  <rect width='192' height='192' rx='35' fill='#2563EB'/>
+  <rect width='192' height='192' rx='35' fill='#0F0F15'/>
+  <rect width='192' height='192' rx='35' fill='none' stroke='#1E1E2A' stroke-width='2'/>
   <text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' 
     font-family='-apple-system,BlinkMacSystemFont,sans-serif' font-weight='800' font-size='86'
     fill='white' letter-spacing='-0.02em'>D</text>

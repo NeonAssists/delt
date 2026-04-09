@@ -1155,7 +1155,7 @@
 
   // --- Confetti ---
   function spawnConfetti() {
-    const colors = ["#2563EB", "#00CEC9", "#FD79A8", "#FDCB6E", "#55EFC4", "#E17055", "#0984E3"];
+    const colors = ["#3B82F6", "#00CEC9", "#FD79A8", "#FDCB6E", "#55EFC4", "#E17055", "#0984E3"];
     const container = document.createElement("div");
     container.className = "delt-confetti-container";
     document.body.appendChild(container);
@@ -2245,7 +2245,7 @@
   // Category metadata for the Command Center
   const CATEGORY_META = {
     system:        { label: "System",        color: "#64748B", icon: "computer" },
-    productivity:  { label: "Productivity",  color: "#2563EB", icon: "layers" },
+    productivity:  { label: "Productivity",  color: "#3B82F6", icon: "layers" },
     communication: { label: "Communication", color: "#0EA5E9", icon: "message" },
     development:   { label: "Development",   color: "#10B981", icon: "code" },
     commerce:      { label: "Commerce",      color: "#F59E0B", icon: "cart" },
@@ -4467,7 +4467,7 @@
       const res = await fetch("/install-silent", { method: "POST" });
       const data = await res.json();
       if (data.error === "node_required") {
-        if (obInstallLabel) obInstallLabel.innerHTML = 'Node.js required — <a href="https://nodejs.org" target="_blank" style="color:#2563EB">install it</a>, then refresh';
+        if (obInstallLabel) obInstallLabel.innerHTML = 'Node.js required — <a href="https://nodejs.org" target="_blank" style="color:#3B82F6">install it</a>, then refresh';
         if (obInstallBar) obInstallBar.classList.add("error");
         return;
       }
@@ -4508,7 +4508,7 @@
           clearInterval(installPollTimer);
           if (obInstallFill) obInstallFill.classList.remove("indeterminate");
           if (obInstallBar) obInstallBar.classList.add("error");
-          if (obInstallLabel) obInstallLabel.innerHTML = 'Install failed — <button onclick="retryInstall()" style="background:none;border:none;color:#2563EB;cursor:pointer;text-decoration:underline;font:inherit">try again</button>';
+          if (obInstallLabel) obInstallLabel.innerHTML = 'Install failed — <button onclick="retryInstall()" style="background:none;border:none;color:#3B82F6;cursor:pointer;text-decoration:underline;font:inherit">try again</button>';
         }
       } catch {}
     }, 2000);
@@ -4569,7 +4569,7 @@
         } else if (s.status === "failed") {
           clearInterval(waitTimer);
           if (obInstallBar) obInstallBar.classList.add("error");
-          if (obInstallLabel) obInstallLabel.innerHTML = 'Install failed — <button onclick="retryInstall()" style="background:none;border:none;color:#2563EB;cursor:pointer;text-decoration:underline;font:inherit">try again</button>';
+          if (obInstallLabel) obInstallLabel.innerHTML = 'Install failed — <button onclick="retryInstall()" style="background:none;border:none;color:#3B82F6;cursor:pointer;text-decoration:underline;font:inherit">try again</button>';
         }
       } catch {}
     }, 1500);

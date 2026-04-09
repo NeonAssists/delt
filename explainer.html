@@ -27,15 +27,15 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect rx='20' width='100' height='100' fill='%237C3AED'/><text x='50' y='72' text-anchor='middle' font-size='60' font-weight='900' fill='white'>D</text></svg>">
   <style>
     :root {
-      --bg: #FAFAFD;
-      --surface: #FFFFFF;
-      --surface-2: #F5F7FA;
-      --border: #E5E8F0;
-      --text: #0C0A14;
-      --text-2: #55526A;
-      --text-3: #8E8BA3;
-      --purple: #2563EB;
-      --indigo: #3B82F6;
+      --bg: #07070B;
+      --surface: #0F0F15;
+      --surface-2: #16161F;
+      --border: #1E1E2A;
+      --text: #F0F0F4;
+      --text-2: #A0A0B4;
+      --text-3: #6B6B80;
+      --purple: #3B82F6;
+      --indigo: #60A5FA;
       --cyan: #06B6D4;
       --mint: #10B981;
       --amber: #F59E0B;
@@ -110,7 +110,7 @@
     .hero-bg {
       position: absolute; inset: 0; z-index: 0;
       background:
-        radial-gradient(ellipse 50% 40% at 50% 20%, rgba(37,99,235,.05) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 40% at 50% 20%, rgba(59,130,246,.05) 0%, transparent 70%),
         radial-gradient(ellipse 40% 50% at 30% 60%, rgba(99,102,241,.03) 0%, transparent 70%),
         radial-gradient(ellipse 30% 40% at 70% 70%, rgba(6,182,212,.03) 0%, transparent 70%);
     }
@@ -118,7 +118,7 @@
     .hero-pill {
       display: inline-flex; align-items: center; gap: 7px;
       padding: 6px 16px 6px 10px; border-radius: 100px;
-      background: rgba(37,99,235,.06); border: 1px solid rgba(37,99,235,.1);
+      background: rgba(59,130,246,.06); border: 1px solid rgba(59,130,246,.1);
       font-size: 12px; font-weight: 600; color: var(--purple); margin-bottom: 28px;
     }
     .hero-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); animation: pulse 2s infinite; }
@@ -138,9 +138,9 @@
       color: #fff; font-weight: 700; font-size: 15px; font-family: var(--font);
       cursor: pointer; transition: all .25s; text-decoration: none;
       display: inline-flex; align-items: center; gap: 8px;
-      box-shadow: 0 4px 24px rgba(37,99,235,.2);
+      box-shadow: 0 4px 24px rgba(59,130,246,.2);
     }
-    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 32px rgba(37,99,235,.3); }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 32px rgba(59,130,246,.3); }
     .btn-secondary {
       padding: 14px 28px; border-radius: 100px; border: 1.5px solid var(--border);
       background: var(--surface); color: var(--text); font-weight: 600; font-size: 14px;
@@ -171,14 +171,14 @@
     .d-badge i { width: 4px; height: 4px; border-radius: 50%; background: var(--mint); display: block; }
     .d-bar-r { margin-left: auto; display: flex; gap: 4px; }
     .d-bar-btn { height: 24px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font-size: 9px; font-weight: 600; color: var(--text-2); display: inline-flex; align-items: center; gap: 3px; }
-    .d-bar-btn.active { border-color: var(--purple); color: var(--purple); background: rgba(37,99,235,.04); }
+    .d-bar-btn.active { border-color: var(--purple); color: var(--purple); background: rgba(59,130,246,.04); }
     .d-layout { display: flex; min-height: 320px; }
     .d-main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 20px 12px; text-align: center; }
     .d-greet { font-size: 22px; font-weight: 800; letter-spacing: -.04em; margin-bottom: 4px; }
     .d-sub { font-size: 12px; color: var(--text-3); margin-bottom: 16px; }
     .d-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 100%; max-width: 380px; margin-bottom: 12px; }
     .d-action { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); text-align: left; }
-    .d-action-icon { width: 24px; height: 24px; border-radius: 7px; background: rgba(37,99,235,.06); display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; color: var(--purple); }
+    .d-action-icon { width: 24px; height: 24px; border-radius: 7px; background: rgba(59,130,246,.06); display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; color: var(--purple); }
     .d-action-text h4 { font-size: 10px; font-weight: 700; line-height: 1.2; }
     .d-action-text p { font-size: 8px; color: var(--text-3); line-height: 1.3; margin: 0; }
     .d-hint { font-size: 9px; color: var(--text-3); margin-bottom: 8px; }
@@ -202,7 +202,7 @@
     .features { background: var(--surface); }
     .examples { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 48px; }
     .example-card { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--bg); transition: border-color .2s; }
-    .example-card:hover { border-color: rgba(37,99,235,.3); }
+    .example-card:hover { border-color: rgba(59,130,246,.3); }
     .example-head { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
     .example-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
     .example-head h3 { font-size: 14px; font-weight: 700; }
@@ -211,7 +211,7 @@
     .ex-msg { padding: 10px 14px; border-radius: 12px; font-size: 12.5px; line-height: 1.55; max-width: 90%; }
     .ex-user { background: linear-gradient(135deg, var(--purple), var(--indigo)); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
     .ex-ai { background: var(--surface); border: 1px solid var(--border); align-self: flex-start; border-bottom-left-radius: 4px; }
-    .ex-ai .tool-badge { display: inline-flex; padding: 1px 6px; border-radius: 5px; font-size: 9px; font-weight: 600; background: rgba(37,99,235,.08); color: var(--purple); margin: 0 1px; }
+    .ex-ai .tool-badge { display: inline-flex; padding: 1px 6px; border-radius: 5px; font-size: 9px; font-weight: 600; background: rgba(59,130,246,.08); color: var(--purple); margin: 0 1px; }
 
     /* Feature pills */
     .pill-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 32px; }
@@ -220,7 +220,7 @@
       padding: 16px 18px; border-radius: 12px; border: 1px solid var(--border);
       background: var(--bg); transition: border-color .2s;
     }
-    .pill-card:hover { border-color: rgba(37,99,235,.2); }
+    .pill-card:hover { border-color: rgba(59,130,246,.2); }
     .pill-icon {
       width: 36px; height: 36px; border-radius: 10px; display: flex;
       align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0;
@@ -240,7 +240,7 @@
       font-size: 12px; font-weight: 600; color: var(--text-2);
       transition: border-color .2s;
     }
-    .integ-chip:hover { border-color: rgba(37,99,235,.25); }
+    .integ-chip:hover { border-color: rgba(59,130,246,.25); }
     .integ-chip .ic-dot { width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; font-weight: 700; }
     .integ-more {
       font-size: 13px; color: var(--text-3); font-weight: 500;
@@ -276,7 +276,7 @@
       width: 72px; height: 72px; border-radius: 18px; margin: 0 auto 16px;
       background: linear-gradient(135deg, var(--purple), var(--indigo));
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 8px 24px rgba(37,99,235,.2);
+      box-shadow: 0 8px 24px rgba(59,130,246,.2);
     }
     .pkg-icon svg { width: 36px; height: 36px; }
     .pkg-hero h4 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
@@ -287,15 +287,15 @@
       color: #fff; font-weight: 700; font-size: 15px; font-family: var(--font);
       cursor: pointer; transition: all .25s; text-decoration: none;
       display: inline-flex; align-items: center; gap: 8px;
-      box-shadow: 0 4px 24px rgba(37,99,235,.2);
+      box-shadow: 0 4px 24px rgba(59,130,246,.2);
     }
-    .btn-download:hover { transform: translateY(-1px); box-shadow: 0 8px 32px rgba(37,99,235,.3); }
+    .btn-download:hover { transform: translateY(-1px); box-shadow: 0 8px 32px rgba(59,130,246,.3); }
     .install-cta { margin-top: 32px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
     .install-note { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
     .install-step { display: flex; align-items: flex-start; gap: 16px; text-align: left; }
     .install-step-num {
       width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
-      background: rgba(37,99,235,.08); color: var(--purple);
+      background: rgba(59,130,246,.08); color: var(--purple);
       display: flex; align-items: center; justify-content: center;
       font-weight: 800; font-size: 13px;
     }
@@ -433,7 +433,7 @@
           <div class="d-integ">
             <div class="d-integ-hdr"><h3>Integrations</h3><span>5 connected</span></div>
             <div class="d-integ-label">Connected</div>
-            <div class="d-integ-card on"><div class="d-integ-icon" style="background:rgba(37,99,235,.06)">&#128187;</div><div style="flex:1;min-width:0"><span class="d-integ-name">Local Computer</span><span class="d-integ-desc">Files, apps, system</span></div><div class="d-integ-dot"></div></div>
+            <div class="d-integ-card on"><div class="d-integ-icon" style="background:rgba(59,130,246,.06)">&#128187;</div><div style="flex:1;min-width:0"><span class="d-integ-name">Local Computer</span><span class="d-integ-desc">Files, apps, system</span></div><div class="d-integ-dot"></div></div>
             <div class="d-integ-card on"><div class="d-integ-icon" style="background:rgba(66,133,244,.06)">&#9993;</div><div style="flex:1;min-width:0"><span class="d-integ-name">Google Workspace</span><span class="d-integ-desc">Gmail, Calendar, Drive</span></div><div class="d-integ-dot"></div></div>
             <div class="d-integ-card on"><div class="d-integ-icon" style="background:rgba(36,41,47,.05)">&#128736;</div><div style="flex:1;min-width:0"><span class="d-integ-name">GitHub</span><span class="d-integ-desc">Repos, PRs, issues</span></div><div class="d-integ-dot"></div></div>
             <div class="d-integ-card on"><div class="d-integ-icon" style="background:rgba(162,89,255,.06)">&#9998;</div><div style="flex:1;min-width:0"><span class="d-integ-name">Figma</span><span class="d-integ-desc">Design files</span></div><div class="d-integ-dot"></div></div>
@@ -500,7 +500,7 @@
       <!-- Feature pills -->
       <div class="pill-grid">
         <div class="pill-card r d1">
-          <div class="pill-icon" style="background:rgba(37,99,235,.08)">&#128268;</div>
+          <div class="pill-icon" style="background:rgba(59,130,246,.08)">&#128268;</div>
           <div><h4>33 integrations</h4><p>Gmail, GitHub, Slack, Stripe, Notion, and more &mdash; one-click connect</p></div>
         </div>
         <div class="pill-card r d2">
@@ -512,7 +512,7 @@
           <div><h4>Phone handoff</h4><p>Scan a QR code, continue on your phone over WiFi</p></div>
         </div>
         <div class="pill-card r d1">
-          <div class="pill-icon" style="background:rgba(37,99,235,.08)">&#9646;&#9646;</div>
+          <div class="pill-icon" style="background:rgba(59,130,246,.08)">&#9646;&#9646;</div>
           <div><h4>Dual-pane</h4><p>Two conversations side by side. Research + draft at once</p></div>
         </div>
         <div class="pill-card r d2">
