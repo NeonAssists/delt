@@ -19,10 +19,6 @@ MCP tools: mcp__github__*
 Design files, components, comments
 MCP tools: mcp__figma__*
 
-## Airtable
-Bases, tables, records, views
-MCP tools: mcp__airtable__*
-
 ## Apple Apps
 Reminders, Notes, Calendar, Contacts, Mail (macOS)
 MCP tools: mcp__apple__*
@@ -30,4 +26,9 @@ MCP tools: mcp__apple__*
 ## Salesforce
 CRM, leads, opportunities, accounts, reports
 MCP tools: mcp__salesforce__*
+
+## Mintlify
+Documentation platform — deploy updates, AI assistant, search docs, analytics
+API key: Admin key (mint_) or Assistant key (mint_dsc_)
+Capabilities: trigger site updates, search docs, AI assistant chat, agent editing jobs, analytics export
 

@@ -8,6 +8,16 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="animations.css">
+  <script>
+  // Apply dark mode before render to prevent flash of wrong theme
+  (function(){
+    var t = localStorage.getItem('delt-theme');
+    if (t === 'dark') {
+      document.documentElement.classList.add('dark-mode');
+    }
+  })();
+  </script>
   <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
   <link rel="icon" type="image/svg+xml" href="/icon-192.svg">
   <link rel="manifest" href="/manifest.json">
@@ -46,10 +56,33 @@
 
       <!-- Step 1: Welcome -->
       <div class="onboard-step" id="ob-welcome">
-        <div class="ob-badge">Private & Local</div>
-        <h1 class="ob-hero-title">Meet <span class="ob-highlight">Delt</span></h1>
-        <p class="ob-hero-sub">Your AI assistant that runs entirely on your computer. No cloud, no tracking — just you and your data.</p>
+        <h1 class="ob-hero-title">Your AI assistant<br>that actually <span class="ob-highlight">does things</span></h1>
+        <p class="ob-hero-sub">Delt reads your email, manages your calendar, drafts your responses, and searches your files. You just approve.</p>
+
+        <!-- What it does — outcome-focused -->
         <div class="ob-features">
+          <div class="ob-feature">
+            <div class="ob-feature-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2"/><path d="m22 5-10 7L2 5"/>
+              </svg>
+            </div>
+            <div>
+              <strong>Triage your inbox in seconds</strong>
+              <span>Reads, summarizes, and drafts replies to your email</span>
+            </div>
+          </div>
+          <div class="ob-feature">
+            <div class="ob-feature-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 16 2 2 4-4"/>
+              </svg>
+            </div>
+            <div>
+              <strong>Never miss a follow-up</strong>
+              <span>Checks your calendar and reminds you what's next</span>
+            </div>
+          </div>
           <div class="ob-feature">
             <div class="ob-feature-icon">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -57,35 +90,27 @@
               </svg>
             </div>
             <div>
-              <strong>100% private</strong>
-              <span>Everything stays on your machine</span>
-            </div>
-          </div>
-          <div class="ob-feature">
-            <div class="ob-feature-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2v6m0 8v6M2 12h6m8 0h6"/><circle cx="12" cy="12" r="3"/>
-              </svg>
-            </div>
-            <div>
-              <strong>Connects your tools</strong>
-              <span>Gmail, Calendar, GitHub & more</span>
-            </div>
-          </div>
-          <div class="ob-feature">
-            <div class="ob-feature-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>
-              </svg>
-            </div>
-            <div>
-              <strong>Free to use</strong>
-              <span>Powered by Claude — no API key needed</span>
+              <strong>Your data stays on your computer</strong>
+              <span>Nothing is stored in the cloud. Ever.</span>
             </div>
           </div>
         </div>
-        <button class="ob-btn primary" id="ob-start">Get started</button>
-        <p class="ob-hint">Setup takes about 2 minutes</p>
+
+        <!-- Demo preview — show what it looks like -->
+        <div class="ob-demo-preview">
+          <div class="ob-demo-msg ob-demo-user">Check my email and tell me what needs a response</div>
+          <div class="ob-demo-msg ob-demo-assistant">
+            <strong>3 emails need your attention:</strong><br>
+            <span class="ob-demo-item">1. Sarah from Acme Corp — wants to reschedule Thursday's call</span><br>
+            <span class="ob-demo-item">2. Your accountant — Q1 docs ready for review</span><br>
+            <span class="ob-demo-item">3. New lead from the website — asking about pricing</span><br>
+            <em class="ob-demo-action">Want me to draft replies?</em>
+          </div>
+        </div>
+
+        <button class="ob-btn primary" id="ob-start" aria-label="Get started with Delt setup">Get started — it's free</button>
+        <p class="ob-hint">Takes about 2 minutes. Requires a free <a href="https://claude.ai" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: underline;">Claude</a> account.</p>
+        <p class="ob-hint" style="margin-top: 4px;"><a href="privacy.html" target="_blank" rel="noopener" style="color: var(--text-tertiary); text-decoration: underline; font-size: 12px;">How your data is protected</a></p>
       </div>
 
       <!-- Step 2: Create Account + Silent Install -->
@@ -126,12 +151,12 @@
             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
           </svg>
         </a>
-        <button class="ob-link" id="ob-have-account">I already have a Claude account &mdash; skip this</button>
+        <button class="ob-link" id="ob-have-account" aria-label="Skip account creation — I already have a Claude account">I already have a Claude account &mdash; skip this</button>
         <div class="ob-install-bar" id="ob-install-bar">
           <div class="ob-install-track">
             <div class="ob-install-fill" id="ob-install-fill"></div>
           </div>
-          <span class="ob-install-label" id="ob-install-label">Installing Delt engine...</span>
+          <span class="ob-install-label" id="ob-install-label">Setting up Delt...</span>
         </div>
       </div>
 
@@ -163,7 +188,7 @@
           </div>
         </div>
 
-        <button class="ob-btn primary" id="ob-signin-btn">Sign in to Claude</button>
+        <button class="ob-btn primary" id="ob-signin-btn" aria-label="Sign in to Claude">Sign in to Claude</button>
 
         <div class="ob-auth-hint hidden" id="ob-auth-hint" style="background:rgba(37,99,235,0.06);border-radius:10px;padding:12px 14px;margin-top:16px;text-align:left;">
           <p style="font-size:13px;color:var(--text-secondary);line-height:1.5;margin:0;">
@@ -175,7 +200,7 @@
           <span class="ob-auth-dot checking" id="ob-auth-dot"></span>
           <span id="ob-auth-text">Waiting for sign in...</span>
         </div>
-        <button class="ob-link" id="ob-auth-retry">I've signed in — check again</button>
+        <button class="ob-link" id="ob-auth-retry" aria-label="Check sign-in status again">I've signed in — check again</button>
       </div>
 
       <!-- Step 4: Ready -->
@@ -187,14 +212,21 @@
         </div>
         <h2 class="ob-title">You're all set</h2>
         <p class="ob-sub">Everything runs locally on your machine. Your conversations, files, and data — all private, always.</p>
-        <button class="ob-btn primary" id="ob-launch">Start chatting</button>
+        <button class="ob-btn primary" id="ob-launch" aria-label="Start chatting with Delt">Start chatting</button>
       </div>
 
       <div class="ob-privacy">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
-        100% local. Your data never touches any server.
+        Your files stay on your computer. AI processing uses Claude (Anthropic) with no data retention.
+      </div>
+      <div class="ob-footer-links">
+        <a href="privacy.html" target="_blank" rel="noopener">Privacy</a>
+        <span class="ob-footer-sep">·</span>
+        <span>Built by <a href="https://neonotics.com" target="_blank" rel="noopener">Neonotics</a></span>
+        <span class="ob-footer-sep">·</span>
+        <a href="mailto:nate@neonotics.com">Contact</a>
       </div>
     </div>
   </div>
@@ -202,7 +234,7 @@
   <div id="app" class="hidden">
     <header id="header">
       <div class="header-left">
-        <a class="logo-link" id="logo-link" href="#" title="New session">
+        <a class="logo-link" id="logo-link" href="#" title="Back to home — start a new conversation">
           <div class="logo-mark" id="logo-mark">N</div>
           <span class="logo-text" id="logo-text">delt</span>
         </a>
@@ -213,30 +245,37 @@
         <div class="integration-chips" id="integration-chips"></div>
       </div>
       <div class="header-right">
-        <button class="header-btn" id="crons-btn">
+        <button class="header-btn" id="crons-btn" aria-label="View scheduled tasks">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
           </svg>
-          Crons
+          Schedules
         </button>
-        <button class="header-btn" id="memory-btn" title="What Delt knows about you">
+        <button class="header-btn" id="memory-btn" title="What Delt knows about you" aria-label="View your profile">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
           </svg>
           Profile
         </button>
-        <button class="header-btn" id="integrations-btn">
+        <button class="header-btn" id="integrations-btn" aria-label="View connected apps">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
           </svg>
-          Integrations
+          Apps
         </button>
-        <button class="header-btn" id="new-chat-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
+        <button class="header-btn" id="new-chat-btn" title="Open a second chat side-by-side" aria-label="Open split view">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="8" height="18" rx="1.5"/><rect x="13" y="3" width="8" height="18" rx="1.5"/>
           </svg>
-          New chat
+          Split view
+        </button>
+        <button class="header-btn theme-toggle" id="theme-toggle-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
+          <svg class="theme-icon theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+          <svg class="theme-icon theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
         </button>
       </div>
     </header>
@@ -245,7 +284,7 @@
       <!-- Left sidebar: History (collapsed by default, toggle with hamburger) -->
       <aside class="sidebar collapsed" id="sidebar">
         <div class="sidebar-top">
-          <button class="sidebar-new-chat" id="sidebar-new-chat">
+          <button class="sidebar-new-chat" id="sidebar-new-chat" aria-label="Start a new chat">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
@@ -257,13 +296,13 @@
         </div>
       </aside>
 
-      <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle history">
+      <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle history" aria-label="Toggle conversation history sidebar">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
       </button>
 
-      <button class="phone-toggle" id="phone-toggle" title="Connect your phone">
+      <button class="phone-toggle" id="phone-toggle" title="Connect your phone" aria-label="Connect your phone">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
           <line x1="12" y1="18" x2="12" y2="18.01"/>
@@ -278,7 +317,7 @@
         <div class="chat-pane" id="pane-1" data-pane="1">
           <div class="pane-header hidden" id="pane-1-header">
             <span class="pane-label">Session 1</span>
-            <button class="pane-close-btn" id="pane-1-close" title="Close this pane">&times;</button>
+            <button class="pane-close-btn" id="pane-1-close" title="Close this pane" aria-label="Close session 1 pane">&times;</button>
           </div>
           <main class="pane-chat-area">
             <!-- First-time onboarding -->
@@ -302,7 +341,7 @@
                     <label class="onboarding-label" for="setup-bot">What should your bot be called?</label>
                     <input type="text" id="setup-bot" class="onboarding-input" placeholder="e.g. Atlas, Sage, Bolt...">
                   </div>
-                  <button id="setup-go" class="onboarding-btn" disabled>Get started</button>
+                  <button id="setup-go" class="onboarding-btn" disabled aria-label="Complete setup and get started">Get started</button>
                 </div>
               </div>
             </div>
@@ -326,13 +365,13 @@
             <div class="input-wrapper">
               <div class="attached-files hidden" id="attached-files"></div>
               <div class="input-row" id="input-row">
-                <label class="attach-btn" title="Attach files">
+                <label class="attach-btn" title="Attach files" aria-label="Attach files">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
                   </svg>
-                  <input type="file" id="file-input" multiple hidden>
+                  <input type="file" id="file-input" multiple hidden aria-label="Choose files to attach">
                 </label>
-                <textarea id="message-input" placeholder="Ask me anything..." rows="1" autofocus></textarea>
+                <textarea id="message-input" placeholder="Ask me anything..." rows="1" autofocus aria-label="Message input"></textarea>
                 <button id="mic-btn" class="mic-btn hidden" title="Voice input — audio stays in your browser" aria-label="Voice input">
                   <svg class="mic-icon-idle" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
@@ -343,24 +382,30 @@
                     <rect x="6" y="6" width="12" height="12" rx="2"/>
                   </svg>
                 </button>
-                <button id="send-btn" class="send-btn" title="Send" disabled>
+                <button id="send-btn" class="send-btn" title="Send" disabled aria-label="Send message">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>
             </svg>
           </button>
-          <button id="stop-btn" class="stop-btn hidden" title="Stop">
+          <button id="stop-btn" class="stop-btn hidden" title="Stop" aria-label="Stop generating">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <rect x="6" y="6" width="12" height="12" rx="2"/>
             </svg>
           </button>
         </div>
         <div class="input-meta">
-          <span class="input-hint"><kbd>Enter</kbd> send · <kbd>Shift+Enter</kbd> new line · drop files anywhere</span>
-          <button class="multitask-btn" id="btw-fab" title="Open side thread to run parallel tasks">
+          <span class="input-hint"><kbd>Enter</kbd> to send <span class="desktop-only">· <kbd>Shift+Enter</kbd> new line</span> · drop files anywhere</span>
+          <button class="new-convo-btn hidden" id="new-convo-btn" title="Start a new conversation" aria-label="Start a new conversation">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            New conversation
+          </button>
+          <button class="multitask-btn" id="btw-fab" title="Open side thread to run parallel tasks" aria-label="Open side chat for parallel tasks">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
             </svg>
-            Multitask
+            Side chat
           </button>
         </div>
             </div>
@@ -371,7 +416,7 @@
         <div class="chat-pane hidden" id="pane-2" data-pane="2">
           <div class="pane-header">
             <span class="pane-label">Session 2</span>
-            <button class="pane-close-btn" id="pane-2-close" title="Close this pane">&times;</button>
+            <button class="pane-close-btn" id="pane-2-close" title="Close this pane" aria-label="Close session 2 pane">&times;</button>
           </div>
           <main class="pane-chat-area">
             <div class="pane-welcome" id="pane-2-welcome">
@@ -391,13 +436,13 @@
             <div class="input-wrapper">
               <div class="attached-files hidden" id="pane-2-attached-files"></div>
               <div class="input-row">
-                <label class="attach-btn" title="Attach files">
+                <label class="attach-btn" title="Attach files" aria-label="Attach files to session 2">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
                   </svg>
-                  <input type="file" id="pane-2-file-input" multiple hidden>
+                  <input type="file" id="pane-2-file-input" multiple hidden aria-label="Choose files to attach to session 2">
                 </label>
-                <textarea id="pane-2-input" class="pane-2-textarea" placeholder="Ask me anything..." rows="1"></textarea>
+                <textarea id="pane-2-input" class="pane-2-textarea" placeholder="Ask me anything..." rows="1" aria-label="Message input for session 2"></textarea>
                 <button id="pane-2-mic-btn" class="mic-btn hidden" title="Voice input — audio stays in your browser" aria-label="Voice input">
                   <svg class="mic-icon-idle" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
@@ -408,24 +453,24 @@
                     <rect x="6" y="6" width="12" height="12" rx="2"/>
                   </svg>
                 </button>
-                <button id="pane-2-send" class="send-btn" title="Send" disabled>
+                <button id="pane-2-send" class="send-btn" title="Send" disabled aria-label="Send message in session 2">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>
                   </svg>
                 </button>
-                <button id="pane-2-stop" class="stop-btn hidden" title="Stop">
+                <button id="pane-2-stop" class="stop-btn hidden" title="Stop" aria-label="Stop generating in session 2">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <rect x="6" y="6" width="12" height="12" rx="2"/>
                   </svg>
                 </button>
               </div>
               <div class="input-meta">
-                <span class="input-hint"><kbd>Enter</kbd> send · <kbd>Shift+Enter</kbd> new line · drop files anywhere</span>
-                <button class="multitask-btn" id="pane-2-btw-fab" title="Open side thread to run parallel tasks">
+                <span class="input-hint"><kbd>Enter</kbd> to send <span class="desktop-only">· <kbd>Shift+Enter</kbd> new line</span> · drop files anywhere</span>
+                <button class="multitask-btn" id="pane-2-btw-fab" title="Open side thread to run parallel tasks" aria-label="Open side chat for parallel tasks">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
                   </svg>
-                  Multitask
+                  Side chat
                 </button>
               </div>
             </div>
@@ -440,7 +485,7 @@
       <div class="preview-header">
         <div class="preview-header-left">
           <span class="preview-title">Preview</span>
-          <button class="preview-inspector-btn" id="preview-inspector-btn" title="Click elements to edit them">
+          <button class="preview-inspector-btn" id="preview-inspector-btn" title="Click elements to edit them" aria-label="Toggle element inspector">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="m13 13 6 6"/>
             </svg>
@@ -448,17 +493,17 @@
           </button>
         </div>
         <div class="preview-header-right">
-          <button class="preview-icon-btn" id="preview-reload-btn" title="Reload preview">
+          <button class="preview-icon-btn" id="preview-reload-btn" title="Reload preview" aria-label="Reload preview">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
             </svg>
           </button>
-          <button class="preview-icon-btn" id="preview-close-btn" title="Close preview">&times;</button>
+          <button class="preview-icon-btn" id="preview-close-btn" title="Close preview" aria-label="Close preview panel">&times;</button>
         </div>
       </div>
       <div class="preview-url-bar">
-        <input type="text" id="preview-url-input" placeholder="http://localhost:3000 or /path/to/project" spellcheck="false" autocomplete="off">
-        <button class="preview-go-btn" id="preview-go-btn">Go</button>
+        <input type="text" id="preview-url-input" placeholder="http://localhost:3000 or /path/to/project" spellcheck="false" autocomplete="off" aria-label="Preview URL">
+        <button class="preview-go-btn" id="preview-go-btn" aria-label="Load preview URL">Go</button>
       </div>
       <div class="preview-content" id="preview-content">
         <div class="preview-empty" id="preview-empty">
@@ -471,17 +516,17 @@
         <iframe id="preview-iframe" class="hidden" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
         <div class="preview-error hidden" id="preview-error">
           <p id="preview-error-text"></p>
-          <button class="preview-retry-btn" id="preview-retry-btn">Retry</button>
+          <button class="preview-retry-btn" id="preview-retry-btn" aria-label="Retry loading preview">Retry</button>
         </div>
       </div>
       <div class="preview-element-popover hidden" id="preview-element-popover">
         <div class="preview-popover-top">
           <span class="preview-element-tag" id="preview-element-tag"></span>
-          <button class="preview-popover-dismiss" id="preview-popover-dismiss">&times;</button>
+          <button class="preview-popover-dismiss" id="preview-popover-dismiss" aria-label="Dismiss element popover">&times;</button>
         </div>
         <div class="preview-element-text" id="preview-element-text"></div>
         <div class="preview-element-styles" id="preview-element-styles"></div>
-        <button class="preview-edit-btn" id="preview-edit-btn">
+        <button class="preview-edit-btn" id="preview-edit-btn" aria-label="Edit selected element in chat">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
           </svg>
@@ -495,10 +540,10 @@
     <div class="btw-panel hidden" id="btw-panel">
       <div class="btw-header">
         <div class="btw-header-left">
-          <span class="btw-title">Multitask</span>
-          <span class="btw-subtitle">parallel side thread</span>
+          <span class="btw-title">Side Chat</span>
+          <span class="btw-subtitle">ask something while you wait</span>
         </div>
-        <button class="btw-close" id="btw-close" title="Close">
+        <button class="btw-close" id="btw-close" title="Close" aria-label="Close side chat">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
@@ -512,13 +557,13 @@
       </div>
       <div class="btw-input-area">
         <div class="btw-input-row">
-          <textarea id="btw-input" placeholder="What else do you need?" rows="1"></textarea>
-          <button id="btw-send" class="btw-send-btn" disabled>
+          <textarea id="btw-input" placeholder="What else do you need?" rows="1" aria-label="Side chat message input"></textarea>
+          <button id="btw-send" class="btw-send-btn" disabled aria-label="Send side chat message">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>
             </svg>
           </button>
-          <button id="btw-stop" class="btw-stop-btn hidden">
+          <button id="btw-stop" class="btw-stop-btn hidden" aria-label="Stop side chat generation">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
               <rect x="6" y="6" width="12" height="12" rx="2"/>
             </svg>
@@ -528,15 +573,15 @@
     </div>
     <div class="btw-overlay hidden" id="btw-overlay"></div>
 
-    <!-- Command Center (Integrations) -->
+    <!-- Apps Panel -->
     <div class="integrations-overlay hidden" id="integrations-overlay"></div>
     <div class="integrations-panel hidden" id="integrations-panel">
       <div class="integrations-header">
         <div>
-          <h2 class="integrations-title">Command Center</h2>
-          <p class="integrations-subtitle">Your tools, one tap away</p>
+          <h2 class="integrations-title">Your Apps</h2>
+          <p class="integrations-subtitle">Connect your favorite tools</p>
         </div>
-        <button class="pane-close-btn" id="integrations-close">&times;</button>
+        <button class="pane-close-btn" id="integrations-close" aria-label="Close apps panel">&times;</button>
       </div>
       <div class="integrations-body" id="integrations-body">
         <div class="integrations-loading">Loading...</div>
@@ -549,9 +594,9 @@
       <div class="integrations-header">
         <div>
           <h2 class="integrations-title">Scheduled Tasks</h2>
-          <p class="integrations-subtitle">Run prompts on a schedule</p>
+          <p class="integrations-subtitle">Set up tasks that run automatically</p>
         </div>
-        <button class="pane-close-btn" id="crons-close">&times;</button>
+        <button class="pane-close-btn" id="crons-close" aria-label="Close scheduled tasks panel">&times;</button>
       </div>
       <div class="integrations-body" id="crons-body">
         <div class="integrations-loading">Loading...</div>
@@ -563,10 +608,10 @@
     <div class="integrations-panel hidden" id="memory-panel">
       <div class="integrations-header">
         <div>
-          <h2 class="integrations-title">Knowledge Base</h2>
-          <p class="integrations-subtitle">What Delt knows &mdash; grows with every conversation</p>
+          <h2 class="integrations-title" id="memory-panel-title">Your Profile</h2>
+          <p class="integrations-subtitle" id="memory-panel-sub">Everything Delt remembers about you</p>
         </div>
-        <button class="pane-close-btn" id="memory-close">&times;</button>
+        <button class="pane-close-btn" id="memory-close" aria-label="Close profile panel">&times;</button>
       </div>
       <div class="integrations-body" id="memory-body">
         <div class="integrations-loading">Loading...</div>
@@ -612,8 +657,8 @@
         </ul>
         <p class="mic-consent-note">Your browser will ask for mic permission next. You can revoke it anytime in browser settings.</p>
         <div class="mic-consent-actions">
-          <button class="mic-consent-deny" id="mic-consent-deny">No thanks</button>
-          <button class="mic-consent-allow" id="mic-consent-allow">Enable voice</button>
+          <button class="mic-consent-deny" id="mic-consent-deny" aria-label="Decline voice input">No thanks</button>
+          <button class="mic-consent-allow" id="mic-consent-allow" aria-label="Enable voice input">Enable voice</button>
         </div>
       </div>
     </div>
@@ -622,7 +667,7 @@
   <!-- QR Phone Handoff Modal -->
   <div class="qr-modal-overlay hidden" id="qr-modal-overlay">
     <div class="qr-modal" id="qr-modal">
-      <button class="qr-modal-close" id="qr-modal-close">&times;</button>
+      <button class="qr-modal-close" id="qr-modal-close" aria-label="Close phone connection modal">&times;</button>
       <div class="qr-modal-content">
         <div class="qr-modal-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -640,10 +685,10 @@
           <img id="qr-image" class="qr-image hidden" alt="QR Code">
         </div>
         <div class="qr-url-row hidden" id="qr-url-row">
-          <input type="text" class="qr-url-input" id="qr-url-input" readonly>
-          <button class="qr-url-copy" id="qr-url-copy">Copy</button>
+          <input type="text" class="qr-url-input" id="qr-url-input" readonly aria-label="Phone connection URL">
+          <button class="qr-url-copy" id="qr-url-copy" aria-label="Copy connection URL to clipboard">Copy</button>
         </div>
-        <button class="qr-stop-btn hidden" id="qr-stop-btn">
+        <button class="qr-stop-btn hidden" id="qr-stop-btn" aria-label="Disconnect tunnel">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
           </svg>

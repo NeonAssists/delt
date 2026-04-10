@@ -7,67 +7,67 @@
     "context": ""
   },
   "theme": {
-    "accent": "#6C5CE7",
-    "accentHover": "#5A4BD6",
-    "accentSoft": "rgba(108, 92, 231, 0.08)",
-    "accentSofter": "rgba(108, 92, 231, 0.04)"
+    "accent": "#2563EB",
+    "accentHover": "#1D4ED8",
+    "accentSoft": "rgba(37, 99, 235, 0.08)",
+    "accentSofter": "rgba(37, 99, 235, 0.04)"
   },
   "tools": [
     {
-      "id": "email",
-      "name": "Write an Email",
+      "id": "catchup",
+      "name": "Catch me up",
       "icon": "mail",
-      "desc": "Draft, reply, or follow up",
-      "prompt": "Help me write an email. Ask me who it's to, the tone I want (professional, friendly, firm, etc.), and the key points I need to hit. Then write it."
+      "desc": "What happened while I was away?",
+      "prompt": "Catch me up. Check my recent emails, calendar, and any notifications from my connected services. Summarize what needs my attention right now — prioritize by urgency. Be brief."
+    },
+    {
+      "id": "email",
+      "name": "Handle this email",
+      "icon": "mail",
+      "desc": "I'll paste it, you draft the reply",
+      "prompt": "I'm going to paste an email I received. Read it, tell me what they want in one sentence, then draft a reply. Keep it professional and concise. Ask me for the email."
     },
     {
       "id": "document",
-      "name": "Analyze a Document",
+      "name": "Read this for me",
       "icon": "document",
-      "desc": "Upload anything — I'll break it down",
-      "prompt": "I want to analyze a document. If I haven't uploaded one yet, ask me to. Then give me: a clear summary, the key takeaways, any action items, and anything that looks off or needs attention. Plain language only."
-    },
-    {
-      "id": "social",
-      "name": "Social Media Post",
-      "icon": "share",
-      "desc": "Content that sounds like you, not AI",
-      "prompt": "Help me write a social media post. Ask me: what platform (Instagram, LinkedIn, X, Facebook), what I'm posting about, and the vibe I want. Give me 2-3 options that sound human, not corporate."
+      "desc": "Summarize any document in 30 seconds",
+      "prompt": "I have a document I need you to read. Give me: what it says in plain English, what I need to do about it, and anything I should be concerned about. Ask me to upload it."
     },
     {
       "id": "customer",
-      "name": "Customer Response",
+      "name": "Reply to a customer",
       "icon": "chat",
-      "desc": "Handle any message professionally",
-      "prompt": "I need help responding to a customer. I'll paste or describe their message. Help me write a reply that's professional, empathetic, and actually solves their problem. Ask me for the message first."
+      "desc": "Turn a complaint into a happy customer",
+      "prompt": "I got a message from a customer that I need help responding to. I'll paste it. Write a reply that solves their problem and keeps them happy. Ask me for the message."
     },
     {
       "id": "notes",
-      "name": "Meeting Notes",
+      "name": "Clean up my notes",
       "icon": "edit",
-      "desc": "Messy notes into clear action items",
-      "prompt": "I have meeting notes that need organizing. I'll paste them. Turn them into: 1) a clean summary (3-5 sentences), 2) action items with owners, 3) key decisions made, 4) anything unresolved that needs follow-up."
+      "desc": "Turn a mess into a clear action plan",
+      "prompt": "I have messy notes from a meeting or call. I'll paste them. Turn them into: a 3-sentence summary, a list of who needs to do what, and any deadlines. Ask me for the notes."
     },
     {
       "id": "ideas",
-      "name": "Brainstorm",
+      "name": "Help me think through this",
       "icon": "lightbulb",
-      "desc": "Strategy, names, plans — let's think",
-      "prompt": "Let's brainstorm. Ask me what I'm trying to figure out — business name, marketing angle, product idea, pricing, strategy, whatever. Then give me your honest best ideas with real pros and cons."
+      "desc": "Talk through a decision or idea",
+      "prompt": "I need to think through something — could be a business decision, a strategy, a hire, a pricing change, whatever. Ask me what's on my mind and help me think it through. Give me honest pros and cons, not just what I want to hear."
     },
     {
       "id": "research",
-      "name": "Research Something",
+      "name": "Look this up for me",
       "icon": "search",
-      "desc": "Companies, markets, competitors",
-      "prompt": "I need research on something. Ask me what I want to know about — it could be a company, a market, a competitor, an industry trend, or a specific question. Then dig in and give me what you find with sources where possible."
+      "desc": "Get the facts on anything, fast",
+      "prompt": "I need you to research something for me. Ask me what I want to know about. Then give me the key facts, organized clearly, with sources where possible. No fluff."
     },
     {
       "id": "proposal",
-      "name": "Write a Proposal",
+      "name": "Write something for me",
       "icon": "dollar",
-      "desc": "Pitch, quote, or project scope",
-      "prompt": "Help me write a business proposal. Ask me: who's it for, what am I proposing, what's the price/scope, and any specifics I want included. Then write a clean, professional proposal I can send."
+      "desc": "Proposals, pitches, or any business doc",
+      "prompt": "I need you to write something — could be a proposal, a pitch, a scope of work, or any business document. Ask me who it's for and what I need, then write it so I can send it as-is."
     }
   ]
 }

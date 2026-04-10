@@ -50,6 +50,7 @@
         if (data.welcomeHidden && welcome) welcome.classList.add("hidden");
         // Re-attach copy buttons on restored code blocks
         messagesEl.querySelectorAll("pre").forEach((pre) => addCopyBtns(pre.closest(".message-content") || pre.parentElement));
+        syncNewConvoBtn();
         // Tell server to resume this session
         return true;
       }
@@ -75,8 +76,9 @@
         const content = document.createElement("div");
         content.className = "message-content";
         // Messages in history are truncated to 300 chars — show as-is, user can continue the thread
-        content.innerHTML = typeof DOMPurify !== "undefined"
-          ? DOMPurify.sanitize(typeof marked !== "undefined" ? marked.parse(msg.text || "") : escapeHtml(msg.text || ""))
+        // SAFETY: require BOTH libs for markdown rendering; fall through to plain escape otherwise
+        content.innerHTML = (typeof marked !== "undefined" && typeof DOMPurify !== "undefined")
+          ? DOMPurify.sanitize(marked.parse(msg.text || ""))
           : escapeHtml(msg.text || "");
         div.appendChild(content);
         messagesEl.appendChild(div);
@@ -84,6 +86,7 @@
       messagesEl.querySelectorAll("pre").forEach((pre) => addCopyBtns(pre.closest(".message-content") || pre.parentElement));
       // Scroll to bottom so user sees latest, not top of old convo
       if (scrollAnchor) scrollAnchor.scrollIntoView({ behavior: "instant" });
+      syncNewConvoBtn();
       return true;
     } catch { return false; }
   }
@@ -149,6 +152,40 @@
   const previewEditBtn = document.getElementById("preview-edit-btn");
   const previewPopoverDismiss = document.getElementById("preview-popover-dismiss");
 
+  // --- Dark Mode Toggle ---
+  const themeToggleBtn = document.getElementById("theme-toggle-btn");
+  const THEME_KEY = "delt-theme";
+
+  function isDarkMode() {
+    return document.documentElement.classList.contains("dark-mode");
+  }
+
+  function setTheme(dark) {
+    if (dark) {
+      document.documentElement.classList.add("dark-mode");
+      localStorage.setItem(THEME_KEY, "dark");
+    } else {
+      document.documentElement.classList.remove("dark-mode");
+      localStorage.setItem(THEME_KEY, "light");
+    }
+    // Update theme-color meta tag for mobile browser chrome
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", dark ? "#13131F" : "#F7F7F8");
+  }
+
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener("click", () => {
+      setTheme(!isDarkMode());
+    });
+  }
+
+  // Listen for OS-level theme changes (only if user hasn't set a manual preference)
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+    if (!localStorage.getItem(THEME_KEY)) {
+      setTheme(e.matches);
+    }
+  });
+
   // --- Integration status chips (header bar) ---
   // Short names for chips to save space
   const CHIP_NAMES = {
@@ -187,6 +224,21 @@
     }
   }
 
+  // --- Smart Dashboard ---
+  // Dashboard elements removed — tools grid with auto-send is the primary UX
+
+  function getTimeGreeting() {
+    const h = new Date().getHours();
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    return "Good evening";
+  }
+
+  function getAuthCookie() {
+    const m = document.cookie.match(/(?:^|; )delt-auth=([^;]*)/);
+    return m ? m[1] : '';
+  }
+
   function applyConfig() {
     if (!config) return;
 
@@ -200,7 +252,10 @@
       logoMark.textContent = biz.name.charAt(0).toUpperCase();
     }
 
-    if (biz.greeting) welcomeGreeting.textContent = biz.greeting;
+    // Time-aware personalized greeting
+    const ownerName = biz.owner || "";
+    const timeGreeting = getTimeGreeting();
+    welcomeGreeting.textContent = ownerName ? `${timeGreeting}, ${ownerName}` : timeGreeting;
     if (biz.subtitle) welcomeSubtitle.textContent = biz.subtitle;
 
     // Theme
@@ -214,8 +269,11 @@
       document.documentElement.style.setProperty("--accent-soft", theme.accentSoft);
     }
 
-    // Tools
+    // Tools grid
     renderTools(config.tools || []);
+
+    // Pre-fetch briefing — show what's connected and ready
+    loadBriefing();
   }
 
   function renderTools(tools) {
@@ -241,83 +299,274 @@
         if (tool) sendMessage(tool.prompt);
       });
     });
-
-    // Add integration-aware quick suggestions
-    addIntegrationSuggestions();
   }
 
-  // Dynamic suggestions based on connected integrations
-  const INTEGRATION_SUGGESTIONS = {
+  // Pre-fetch briefing — show connected services and status on welcome screen
+  async function loadBriefing() {
+    const sub = document.getElementById("welcome-subtitle");
+    if (!sub) return;
+    try {
+      const res = await fetch("/integrations", { credentials: "same-origin" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const connected = (data.integrations || []).filter(i => i.connected);
+      if (!connected.length) {
+        sub.textContent = "Connect your email, calendar, or files to get started.";
+        return;
+      }
+      const names = { "google-workspace": "Google", "github": "GitHub", "local-access": "your files", "apple": "Apple apps", "figma": "Figma", "slack": "Slack", "notion": "Notion", "stripe": "Stripe", "microsoft-365": "Microsoft 365" };
+      const labels = connected.map(i => names[i.id] || i.name).filter(Boolean).slice(0, 4);
+      const suffix = connected.length > 4 ? ` + ${connected.length - 4} more` : "";
+      sub.textContent = `Connected to ${labels.join(", ")}${suffix}. Ask me anything.`;
+    } catch {}
+  }
+
+  // (Smart dashboard removed — tools grid with auto-send is the primary UX)
+  const _UNUSED_SMART_ACTIONS = {
     "google-workspace": [
-      { icon: "mail", name: "Check email", prompt: "Summarize my unread emails" },
-      { icon: "calendar", name: "Today's schedule", prompt: "What's on my calendar today?" },
+      {
+        id: "catch-up-email",
+        icon: "mail",
+        label: "Catch me up on email",
+        desc: "Recent emails that need attention",
+        prompt: "Check my recent emails and summarize anything that needs my attention",
+        gradient: "linear-gradient(135deg, #4285F4 0%, #34A853 100%)",
+      },
+      {
+        id: "schedule-today",
+        icon: "calendar",
+        label: "What's on my schedule?",
+        desc: "Today's calendar at a glance",
+        prompt: "What's on my calendar today?",
+        gradient: "linear-gradient(135deg, #34A853 0%, #FBBC05 100%)",
+      },
     ],
     "github": [
-      { icon: "chart", name: "PR status", prompt: "Show my open pull requests" },
+      {
+        id: "review-prs",
+        icon: "chart",
+        label: "Review my PRs",
+        desc: "Open pull requests & status",
+        prompt: "Check my open pull requests and give me a status update",
+        gradient: "linear-gradient(135deg, #24292e 0%, #586069 100%)",
+      },
     ],
     "slack": [
-      { icon: "chat", name: "Slack catch-up", prompt: "What's the latest in my Slack channels?" },
+      {
+        id: "slack-catchup",
+        icon: "chat",
+        label: "Slack catch-up",
+        desc: "What you missed in channels",
+        prompt: "What's the latest in my Slack channels?",
+        gradient: "linear-gradient(135deg, #611f69 0%, #E01E5A 100%)",
+      },
     ],
     "stripe": [
-      { icon: "dollar", name: "Revenue check", prompt: "Show my recent Stripe payments" },
+      {
+        id: "revenue-check",
+        icon: "dollar",
+        label: "Revenue check",
+        desc: "Recent payments & metrics",
+        prompt: "Show my recent Stripe payments and revenue summary",
+        gradient: "linear-gradient(135deg, #635bff 0%, #00d4ff 100%)",
+      },
+    ],
+    "local-access": [
+      {
+        id: "local-schedule",
+        icon: "calendar",
+        label: "What's on my schedule?",
+        desc: "Today's calendar at a glance",
+        prompt: "What's on my calendar today?",
+        gradient: "linear-gradient(135deg, #34A853 0%, #FBBC05 100%)",
+      },
     ],
     "notion": [
-      { icon: "document", name: "Search Notion", prompt: "Search my Notion workspace" },
+      {
+        id: "notion-search",
+        icon: "document",
+        label: "Search Notion",
+        desc: "Find anything in your workspace",
+        prompt: "Search my Notion workspace",
+        gradient: "linear-gradient(135deg, #000000 0%, #505050 100%)",
+      },
     ],
     "todoist": [
-      { icon: "edit", name: "My tasks", prompt: "Show my Todoist tasks for today" },
+      {
+        id: "todoist-tasks",
+        icon: "edit",
+        label: "My tasks",
+        desc: "What's due today",
+        prompt: "Show my Todoist tasks for today",
+        gradient: "linear-gradient(135deg, #E44332 0%, #FF7043 100%)",
+      },
     ],
     "linear": [
-      { icon: "chart", name: "My issues", prompt: "Show my assigned Linear issues" },
+      {
+        id: "linear-issues",
+        icon: "chart",
+        label: "My issues",
+        desc: "Assigned Linear issues",
+        prompt: "Show my assigned Linear issues",
+        gradient: "linear-gradient(135deg, #5E6AD2 0%, #8B5CF6 100%)",
+      },
     ],
     "jira": [
-      { icon: "chart", name: "Sprint status", prompt: "Show my Jira sprint tickets" },
+      {
+        id: "jira-sprint",
+        icon: "chart",
+        label: "Sprint status",
+        desc: "Current sprint tickets",
+        prompt: "Show my Jira sprint tickets",
+        gradient: "linear-gradient(135deg, #0052CC 0%, #00A3BF 100%)",
+      },
     ],
   };
 
-  async function addIntegrationSuggestions() {
+  // The always-present action
+  const FOCUS_ACTION = {
+    id: "focus-action",
+    icon: "lightbulb",
+    label: "What should I focus on?",
+    desc: "Smart priority based on your activity",
+    prompt: "Based on my recent activity, what should I focus on right now?",
+    gradient: "linear-gradient(135deg, var(--accent) 0%, #8B5CF6 100%)",
+  };
+
+  async function buildSmartDashboard() {
+    if (!smartActionsEl) return;
+
+    // Fetch integrations to determine which actions to show
+    let connectedIds = [];
     try {
-      const res = await fetch("/integrations");
+      const res = await fetch("/integrations", { credentials: "same-origin" });
       const data = await res.json();
       const connected = (data.integrations || []).filter(i => i.connected);
-      if (!connected.length) return;
+      connectedIds = connected.map(i => i.id);
 
-      const suggestions = [];
-      for (const int of connected) {
-        const items = INTEGRATION_SUGGESTIONS[int.id];
-        if (items) suggestions.push(...items);
-      }
-      if (!suggestions.length) return;
-
-      // Build a "Your tools" row below the main tools grid
-      const existingRow = document.getElementById("integration-suggestions");
-      if (existingRow) existingRow.remove();
-
-      const row = document.createElement("div");
-      row.id = "integration-suggestions";
-      row.className = "integration-suggestions";
-      row.innerHTML = `
-        <div class="int-suggestions-label">From your connected apps</div>
-        <div class="int-suggestions-grid">
-          ${suggestions.slice(0, 4).map(s => `
-            <button class="int-suggestion-chip" data-prompt="${escapeHtml(s.prompt)}">
-              <span class="int-suggestion-icon">${ICONS[s.icon] || ""}</span>
-              ${escapeHtml(s.name)}
-            </button>
-          `).join("")}
-        </div>
-      `;
-
-      // Insert after tools grid
-      toolsGrid.parentElement.insertBefore(row, toolsGrid.nextSibling);
-
-      // Bind clicks
-      row.querySelectorAll(".int-suggestion-chip").forEach(chip => {
-        chip.addEventListener("click", () => {
-          sendMessage(chip.dataset.prompt);
-        });
-      });
+      // Render integration strip
+      renderIntegrationStrip(connected);
     } catch {}
+
+    // Build smart action cards from connected integrations
+    const actions = [];
+    const seenIds = new Set();
+    for (const intId of connectedIds) {
+      const items = SMART_ACTIONS[intId];
+      if (items) {
+        for (const item of items) {
+          if (!seenIds.has(item.id)) {
+            seenIds.add(item.id);
+            actions.push(item);
+          }
+        }
+      }
+    }
+
+    // Always add the focus action
+    actions.push(FOCUS_ACTION);
+
+    // Limit to 4 actions max
+    const displayActions = actions.slice(0, 4);
+
+    smartActionsEl.innerHTML = displayActions.map(a => `
+      <button class="smart-action-card" data-prompt="${escapeHtml(a.prompt)}">
+        <div class="smart-action-icon-wrap" style="background: ${a.gradient}">
+          ${ICONS[a.icon] || ICONS.lightbulb}
+        </div>
+        <div class="smart-action-text">
+          <span class="smart-action-label">${escapeHtml(a.label)}</span>
+          <span class="smart-action-desc">${escapeHtml(a.desc)}</span>
+        </div>
+        <div class="smart-action-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+      </button>
+    `).join("");
+
+    // Bind clicks — pre-fill input, don't auto-send
+    smartActionsEl.querySelectorAll(".smart-action-card").forEach(card => {
+      card.addEventListener("click", () => {
+        prefillInput(card.dataset.prompt);
+      });
+    });
+
+    // Load activity summary
+    loadActivitySummary();
+  }
+
+  function renderIntegrationStrip(connected) {
+    if (!welcomeIntStrip || !connected.length) {
+      if (welcomeIntStrip) welcomeIntStrip.innerHTML = "";
+      return;
+    }
+
+    const INTEGRATION_ICONS = {
+      "google-workspace": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8m-4-4h8"/></svg>`,
+      "github": `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0012 2z"/></svg>`,
+      "local-access": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>`,
+      "slack": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2a2.5 2.5 0 0 0 0 5H17V4.5A2.5 2.5 0 0 0 14.5 2z"/><path d="M3 14.5a2.5 2.5 0 0 0 5 0V12H5.5A2.5 2.5 0 0 0 3 14.5z"/></svg>`,
+      "stripe": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`,
+      "apple": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 5-4 5-9.5C21 7 17 3 12 3S3 7 3 12.5c0 5.5 2 9.5 5 9.5 1.25 0 2.5-1.06 4-1.06z"/></svg>`,
+      "microsoft-365": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/></svg>`,
+      "custom-api": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`,
+    };
+
+    welcomeIntStrip.innerHTML = `
+      <div class="int-strip-label">Connected</div>
+      <div class="int-strip-chips">
+        ${connected.map(i => {
+          const label = CHIP_NAMES[i.id] || i.name;
+          const icon = INTEGRATION_ICONS[i.id] || "";
+          return `<span class="int-strip-chip"><span class="int-strip-icon">${icon}</span>${escapeHtml(label)}</span>`;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  function relativeTime(dateStr) {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+  }
+
+  async function loadActivitySummary() {
+    if (!welcomeActivityEl) return;
+    try {
+      const res = await fetch("/logs/summary", { credentials: "same-origin" });
+      if (!res.ok) { welcomeActivityEl.innerHTML = ""; return; }
+      const data = await res.json();
+
+      const weekCount = data.week?.count || 0;
+      const todayCount = data.today?.count || 0;
+      const lastRecent = data.recent?.[0];
+      const lastActiveStr = lastRecent ? relativeTime(lastRecent.timestamp) : null;
+
+      if (!weekCount && !lastActiveStr) {
+        welcomeActivityEl.innerHTML = "";
+        return;
+      }
+
+      let parts = [];
+      if (weekCount > 0) {
+        parts.push(`<span class="activity-stat"><span class="activity-num">${weekCount}</span> conversation${weekCount === 1 ? "" : "s"} this week</span>`);
+      }
+      if (todayCount > 0) {
+        parts.push(`<span class="activity-stat"><span class="activity-num">${todayCount}</span> today</span>`);
+      }
+      if (lastActiveStr) {
+        parts.push(`<span class="activity-stat activity-last">Last active ${lastActiveStr}</span>`);
+      }
+
+      welcomeActivityEl.innerHTML = `<div class="activity-row">${parts.join('<span class="activity-sep"></span>')}</div>`;
+    } catch {
+      welcomeActivityEl.innerHTML = "";
+    }
   }
 
   // --- Markdown ---
@@ -444,7 +693,7 @@
         break;
       case "resumed":
         sessionId = msg.sessionId;
-        setStatus("connected", "Resumed");
+        setStatus("connected", "Ready");
         break;
       case "thinking":
         showTyping();
@@ -543,11 +792,10 @@
           addCopyBtns(el);
         }
       }
-      if (data.cost_usd && currentAssistantEl) {
-        const c = document.createElement("div");
-        c.className = "cost-indicator";
-        c.textContent = data.cost_usd < 0.01 ? "< $0.01" : `$${data.cost_usd.toFixed(2)}`;
-        currentAssistantEl.after(c);
+      // Cost indicator hidden — confuses users who think they're being charged.
+      // Data still logged to console for power users.
+      if (data.cost_usd) {
+        console.log(`[Delt] Response cost: $${data.cost_usd.toFixed(4)}`);
       }
       scrollDown();
     }
@@ -672,6 +920,7 @@
   // --- Messages ---
   function addMessage(role, text, files) {
     welcome.classList.add("hidden");
+    syncNewConvoBtn();
 
     const el = document.createElement("div");
     el.className = `message ${role}`;
@@ -705,12 +954,13 @@
   function renderMd(text) {
     if (!text) return "";
     try {
-      if (typeof marked !== "undefined") {
+      // SAFETY: only render markdown if BOTH marked AND DOMPurify loaded.
+      // If DOMPurify failed (CDN blocked, offline, MITM), fall through to escaped text.
+      // Rendering marked output without sanitization is a stored-XSS vector.
+      if (typeof marked !== "undefined" && typeof DOMPurify !== "undefined") {
         const fn = marked.parse || marked;
         if (typeof fn === "function") {
-          const raw = fn(text);
-          if (typeof DOMPurify !== "undefined") return DOMPurify.sanitize(raw);
-          return raw;
+          return DOMPurify.sanitize(fn(text));
         }
       }
     } catch {}
@@ -1312,6 +1562,18 @@
     processQueue();
   }
 
+  // "New conversation" button — visible when a conversation is active
+  function syncNewConvoBtn() {
+    const btn = document.getElementById("new-convo-btn");
+    if (!btn) return;
+    const chatActive = welcome && welcome.classList.contains("hidden");
+    btn.classList.toggle("hidden", !chatActive);
+  }
+  const _ncb = document.getElementById("new-convo-btn");
+  if (_ncb) {
+    _ncb.addEventListener("click", () => { closePane2(); clearChat(); });
+  }
+
   function clearChat() {
     messagesEl.innerHTML = "";
     welcome.classList.remove("hidden");
@@ -1330,6 +1592,14 @@
     renderAttached();
     setBusy(false);
     setStatus("connected", "Ready");
+    syncNewConvoBtn();
+    // Refresh greeting with current time and reload activity
+    if (config) {
+      const ownerName = (config.business || {}).owner || "";
+      const timeGreeting = getTimeGreeting();
+      welcomeGreeting.textContent = ownerName ? `${timeGreeting}, ${ownerName}` : timeGreeting;
+    }
+    loadActivitySummary();
   }
 
   // ============================================
@@ -2070,7 +2340,7 @@
     if (!crons.length && !showForm) {
       html += `<div class="cron-empty">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 12px;display:block;opacity:0.3"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        No scheduled tasks yet.<br>Create one to automate recurring prompts.
+        No scheduled tasks yet.<br>Create one to run tasks automatically.
       </div>`;
     }
 
@@ -2294,6 +2564,7 @@
     zendesk: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M11.2 3v14.2L2 3h9.2z" fill="#03363D"/><path d="M11.2 18.8H2l9.2-14.2v14.2z" fill="#03363D" opacity=".5"/><path d="M12.8 5.2c0 2.5 2 4.6 4.6 4.6S22 7.7 22 5.2H12.8z" fill="#03363D"/><path d="M12.8 21h9.2L12.8 6.8V21z" fill="#03363D"/></svg>`,
     clickup: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M4 16.5l3.6-2.8c1.8 2.3 3 3 4.4 3 1.4 0 2.6-.8 4.4-3l3.6 2.8c-2.4 3.2-4.8 4.7-8 4.7s-5.6-1.5-8-4.7z" fill="#8930FD"/><path d="M12 7.5l-6.5 5.3-2.5-3L12 3l9 6.8-2.5 3L12 7.5z" fill="#49CCF9"/></svg>`,
     monday: `<svg width="20" height="20" viewBox="0 0 24 24"><circle cx="5" cy="15" r="3" fill="#FF3D57"/><circle cx="12" cy="12" r="3" fill="#FFCB00"/><circle cx="19" cy="9" r="3" fill="#00D647"/><rect x="3" y="15" width="4" height="5" rx="2" fill="#FF3D57"/><rect x="10" y="12" width="4" height="8" rx="2" fill="#FFCB00"/><rect x="17" y="9" width="4" height="11" rx="2" fill="#00D647"/></svg>`,
+    mintlify: `<svg width="20" height="20" viewBox="0 0 24 24"><rect x="1" y="1" width="22" height="22" rx="5" fill="#0D9373"/><path d="M7 7h3v10H7V7zm4 3h3v7h-3v-7zm4-1h3v8h-3V9z" fill="white"/></svg>`,
   };
 
   function openIntegrations() {
@@ -2311,14 +2582,14 @@
   if (integrationsClose) integrationsClose.addEventListener("click", closeIntegrations);
   if (integrationsOverlay) integrationsOverlay.addEventListener("click", closeIntegrations);
 
-  // --- Wiki Knowledge Base Panel ---
+  // --- Profile Panel ---
   const memoryBtn = document.getElementById("memory-btn");
   const memoryPanel = document.getElementById("memory-panel");
   const memoryOverlay = document.getElementById("memory-overlay");
   const memoryClose = document.getElementById("memory-close");
   const memoryBody = document.getElementById("memory-body");
-
-  let wikiActiveCategory = "all";
+  const memPanelTitle = document.getElementById("memory-panel-title");
+  const memPanelSub = document.getElementById("memory-panel-sub");
 
   function openMemory() { memoryPanel.classList.remove("hidden"); memoryOverlay.classList.remove("hidden"); loadWiki(); }
   function closeMemory() { memoryPanel.classList.add("hidden"); memoryOverlay.classList.add("hidden"); }
@@ -2326,230 +2597,175 @@
   if (memoryClose) memoryClose.addEventListener("click", closeMemory);
   if (memoryOverlay) memoryOverlay.addEventListener("click", closeMemory);
 
-  const wikiCategoryLabels = { user: "You", project: "Projects", decision: "Decisions", preference: "Preferences", reference: "References", fact: "Facts" };
-  const wikiCategoryIcons = {
-    user: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
-    project: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
-    decision: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
-    preference: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
-    reference: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
-    fact: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
-  };
+  const wikiCatLabel = { user: "About You", preference: "How You Work", project: "Projects", decision: "Decisions", reference: "References", fact: "Notes" };
+  const wikiCatOrder = ["user", "preference", "project", "decision", "reference", "fact"];
 
   async function loadWiki() {
     memoryBody.innerHTML = '<div class="integrations-loading">Loading...</div>';
     try {
       const res = await fetch("/wiki");
       const data = await res.json();
-      renderWikiPanel(data.pages || [], data.stats || {});
-    } catch { memoryBody.innerHTML = '<div class="integrations-loading">Could not load knowledge base.</div>'; }
+      const pages = data.pages || [];
+      const stats = data.stats || {};
+      const full = await Promise.all(pages.map(async (p) => {
+        try {
+          const r = await fetch("/wiki/page/" + encodeURIComponent(p.category) + "/" + encodeURIComponent(p.id.split("/")[1]));
+          const pg = await r.json();
+          return { ...p, content: pg.content || "" };
+        } catch { return { ...p, content: p.summary || "" }; }
+      }));
+      renderProfile(full, stats);
+    } catch { memoryBody.innerHTML = '<div class="integrations-loading">Couldn\'t load profile.</div>'; }
   }
 
-  function renderWikiPanel(pages, stats) {
-    const totalPages = stats.totalPages || 0;
-    const byCategory = stats.byCategory || {};
+  function renderProfile(pages, stats) {
+    const total = stats.totalPages || 0;
 
-    // Category tabs
-    let tabsHtml = '<div class="wiki-tabs"><button class="wiki-tab' + (wikiActiveCategory === "all" ? " active" : "") + '" data-cat="all">All <span class="wiki-tab-count">' + totalPages + '</span></button>';
-    for (const cat of ["user", "project", "decision", "preference", "reference", "fact"]) {
-      const count = byCategory[cat] || 0;
-      if (count > 0 || cat === "user") {
-        tabsHtml += '<button class="wiki-tab' + (wikiActiveCategory === cat ? " active" : "") + '" data-cat="' + cat + '">' + (wikiCategoryIcons[cat] || "") + ' ' + wikiCategoryLabels[cat] + ' <span class="wiki-tab-count">' + count + '</span></button>';
-      }
-    }
-    tabsHtml += '</div>';
+    // Update header dynamically based on content
+    if (memPanelTitle) memPanelTitle.textContent = total ? "Your Profile" : "Your Profile";
+    if (memPanelSub) memPanelSub.textContent = total ? total + " thing" + (total !== 1 ? "s" : "") + " remembered" : "Delt is still getting to know you";
 
-    // Filter pages
-    const filtered = wikiActiveCategory === "all" ? pages : pages.filter(p => p.category === wikiActiveCategory);
-    // Sort: most recently updated first
-    filtered.sort((a, b) => new Date(b.updated || 0) - new Date(a.updated || 0));
-
-    // Page cards
-    let cardsHtml = "";
-    if (!filtered.length) {
-      cardsHtml = '<div class="wiki-empty">' +
-        '<div class="wiki-empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>' +
-        '<p class="wiki-empty-title">No pages yet</p>' +
-        '<p class="wiki-empty-sub">Delt learns from your conversations and saves lasting facts here. The more you chat, the smarter it gets.</p>' +
+    if (!total) {
+      memoryBody.innerHTML =
+        '<div class="wk-empty">' +
+          '<div class="wk-empty-avatar"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>' +
+          '<p class="wk-empty-title">We haven\'t met yet</p>' +
+          '<p class="wk-empty-sub">Just chat naturally. Delt picks up on who you are, what you\'re working on, and how you like things done. No forms to fill out.</p>' +
+          '<button class="wk-empty-action" id="wk-teach-btn">Or tell me something now</button>' +
         '</div>';
-    } else {
-      cardsHtml = '<div class="wiki-cards">';
-      for (const page of filtered) {
-        const catIcon = wikiCategoryIcons[page.category] || "";
-        const catLabel = wikiCategoryLabels[page.category] || page.category;
+      const teachBtn = memoryBody.querySelector("#wk-teach-btn");
+      if (teachBtn) teachBtn.addEventListener("click", () => showWikiEditor(null));
+      return;
+    }
+
+    // Group pages by category
+    const grouped = {};
+    for (const p of pages) { (grouped[p.category] = grouped[p.category] || []).push(p); }
+
+    let html = '';
+
+    for (const cat of wikiCatOrder) {
+      const catPages = grouped[cat];
+      if (!catPages || !catPages.length) continue;
+      catPages.sort((a, b) => new Date(b.updated || 0) - new Date(a.updated || 0));
+
+      html += '<div class="wk-section"><div class="wk-section-label">' + escapeHtml(wikiCatLabel[cat] || cat) + '</div>';
+
+      for (const page of catPages) {
         const updated = page.updated ? new Date(page.updated).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
-        const tags = (page.tags || []).map(t => '<span class="wiki-tag">' + escapeHtml(t) + '</span>').join("");
-        cardsHtml += '<div class="wiki-card" data-page-id="' + escapeHtml(page.id) + '">' +
-          '<div class="wiki-card-header">' +
-            '<span class="wiki-card-category">' + catIcon + ' ' + escapeHtml(catLabel) + '</span>' +
-            '<span class="wiki-card-date">' + escapeHtml(updated) + '</span>' +
+        // SAFETY: require BOTH marked and DOMPurify — never inject unsanitized HTML
+        const sanitized = (typeof marked !== "undefined" && typeof DOMPurify !== "undefined")
+          ? DOMPurify.sanitize(marked.parse(page.content || ""))
+          : escapeHtml(page.content || "").replace(/\n/g, "<br>");
+
+        // For single-page categories, skip the title (the section label IS the title)
+        const showTitle = catPages.length > 1;
+
+        html += '<div class="wk-page" data-id="' + escapeHtml(page.id) + '">' +
+          (showTitle ? '<div class="wk-page-title">' + escapeHtml(page.title) + ' <span class="wk-page-date">' + escapeHtml(updated) + '</span></div>' : '') +
+          '<div class="wk-page-body">' + sanitized + '</div>' +
+          '<div class="wk-page-tools">' +
+            '<button class="wk-tool" data-action="edit" data-id="' + escapeHtml(page.id) + '" title="Edit"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
+            '<button class="wk-tool wk-tool-danger" data-action="delete" data-id="' + escapeHtml(page.id) + '" title="Forget this"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' +
           '</div>' +
-          '<div class="wiki-card-title">' + escapeHtml(page.title) + '</div>' +
-          '<div class="wiki-card-summary">' + escapeHtml(page.summary || "") + '</div>' +
-          (tags ? '<div class="wiki-card-tags">' + tags + '</div>' : "") +
         '</div>';
       }
-      cardsHtml += '</div>';
+      html += '</div>';
     }
 
-    // Add page button + info
-    const addBtn = '<div class="wiki-actions"><button class="memory-edit-btn" id="wiki-add-btn">Add a page</button></div>';
-    const infoHtml = '<div class="memory-info-section"><div class="memory-info-card"><strong>How does this work?</strong><p>After each conversation, Delt extracts lasting facts into wiki pages organized by topic. This knowledge base is loaded into every new chat so Delt remembers you across sessions.</p><p style="margin-top:8px;"><strong>This data never leaves your computer.</strong> Stored at <code>~/.delt/wiki/</code>.</p></div></div>';
+    // Quiet add link at bottom — not screaming at you
+    html += '<div class="wk-bottom"><button class="wk-add-link" id="wk-add-btn">+ Teach Delt something</button><span class="wk-local-badge">stored locally at ~/.delt/wiki</span></div>';
 
-    memoryBody.innerHTML = tabsHtml + cardsHtml + addBtn + infoHtml;
+    memoryBody.innerHTML = html;
 
-    // Tab click handlers
-    memoryBody.querySelectorAll(".wiki-tab").forEach(tab => {
-      tab.addEventListener("click", () => {
-        wikiActiveCategory = tab.dataset.cat;
-        renderWikiPanel(pages, stats);
-      });
-    });
+    // Event delegation for edit/delete tools
+    memoryBody.addEventListener("click", function handler(e) {
+      const tool = e.target.closest(".wk-tool");
+      if (!tool) return;
+      e.stopPropagation();
+      const id = tool.dataset.id;
+      const action = tool.dataset.action;
+      if (action === "edit") {
+        const page = pages.find(p => p.id === id);
+        if (page) showWikiInlineEdit(page);
+      } else if (action === "delete") {
+        if (!confirm("Forget this?")) return;
+        const parts = id.split("/");
+        fetch("/wiki/page/" + encodeURIComponent(parts[0]) + "/" + encodeURIComponent(parts[1]), { method: "DELETE" }).then(() => loadWiki()).catch(() => {});
+      }
+    }, { once: true });
 
-    // Card click → expand page
-    memoryBody.querySelectorAll(".wiki-card").forEach(card => {
-      card.addEventListener("click", () => openWikiPage(card.dataset.pageId));
-    });
+    // Rebind on each render — use a named replacement
+    memoryBody.onclick = function(e) {
+      const tool = e.target.closest(".wk-tool");
+      if (!tool) return;
+      e.stopPropagation();
+      const id = tool.dataset.id;
+      const action = tool.dataset.action;
+      if (action === "edit") {
+        const page = pages.find(p => p.id === id);
+        if (page) showWikiInlineEdit(page);
+      } else if (action === "delete") {
+        if (!confirm("Forget this?")) return;
+        const parts = id.split("/");
+        fetch("/wiki/page/" + encodeURIComponent(parts[0]) + "/" + encodeURIComponent(parts[1]), { method: "DELETE" }).then(() => loadWiki()).catch(() => {});
+      }
+    };
 
-    // Add page button
-    const addBtnEl = memoryBody.querySelector("#wiki-add-btn");
-    if (addBtnEl) addBtnEl.addEventListener("click", () => showWikiEditor(null));
+    const addEl = memoryBody.querySelector("#wk-add-btn");
+    if (addEl) addEl.addEventListener("click", () => showWikiEditor(null));
   }
 
-  async function openWikiPage(pageId) {
-    memoryBody.innerHTML = '<div class="integrations-loading">Loading...</div>';
-    try {
-      const parts = pageId.split("/");
-      const res = await fetch("/wiki/page/" + encodeURIComponent(parts[0]) + "/" + encodeURIComponent(parts[1]));
-      const page = await res.json();
-      renderWikiPageView(page);
-    } catch { memoryBody.innerHTML = '<div class="integrations-loading">Could not load page.</div>'; }
-  }
+  function showWikiInlineEdit(page) {
+    const pageEl = memoryBody.querySelector('.wk-page[data-id="' + page.id + '"]');
+    if (!pageEl) return;
+    const bodyEl = pageEl.querySelector(".wk-page-body");
+    const toolsEl = pageEl.querySelector(".wk-page-tools");
+    if (toolsEl) toolsEl.style.display = "none";
+    bodyEl.innerHTML =
+      '<textarea class="wk-edit-textarea" rows="8">' + escapeHtml(page.content || "") + '</textarea>' +
+      '<div class="wk-edit-actions"><button class="wk-btn-save">Save</button><button class="wk-btn-cancel">Cancel</button></div>';
 
-  function renderWikiPageView(page) {
-    const catIcon = wikiCategoryIcons[page.category] || "";
-    const catLabel = wikiCategoryLabels[page.category] || page.category;
-    const updated = page.updated ? new Date(page.updated).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
-    const created = page.created ? new Date(page.created).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
-    const tags = (page.tags || []).map(t => '<span class="wiki-tag">' + escapeHtml(t) + '</span>').join("");
-
-    memoryBody.innerHTML =
-      '<div class="wiki-page-view">' +
-        '<button class="wiki-back-btn" id="wiki-back-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg> Back</button>' +
-        '<div class="wiki-page-header">' +
-          '<span class="wiki-card-category">' + catIcon + ' ' + escapeHtml(catLabel) + '</span>' +
-          '<h3 class="wiki-page-title">' + escapeHtml(page.title) + '</h3>' +
-          '<div class="wiki-page-meta">' +
-            (created ? '<span>Created ' + escapeHtml(created) + '</span>' : '') +
-            (updated ? '<span>Updated ' + escapeHtml(updated) + '</span>' : '') +
-          '</div>' +
-          (tags ? '<div class="wiki-card-tags">' + tags + '</div>' : '') +
-        '</div>' +
-        '<div class="memory-content-display">' + renderMd(page.content || "") + '</div>' +
-        '<div class="wiki-page-actions">' +
-          '<button class="memory-edit-btn" id="wiki-edit-page-btn">Edit</button>' +
-          '<button class="memory-clear-btn" id="wiki-delete-page-btn">Delete</button>' +
-        '</div>' +
-        '<div class="memory-editor hidden" id="wiki-page-editor">' +
-          '<textarea class="memory-textarea" id="wiki-page-textarea" rows="12">' + escapeHtml(page.content || "") + '</textarea>' +
-          '<div class="memory-editor-actions">' +
-            '<button class="memory-save-btn" id="wiki-page-save">Save</button>' +
-            '<button class="memory-cancel-btn" id="wiki-page-cancel">Cancel</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-
-    memoryBody.querySelector("#wiki-back-btn").addEventListener("click", loadWiki);
-
-    const editBtn = memoryBody.querySelector("#wiki-edit-page-btn");
-    const deleteBtn = memoryBody.querySelector("#wiki-delete-page-btn");
-    const editor = memoryBody.querySelector("#wiki-page-editor");
-    const display = memoryBody.querySelector(".memory-content-display");
-    const textarea = memoryBody.querySelector("#wiki-page-textarea");
-    const saveBtn = memoryBody.querySelector("#wiki-page-save");
-    const cancelBtn = memoryBody.querySelector("#wiki-page-cancel");
-
-    editBtn.addEventListener("click", () => {
-      editor.classList.remove("hidden");
-      display.classList.add("hidden");
-      editBtn.classList.add("hidden");
-      deleteBtn.classList.add("hidden");
-      textarea.focus();
-    });
-
-    cancelBtn.addEventListener("click", () => {
-      editor.classList.add("hidden");
-      display.classList.remove("hidden");
-      editBtn.classList.remove("hidden");
-      deleteBtn.classList.remove("hidden");
-    });
-
-    saveBtn.addEventListener("click", async () => {
-      saveBtn.textContent = "Saving..."; saveBtn.disabled = true;
+    bodyEl.querySelector(".wk-btn-cancel").addEventListener("click", () => loadWiki());
+    bodyEl.querySelector(".wk-btn-save").addEventListener("click", async () => {
+      const textarea = bodyEl.querySelector(".wk-edit-textarea");
+      const parts = page.id.split("/");
+      const btn = bodyEl.querySelector(".wk-btn-save");
+      btn.textContent = "Saving..."; btn.disabled = true;
       try {
-        const parts = page.id.split("/");
-        await fetch("/wiki/page/" + encodeURIComponent(parts[0]) + "/" + encodeURIComponent(parts[1]), {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: textarea.value }),
-        });
-        openWikiPage(page.id);
-      } catch { saveBtn.textContent = "Failed"; saveBtn.disabled = false; }
-    });
-
-    deleteBtn.addEventListener("click", async () => {
-      if (!confirm("Delete this page? This can't be undone.")) return;
-      try {
-        const parts = page.id.split("/");
-        await fetch("/wiki/page/" + encodeURIComponent(parts[0]) + "/" + encodeURIComponent(parts[1]), { method: "DELETE" });
+        await fetch("/wiki/page/" + encodeURIComponent(parts[0]) + "/" + encodeURIComponent(parts[1]), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: textarea.value }) });
         loadWiki();
-      } catch {}
+      } catch { btn.textContent = "Failed"; btn.disabled = false; }
     });
   }
 
-  function showWikiEditor(page) {
-    const isNew = !page;
+  function showWikiEditor() {
+    if (memPanelTitle) memPanelTitle.textContent = "Teach Delt";
+    if (memPanelSub) memPanelSub.textContent = "Add something to your profile";
     memoryBody.innerHTML =
-      '<div class="wiki-page-view">' +
-        '<button class="wiki-back-btn" id="wiki-back-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg> Back</button>' +
-        '<h3 class="wiki-page-title" style="margin:12px 0 16px">' + (isNew ? "New Page" : "Edit Page") + '</h3>' +
-        '<div class="wiki-editor-form">' +
-          '<input class="wiki-input" id="wiki-new-title" placeholder="Page title" value="' + escapeHtml(page ? page.title : "") + '" />' +
-          '<select class="wiki-input" id="wiki-new-category">' +
-            '<option value="user"' + (!page || page.category === "user" ? " selected" : "") + '>You</option>' +
-            '<option value="project"' + (page && page.category === "project" ? " selected" : "") + '>Project</option>' +
-            '<option value="decision"' + (page && page.category === "decision" ? " selected" : "") + '>Decision</option>' +
-            '<option value="preference"' + (page && page.category === "preference" ? " selected" : "") + '>Preference</option>' +
-            '<option value="reference"' + (page && page.category === "reference" ? " selected" : "") + '>Reference</option>' +
-            '<option value="fact"' + (page && page.category === "fact" ? " selected" : "") + '>Fact</option>' +
+      '<div class="wk-editor-view">' +
+        '<button class="wk-back-link" id="wk-back-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg> Back to profile</button>' +
+        '<div class="wk-editor-form">' +
+          '<input class="wk-input" id="wk-new-title" placeholder="What is this about?" autofocus />' +
+          '<select class="wk-input" id="wk-new-category">' +
+            wikiCatOrder.map(c => '<option value="' + c + '"' + (c === "fact" ? " selected" : "") + '>' + escapeHtml(wikiCatLabel[c]) + '</option>').join("") +
           '</select>' +
-          '<input class="wiki-input" id="wiki-new-tags" placeholder="Tags (comma separated)" value="' + escapeHtml(page ? (page.tags || []).join(", ") : "") + '" />' +
-          '<textarea class="memory-textarea" id="wiki-new-content" rows="10" placeholder="What should Delt remember?">' + escapeHtml(page ? page.content : "") + '</textarea>' +
-          '<div class="memory-editor-actions">' +
-            '<button class="memory-save-btn" id="wiki-new-save">Save</button>' +
-            '<button class="memory-cancel-btn" id="wiki-new-cancel">Cancel</button>' +
-          '</div>' +
+          '<textarea class="wk-edit-textarea" id="wk-new-content" rows="8" placeholder="The details..."></textarea>' +
+          '<div class="wk-edit-actions"><button class="wk-btn-save" id="wk-new-save">Save</button><button class="wk-btn-cancel" id="wk-new-cancel">Cancel</button></div>' +
         '</div>' +
       '</div>';
 
-    memoryBody.querySelector("#wiki-back-btn").addEventListener("click", loadWiki);
-    memoryBody.querySelector("#wiki-new-cancel").addEventListener("click", loadWiki);
-    memoryBody.querySelector("#wiki-new-save").addEventListener("click", async () => {
-      const title = memoryBody.querySelector("#wiki-new-title").value.trim();
-      const category = memoryBody.querySelector("#wiki-new-category").value;
-      const tags = memoryBody.querySelector("#wiki-new-tags").value.split(",").map(t => t.trim()).filter(Boolean);
-      const content = memoryBody.querySelector("#wiki-new-content").value.trim();
+    memoryBody.querySelector("#wk-back-btn").addEventListener("click", loadWiki);
+    memoryBody.querySelector("#wk-new-cancel").addEventListener("click", loadWiki);
+    memoryBody.querySelector("#wk-new-save").addEventListener("click", async () => {
+      const title = memoryBody.querySelector("#wk-new-title").value.trim();
+      const category = memoryBody.querySelector("#wk-new-category").value;
+      const content = memoryBody.querySelector("#wk-new-content").value.trim();
       if (!title || !content) return;
-      const saveBtn = memoryBody.querySelector("#wiki-new-save");
-      saveBtn.textContent = "Saving..."; saveBtn.disabled = true;
-      try {
-        await fetch("/wiki/page", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ category, title, content, tags }),
-        });
-        loadWiki();
-      } catch { saveBtn.textContent = "Failed"; saveBtn.disabled = false; }
+      const btn = memoryBody.querySelector("#wk-new-save");
+      btn.textContent = "Saving..."; btn.disabled = true;
+      try { await fetch("/wiki/page", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category, title, content, tags: [] }) }); loadWiki(); }
+      catch { btn.textContent = "Failed"; btn.disabled = false; }
     });
   }
 
@@ -2964,7 +3180,7 @@
           </div>
           <div class="cc-card-name">${escapeHtml(i.name)}</div>
           <div class="cc-card-desc">${escapeHtml(i.description)}</div>
-          ${i.tryIt ? `<button class="cc-tryit" data-action="tryit" data-prompt="${escapeHtml(i.tryIt)}">Try it</button>` : ""}
+          ${i.tryIt ? `<button class="cc-tryit" data-action="tryit" data-prompt="${escapeHtml(i.tryIt)}">Use</button>` : ""}
           <div class="cc-card-actions">
             <button class="cc-action-btn" data-action="verify" data-id="${i.id}">Test</button>
             ${i.authType === "local-access" ? `<button class="cc-action-btn" data-action="connect" data-id="${i.id}" data-auth="local-access">Edit</button>` : ""}
@@ -4454,7 +4670,10 @@
 
   async function checkClaude() {
     try {
-      const res = await fetch("/health");
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch("/health", { signal: controller.signal });
+      clearTimeout(timeout);
       return await res.json();
     } catch {
       return { installed: false, version: null, authed: false };
@@ -4721,6 +4940,12 @@
       if (health.installed && health.authed) {
         showApp();
       } else if (health.installed && !health.authed) {
+        // Health check uses fast heuristics that can miss valid auth.
+        // Do one real verify-auth before showing the sign-in gate.
+        try {
+          const verify = await fetch("/verify-auth", { method: "POST" }).then(r => r.json());
+          if (verify.authed) { showApp(); return; }
+        } catch {}
         showObStep(obSignin);
         startAuthPoll();
       } else {

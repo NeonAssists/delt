@@ -8,10 +8,10 @@
 
   <!-- Open Graph (iMessage, Slack, LinkedIn, Facebook) -->
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://delt-marketing.vercel.app/">
+  <meta property="og:url" content="https://delt.vercel.app/">
   <meta property="og:title" content="Delt — AI that handles your busy work">
   <meta property="og:description" content="Connects your email, calendar, and apps. Handles tasks for you. Runs privately on your computer.">
-  <meta property="og:image" content="https://delt-marketing.vercel.app/public/og.png">
+  <meta property="og:image" content="https://delt.vercel.app/public/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
 
@@ -19,12 +19,12 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Delt — AI that handles your busy work">
   <meta name="twitter:description" content="Connects your email, calendar, and apps. Handles tasks for you. Private. Free.">
-  <meta name="twitter:image" content="https://delt-marketing.vercel.app/public/og.png">
+  <meta name="twitter:image" content="https://delt.vercel.app/public/og.png">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect rx='20' width='100' height='100' fill='%237C3AED'/><text x='50' y='72' text-anchor='middle' font-size='60' font-weight='900' fill='white'>D</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect rx='20' width='100' height='100' fill='%233B82F6'/><text x='50' y='72' text-anchor='middle' font-size='60' font-weight='900' fill='white'>D</text></svg>">
   <style>
     :root {
       --bg: #FAFAFD;
@@ -574,9 +574,9 @@
             <p>macOS installer. Download, unzip, and run.</p>
           </div>
           <div class="install-cta">
-            <a class="btn-download" href="/public/Delt-v2.0.1.zip" id="download-btn">
+            <a class="btn-download" href="/public/Delt-v2.1.0.zip" id="download-btn">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Download Delt-v2.0.1.zip
+              Download Delt-v2.1.0.zip
             </a>
             <span class="install-note">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
@@ -592,7 +592,7 @@
             <div>
               <h4>Open Terminal and run this</h4>
               <p>Installs Node.js (if needed), Claude Code, and Delt. Takes about 2 minutes.</p>
-              <code id="install-cmd">curl -fsSL https://delt-marketing.vercel.app/install.sh | bash</code>
+              <code id="install-cmd">curl -fsSL https://delt.vercel.app/install.sh | bash</code>
             </div>
           </div>
           <div class="install-cta">
@@ -681,7 +681,7 @@
 
     // Copy install command
     function copyInstall() {
-      const cmd = 'curl -fsSL https://delt-marketing.vercel.app/install.sh | bash';
+      const cmd = 'curl -fsSL https://delt.vercel.app/install.sh | bash';
       navigator.clipboard.writeText(cmd).then(() => {
         const btn = document.getElementById('copy-btn');
         btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!';

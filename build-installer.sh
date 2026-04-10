@@ -36,6 +36,7 @@ tar czf /tmp/delt-bundle.tar.gz \
   lib/memory.js \
   lib/rate-limit.js \
   lib/tunnel.js \
+  lib/wiki.js \
   test/critical.test.js \
   public/index.html \
   public/style.css \
@@ -89,17 +90,69 @@ chown "$REAL_USER:staff" "$PORT_FILE"
 PLIST_LABEL="com.neonotics.delt"
 PLIST_PATH="$REAL_HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 
-# Find node
-NODE_BIN=""
-for p in /opt/homebrew/bin/node /usr/local/bin/node; do
-  [ -x "$p" ] && NODE_BIN="$p" && break
-done
+# Find node — search broadly
+find_node_bin() {
+  for p in \
+    /opt/homebrew/bin/node \
+    /usr/local/bin/node \
+    /usr/bin/node \
+    "$REAL_HOME/.local/bin/node" \
+    "$REAL_HOME/.volta/bin/node" \
+    "$REAL_HOME/.nvm/versions/node/$(ls -1 "$REAL_HOME/.nvm/versions/node" 2>/dev/null | sort -V | tail -1)/bin/node" \
+    "$REAL_HOME/.fnm/aliases/default/bin/node" \
+    "$REAL_HOME/.asdf/shims/node" \
+    "$REAL_HOME/.local/share/mise/installs/node/latest/bin/node"; do
+    if [ -x "$p" ]; then echo "$p"; return 0; fi
+  done
+  # Try the user's actual PATH
+  user_node=$(sudo -u "$REAL_USER" -i bash -lc 'command -v node 2>/dev/null' 2>/dev/null)
+  if [ -n "$user_node" ] && [ -x "$user_node" ]; then echo "$user_node"; return 0; fi
+  return 1
+}
+
+NODE_BIN="$(find_node_bin)"
 
 if [ -z "$NODE_BIN" ]; then
-  # Leave a breadcrumb — Delt onboarding UI will handle Node install
+  # Try to install node via Homebrew as the real user
+  BREW_BIN=""
+  for p in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    [ -x "$p" ] && BREW_BIN="$p" && break
+  done
+  if [ -n "$BREW_BIN" ]; then
+    sudo -u "$REAL_USER" "$BREW_BIN" install node >/dev/null 2>&1 || true
+    NODE_BIN="$(find_node_bin)"
+  fi
+fi
+
+if [ -z "$NODE_BIN" ]; then
+  # Last resort — download official node binary
+  ARCH="$(uname -m)"
+  case "$ARCH" in
+    arm64)  NODE_ARCH="darwin-arm64" ;;
+    x86_64) NODE_ARCH="darwin-x64" ;;
+    *)      NODE_ARCH="" ;;
+  esac
+  if [ -n "$NODE_ARCH" ]; then
+    NODE_VER="v20.18.1"
+    NODE_TGZ="/tmp/node-${NODE_VER}.tar.gz"
+    NODE_DIR="$REAL_HOME/Delt/runtime"
+    mkdir -p "$NODE_DIR"
+    if curl -fsSL "https://nodejs.org/dist/${NODE_VER}/node-${NODE_VER}-${NODE_ARCH}.tar.gz" -o "$NODE_TGZ" 2>/dev/null; then
+      tar xzf "$NODE_TGZ" -C "$NODE_DIR" --strip-components=1 2>/dev/null
+      rm -f "$NODE_TGZ"
+      [ -x "$NODE_DIR/bin/node" ] && NODE_BIN="$NODE_DIR/bin/node"
+      chown -R "$REAL_USER:staff" "$NODE_DIR" 2>/dev/null || true
+    fi
+  fi
+fi
+
+if [ -z "$NODE_BIN" ]; then
+  # Show a clear error and bail
   mkdir -p "$DELT_DATA"
   echo "node_missing" > "$DELT_DATA/install-status"
   chown -R "$REAL_USER:staff" "$DELT_DATA"
+  sudo -u "$REAL_USER" osascript -e 'display dialog "Delt could not find Node.js and failed to install it automatically.\n\nPlease install Node.js from https://nodejs.org and re-run the Delt installer." with title "Delt — Install failed" buttons {"OK"} default button 1 with icon caution' >/dev/null 2>&1 || true
+  sudo -u "$REAL_USER" open "https://nodejs.org" 2>/dev/null || true
   exit 0
 fi
 
@@ -150,17 +203,40 @@ cat > "$PLIST_PATH" << PLIST
 PLIST
 chown "$REAL_USER:staff" "$PLIST_PATH"
 
-# 3. Load the service and open browser
+# 3. Try launchd, fall back to nohup if it fails
 sudo -u "$REAL_USER" launchctl bootstrap "gui/$(id -u "$REAL_USER")" "$PLIST_PATH" 2>/dev/null || \
   sudo -u "$REAL_USER" launchctl load "$PLIST_PATH" 2>/dev/null || true
 
-# Wait for server
-for i in $(seq 1 20); do
-  curl -sf -o /dev/null "http://localhost:$PORT/health" 2>/dev/null && break
+# Wait for server (up to 20 seconds via launchd)
+SERVER_UP=false
+for i in $(seq 1 40); do
+  if curl -sf -o /dev/null "http://localhost:$PORT/health" 2>/dev/null; then
+    SERVER_UP=true
+    break
+  fi
   sleep 0.5
 done
 
-sudo -u "$REAL_USER" open "http://localhost:$PORT" 2>/dev/null || true
+# Fall back to direct nohup start if launchd failed
+if [ "$SERVER_UP" = "false" ]; then
+  sudo -u "$REAL_USER" bash -c "cd '$INSTALL_DIR' && nohup '$NODE_BIN' server.js > '$DELT_DATA/delt.log' 2> '$DELT_DATA/delt.err' &" 2>/dev/null
+  for i in $(seq 1 30); do
+    if curl -sf -o /dev/null "http://localhost:$PORT/health" 2>/dev/null; then
+      SERVER_UP=true
+      break
+    fi
+    sleep 0.5
+  done
+fi
+
+# Open browser — bypass any cached service worker with a cache-bust
+if [ "$SERVER_UP" = "true" ]; then
+  sudo -u "$REAL_USER" open "http://localhost:$PORT/?fresh=$(date +%s)" 2>/dev/null || true
+else
+  # Server didn't start — show a clear error
+  ERR_TAIL="$(tail -20 "$DELT_DATA/delt.err" 2>/dev/null | head -10 | tr '"' "'")"
+  sudo -u "$REAL_USER" osascript -e "display dialog \"Delt installed but the server did not start.\n\nLogs:\n$ERR_TAIL\n\nTry: cd ~/Delt && node server.js\" with title \"Delt — Server failed to start\" buttons {\"OK\"} default button 1 with icon caution" >/dev/null 2>&1 || true
+fi
 
 exit 0
 POSTINSTALL_BOTTOM

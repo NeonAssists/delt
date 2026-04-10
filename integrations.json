@@ -1607,6 +1607,58 @@
       "setupTime": "~10 sec",
       "troubleshooting": "Token is a long JWT string starting with eyJ. Make sure you copy the full thing.",
       "tryIt": "Show my Monday boards"
+    },
+    {
+      "id": "mintlify",
+      "name": "Mintlify",
+      "description": "Documentation platform — deploy, search, AI assistant, analytics",
+      "icon": "mintlify",
+      "category": "development",
+      "authType": "token",
+      "capabilities": {
+        "can": [
+          "Trigger documentation site updates and check deploy status",
+          "Search documentation content across your site",
+          "Get full page content from any docs page",
+          "Use AI assistant to answer questions from your docs",
+          "Create agent jobs for automated doc editing",
+          "Export analytics — page views, visitors, search queries, feedback"
+        ],
+        "creates": [
+          "Site updates",
+          "Agent editing jobs",
+          "AI assistant conversations"
+        ],
+        "limitations": [
+          "Cannot edit markdown source files directly — use GitHub integration for that",
+          "Assistant API calls (mint_dsc_ key) may incur usage costs"
+        ]
+      },
+      "tokenConfig": {
+        "label": "Admin API Key",
+        "placeholder": "mint_xxxxxxxxxxxxxxxxxxxx",
+        "helpUrl": "https://mintlify.com/docs/api-reference",
+        "scopes": "updates, agent, assistant, analytics"
+      },
+      "mcpServers": {
+        "mintlify": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-fetch"],
+          "envMapping": {
+            "DEFAULT_HEADERS": "_static:{\"Authorization\":\"Bearer ${token}\"}",
+            "BASE_URL": "_static:https://api.mintlify.com/api"
+          }
+        }
+      },
+      "setupSteps": [
+        "Sign in to your <a href=\"https://mintlify.com/dashboard\" target=\"_blank\">Mintlify dashboard</a>",
+        "Go to <strong>Settings → API Keys</strong>",
+        "Click <strong>Create Key</strong> — choose <strong>Admin</strong> for full access",
+        "Copy the key (starts with <strong>mint_</strong>) and paste it below"
+      ],
+      "setupTime": "~1 min",
+      "troubleshooting": "Key starts with mint_ (admin) or mint_dsc_ (assistant-only). Admin keys give full access. Rate limit: 10 keys created per hour per org.",
+      "tryIt": "Search my docs for getting started"
     }
   ]
 }

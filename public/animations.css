@@ -1,0 +1,217 @@
+/* ============================================
+   Motion Design System — Spring physics, micro-interactions
+   Loaded after style.css
+   ============================================ */
+
+/* Easing curves */
+:root {
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+}
+
+/* ---- Button micro-interactions ---- */
+button, .ob-btn, .tool-card, .integration-chip {
+  transition: transform var(--duration-fast) var(--ease-spring),
+              box-shadow var(--duration-fast) var(--ease-smooth),
+              background-color var(--duration-fast) var(--ease-smooth),
+              border-color var(--duration-fast) var(--ease-smooth),
+              opacity var(--duration-fast) var(--ease-smooth);
+}
+
+button:active, .ob-btn:active, .tool-card:active {
+  transform: scale(0.97);
+}
+
+/* ---- Message animations ---- */
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message {
+  animation: messageSlideIn var(--duration-normal) var(--ease-out) both;
+}
+
+/* Stagger messages slightly */
+.message:nth-last-child(1) { animation-delay: 0ms; }
+.message:nth-last-child(2) { animation-delay: 30ms; }
+.message:nth-last-child(3) { animation-delay: 60ms; }
+
+/* ---- Modal/panel animations ---- */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Overlay backgrounds */
+.modal-overlay, .panel-overlay {
+  animation: fadeIn var(--duration-fast) var(--ease-smooth) both;
+}
+
+/* Modal content */
+.modal-content, .profile-modal, .integrations-modal, .crons-panel {
+  animation: slideUp var(--duration-normal) var(--ease-spring) both;
+}
+
+/* Side panels */
+.history-panel, .preview-panel {
+  animation: slideInRight var(--duration-normal) var(--ease-out) both;
+}
+
+/* ---- Input focus glow ---- */
+.chat-input-area textarea,
+.chat-input-area input,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+textarea {
+  transition: border-color var(--duration-fast) var(--ease-smooth),
+              box-shadow var(--duration-fast) var(--ease-smooth);
+}
+
+.chat-input-area textarea:focus,
+input[type="text"]:focus,
+input[type="email"]:focus,
+textarea:focus {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ---- Card hover lift ---- */
+.tool-card:hover, .ob-feature:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ---- Integration chip hover ---- */
+.integration-chip:hover {
+  transform: translateY(-1px);
+}
+
+/* ---- Connection status pulse ---- */
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.status-dot.connected {
+  animation: statusPulse 2s var(--ease-smooth) infinite;
+}
+
+/* ---- Typing indicator ---- */
+@keyframes typingBounce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-6px); }
+}
+
+.typing-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  animation: typingBounce 1.4s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(1) { animation-delay: 0ms; }
+.typing-dot:nth-child(2) { animation-delay: 160ms; }
+.typing-dot:nth-child(3) { animation-delay: 320ms; }
+
+/* ---- Loading skeleton shimmer ---- */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-hover) 25%, var(--border) 50%, var(--bg-hover) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+/* ---- Smooth page transitions ---- */
+.onboard-step {
+  transition: opacity var(--duration-normal) var(--ease-smooth),
+              transform var(--duration-normal) var(--ease-spring);
+}
+
+.onboard-step.hidden {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  position: absolute;
+}
+
+/* ---- Send button animation ---- */
+@keyframes sendPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+.send-btn:not(:disabled):active {
+  animation: sendPulse 200ms var(--ease-spring);
+}
+
+/* ---- Copy button feedback ---- */
+@keyframes copyFlash {
+  0% { background: var(--accent); color: white; }
+  100% { background: transparent; color: var(--text-tertiary); }
+}
+
+.copy-btn.copied {
+  animation: copyFlash 600ms var(--ease-smooth);
+}
+
+/* ---- Reduce motion for accessibility ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
